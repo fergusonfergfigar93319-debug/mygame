@@ -73,6 +73,7 @@ class EndlessScoreBook(
         val base = baseSubtotal()
         val mult = survivalMultiplier()
         val final = (base * mult).toInt()
+        val (tier, intoTier) = cfg.appliedMultiplierTier(survivalSeconds)
         return EndlessRunScoreBreakdown(
             distanceScore = distanceScore,
             collectionScore = collectionScore,
@@ -82,6 +83,8 @@ class EndlessScoreBook(
             finalTotal = final,
             bonusFromMultiplier = final - base,
             survivalSeconds = survivalSeconds,
+            multiplierTier = tier,
+            secondsIntoTier = intoTier,
         )
     }
 
@@ -121,4 +124,24 @@ class EndlessScoreBook(
     fun onAssistUsed() {
         actionScore += cfg.assistActionPoints
     }
+}
+
+/** 倍率封顶时最大的 0 起始档位索引（使 `1 + index * step <= cap`）。 */
+private fun EndlessScoringConfig.maxMultiplierTierIndex(): Int {
+    if (multiplierStep <= 0f || multiplierCap <= 1f) return 0
+    return ((multiplierCap - 1f) / multiplierStep).toInt().coerceAtLeast(0)
+}
+
+/**
+ * 与 [EndlessScoreBook.survivalMultiplier] 一致的档位：时间档取整后封顶，
+ * [secondsIntoTier] 为进入该档以来的存活秒数。
+ */
+private fun EndlessScoringConfig.appliedMultiplierTier(survivalSeconds: Float): Pair<Int, Float> {
+    val every = multiplierStepEverySeconds
+    if (every <= 0f) return 0 to survivalSeconds.coerceAtLeast(0f)
+    val rawTier = (survivalSeconds / every).toInt()
+    val tier = rawTier.coerceAtMost(maxMultiplierTierIndex())
+    val tierStart = tier * every
+    val into = (survivalSeconds - tierStart).coerceAtLeast(0f)
+    return tier to into
 }

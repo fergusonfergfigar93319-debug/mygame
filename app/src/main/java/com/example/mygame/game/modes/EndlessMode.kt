@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,9 +28,15 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.unit.dp
+import com.example.mygame.R
+import com.example.mygame.audio.SoundManager
 import com.example.mygame.data.LeaderboardRepository
 import com.example.mygame.data.LeaderboardSubmitResult
 import com.example.mygame.data.LocalLeaderboardRepository
@@ -40,21 +44,41 @@ import com.example.mygame.data.SaveRepository
 import com.example.mygame.data.model.LeaderboardEntry
 import com.example.mygame.game.BlockReward
 import com.example.mygame.game.BlockType
+import com.example.mygame.game.canBeStomped
 import com.example.mygame.game.CoinKind
 import com.example.mygame.game.EnemyKind
 import com.example.mygame.game.FishSnack
 import com.example.mygame.game.FloatingCoin
+import com.example.mygame.game.GuguSpriteLayout
+import com.example.mygame.game.horizontalGroundDampening
+import com.example.mygame.game.Particle
+import com.example.mygame.game.ParticleSpawners
+import com.example.mygame.game.StompFeel
+import com.example.mygame.game.standingSurfaceFriction
+import com.example.mygame.game.drawDrorCompanion
+import com.example.mygame.game.drawEndlessNightBackdrop
+import com.example.mygame.game.drawGuguCharacterSprite
+import com.example.mygame.game.drawStageForegroundDecor
+import com.example.mygame.game.initialDrorPosition
+import com.example.mygame.game.lerpDrorTowardTarget
+import com.example.mygame.game.guguIsMovingHorizontally
 import com.example.mygame.game.HoldButton
+import com.example.mygame.game.updateParticlesInPlace
 import com.example.mygame.game.OverlayCard
+import com.example.mygame.game.StageDecorPalette
 import com.example.mygame.game.level.EndlessSegmentKind
 import com.example.mygame.game.level.EndlessSegmentPool
 import com.example.mygame.game.level.EndlessSegmentSpan
 import com.example.mygame.game.level.offsetWorldX
 import com.example.mygame.game.score.EndlessRunScoreBreakdown
 import com.example.mygame.game.score.EndlessScoreBook
+import com.example.mygame.ui.common.GameStageControlDock
+import com.example.mygame.ui.common.GameStageTopBar
 import com.example.mygame.ui.endless.EndlessHud
 import com.example.mygame.ui.endless.EndlessSettlementOverlay
 import kotlinx.coroutines.delay
+import java.util.concurrent.ThreadLocalRandom
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
@@ -66,9 +90,15 @@ fun EndlessMode(
     saveRepository: SaveRepository,
     leaderboardRepository: LeaderboardRepository,
     onExitToMenu: () -> Unit,
+    runPreset: EndlessRunPreset = EndlessRunPreset.Casual,
+    soundManager: SoundManager? = null,
+    companionDrorUnlocked: Boolean = saveRepository.getCompanionDrorUnlocked(),
 ) {
     val rescuedTuanTuan = remember { saveRepository.getRescuedTuanTuan() }
-    val random = remember { Random(System.currentTimeMillis()) }
+    val segmentRng = remember(runPreset) { SegmentRng(runPreset) }
+    val guguSprite = ImageBitmap.imageResource(R.drawable.gugu_sprite)
+    val guguSpriteLayout = remember(guguSprite) { GuguSpriteLayout.singleImage(guguSprite) }
+    val drorSprite = ImageBitmap.imageResource(R.drawable.companion_dror)
 
     var worldWidth by remember { mutableFloatStateOf(1f) }
     var worldHeight by remember { mutableFloatStateOf(1f) }
@@ -84,11 +114,18 @@ fun EndlessMode(
     val blocks = remember { mutableStateListOf<com.example.mygame.game.Block>() }
     val floatingCoins = remember { mutableStateListOf<FloatingCoin>() }
     val fishSnacks = remember { mutableStateListOf<FishSnack>() }
+    val particles = remember { mutableStateListOf<Particle>() }
+    var hitStopTimer by remember { mutableFloatStateOf(0f) }
+    var shakeTimer by remember { mutableFloatStateOf(0f) }
+    var renderShakeX by remember { mutableFloatStateOf(0f) }
+    var renderShakeY by remember { mutableFloatStateOf(0f) }
 
     val scoreBook = remember { EndlessScoreBook(EndlessBalanceConfig.scoring) }
 
     var playerX by remember { mutableFloatStateOf(100f) }
     var playerY by remember { mutableFloatStateOf(100f) }
+    var drorWorldX by remember { mutableFloatStateOf(0f) }
+    var drorWorldY by remember { mutableFloatStateOf(0f) }
     var playerVelocityX by remember { mutableFloatStateOf(0f) }
     var playerVelocityY by remember { mutableFloatStateOf(0f) }
     var onGround by remember { mutableStateOf(false) }
@@ -100,9 +137,13 @@ fun EndlessMode(
     var moveLeftPressed by remember { mutableStateOf(false) }
     var moveRightPressed by remember { mutableStateOf(false) }
     var jumpPressed by remember { mutableStateOf(false) }
+    var playerFacingRight by remember { mutableStateOf(true) }
+    var spriteAnimTick by remember { mutableIntStateOf(0) }
 
     var fishDashTimer by remember { mutableFloatStateOf(0f) }
     var hasBubbleScarf by remember { mutableStateOf(false) }
+    var hasSnowShield by remember { mutableStateOf(false) }
+    var gustBootsTimer by remember { mutableFloatStateOf(0f) }
     var tuanTuanAssistTimer by remember { mutableFloatStateOf(0f) }
     var tuanTuanAssistReady by remember { mutableStateOf(rescuedTuanTuan) }
 
@@ -118,6 +159,7 @@ fun EndlessMode(
 
     var submitResult by remember { mutableStateOf<LeaderboardSubmitResult?>(null) }
     var lastBreakdown by remember { mutableStateOf<EndlessRunScoreBreakdown?>(null) }
+    var lastChallengeBucket by remember { mutableStateOf<String?>(null) }
 
     fun groundTop() = worldHeight * 0.82f
     fun playerSize() = min(worldWidth, worldHeight) * 0.1f
@@ -134,7 +176,7 @@ fun EndlessMode(
             worldWidth,
             worldHeight,
             runElapsed,
-            random,
+            segmentRng.random,
             playerX,
             lastRewardEndX,
         )
@@ -184,6 +226,7 @@ fun EndlessMode(
     }
 
     fun resetEndless() {
+        segmentRng.reseed()
         worldTailX = 0f
         lastRewardEndX = -8_000f
         runElapsed = 0f
@@ -195,14 +238,22 @@ fun EndlessMode(
         blocks.clear()
         floatingCoins.clear()
         fishSnacks.clear()
+        particles.clear()
+        hitStopTimer = 0f
+        shakeTimer = 0f
+        renderShakeX = 0f
+        renderShakeY = 0f
         scoreBook.reset()
         fishDashTimer = 0f
         hasBubbleScarf = false
+        hasSnowShield = false
+        gustBootsTimer = 0f
         tuanTuanAssistTimer = 0f
         tuanTuanAssistReady = rescuedTuanTuan
         gameOver = false
         submitResult = null
         lastBreakdown = null
+        lastChallengeBucket = null
         landingsChain = 0
         expectingLandingBonus = false
         prevOnGround = true
@@ -215,6 +266,11 @@ fun EndlessMode(
         onGround = true
         coyoteTimer = coyoteMax
         cameraX = 0f
+        if (companionDrorUnlocked) {
+            val (ix, iy) = initialDrorPosition(playerX, playerY, playerFacingRight, size)
+            drorWorldX = ix
+            drorWorldY = iy
+        }
         started = true
         running = true
     }
@@ -222,8 +278,16 @@ fun EndlessMode(
     fun endRunDead() {
         if (gameOver) return
         running = false
+        particles.clear()
+        hitStopTimer = 0f
+        shakeTimer = 0f
+        renderShakeX = 0f
+        renderShakeY = 0f
         gameOver = true
         lastBreakdown = scoreBook.breakdown()
+        val challengeBucket =
+            if (runPreset == EndlessRunPreset.DailyChallenge) EndlessDailyChallenge.todayBucketLocal() else null
+        lastChallengeBucket = challengeBucket
         val entry = LeaderboardEntry(
             id = LocalLeaderboardRepository.newEntryId(),
             playerId = saveRepository.getOrCreatePlayerId(),
@@ -236,6 +300,7 @@ fun EndlessMode(
             survivalSeconds = runElapsed,
             timestampMillis = System.currentTimeMillis(),
             rescuedTuanTuan = saveRepository.getRescuedTuanTuan(),
+            challengeBucket = challengeBucket,
         )
         submitResult = leaderboardRepository.submit(entry)
     }
@@ -251,9 +316,10 @@ fun EndlessMode(
         }
         if (onGround || coyoteTimer > 0f) {
             expectingLandingBonus = true
-            playerVelocityY = -980f
+            playerVelocityY = if (gustBootsTimer > 0f) -1120f else -980f
             onGround = false
             coyoteTimer = 0f
+            soundManager?.playJump()
         }
     }
 
@@ -267,7 +333,18 @@ fun EndlessMode(
     LaunchedEffect(Unit) {
         while (true) {
             delay(16)
-            globalAnim += 0.05f
+            if (hitStopTimer <= 0f) {
+                globalAnim += 0.05f
+            }
+        }
+    }
+
+    LaunchedEffect(running, started) {
+        while (running && started) {
+            delay(100)
+            if (hitStopTimer <= 0f) {
+                spriteAnimTick++
+            }
         }
     }
 
@@ -280,8 +357,25 @@ fun EndlessMode(
 
         while (running) {
             delay(16)
+            if (shakeTimer > 0f) {
+                val tBefore = shakeTimer
+                shakeTimer = max(0f, shakeTimer - frameSeconds)
+                val phase = (tBefore / StompFeel.SHAKE_DURATION_S).coerceIn(0f, 1f)
+                val amp = StompFeel.SHAKE_MAX_PX * phase
+                renderShakeX = (Random.nextFloat() - 0.5f) * 2f * amp
+                renderShakeY = (Random.nextFloat() - 0.5f) * 2f * amp
+            } else {
+                renderShakeX = 0f
+                renderShakeY = 0f
+            }
+            if (hitStopTimer > 0f) {
+                hitStopTimer = max(0f, hitStopTimer - frameSeconds)
+                continue
+            }
             runElapsed += frameSeconds
+            val dashActive = fishDashTimer > 0f
             fishDashTimer = max(0f, fishDashTimer - frameSeconds)
+            gustBootsTimer = max(0f, gustBootsTimer - frameSeconds)
             tuanTuanAssistTimer = max(0f, tuanTuanAssistTimer - frameSeconds)
 
             ensureWorld()
@@ -291,17 +385,40 @@ fun EndlessMode(
             val blizzardMul =
                 1f - (span?.blizzardIntensity ?: 0f) * EndlessBalanceConfig.blizzardRunSpeedPenaltyPerIntensity
 
-            var runSpeed = (if (fishDashTimer > 0f) 365f else 290f) * speedMul * blizzardMul
+            var runSpeed =
+                (
+                    when {
+                        fishDashTimer > 0f -> 365f
+                        gustBootsTimer > 0f -> 330f
+                        else -> 290f
+                    }
+                ) * speedMul * blizzardMul
 
             val groundY = groundTop()
             val size = playerSize()
+            val wasInAir = !onGround
             val previousY = playerY
             val previousBottom = previousY + size
+            val overPitForFriction = intersectsPit(playerX, playerX + size)
+            val surfaceFrictionFactor = standingSurfaceFriction(
+                onGround,
+                playerX,
+                playerY,
+                size,
+                groundY,
+                overPitForFriction,
+                platforms,
+                blocks,
+            )
+            val horizontalDamp = horizontalGroundDampening(friction, surfaceFrictionFactor)
 
             playerVelocityX = when {
                 moveLeftPressed && !moveRightPressed -> -runSpeed
                 moveRightPressed && !moveLeftPressed -> runSpeed
-                else -> playerVelocityX * friction
+                else -> playerVelocityX * horizontalDamp
+            }
+            if (abs(playerVelocityX) > 20f) {
+                playerFacingRight = playerVelocityX > 0f
             }
 
             playerVelocityY += gravity * frameSeconds
@@ -391,6 +508,14 @@ fun EndlessMode(
                                     blocks[index] = blocks[index].copy(used = true)
                                     hasBubbleScarf = true
                                 }
+                                BlockReward.Shield -> {
+                                    blocks[index] = blocks[index].copy(used = true)
+                                    hasSnowShield = true
+                                }
+                                BlockReward.Boots -> {
+                                    blocks[index] = blocks[index].copy(used = true)
+                                    gustBootsTimer = 8f
+                                }
                             }
                         }
                         break
@@ -400,6 +525,15 @@ fun EndlessMode(
 
             if (landed && playerVelocityY >= 0f) {
                 nextY = landingY
+                if (wasInAir && playerVelocityY > 45f) {
+                    ParticleSpawners.landingDust(
+                        particles,
+                        worldX = playerX,
+                        footY = landingY + size,
+                        playerWidth = size,
+                    )
+                    soundManager?.playLand()
+                }
                 playerVelocityY = 0f
                 onGround = true
             } else {
@@ -539,22 +673,39 @@ fun EndlessMode(
                 playerRect.overlaps(r)
             }
             if (eatenFish != null) {
+                val ex = eatenFish
                 fishSnacks.remove(eatenFish)
                 fishDashTimer = 7f
                 scoreBook.onFishSnackEaten()
+                ParticleSpawners.fishSnackBurst(
+                    particles,
+                    centerX = ex.x + ex.size * 0.5f,
+                    centerY = ex.y + ex.size * 0.45f,
+                )
+                soundManager?.playEatFish()
             }
 
             val stompedEnemy = enemies.firstOrNull { enemy ->
                 val er = Rect(enemy.x, enemy.y, enemy.x + enemy.width, enemy.y + enemy.height)
                 playerRect.overlaps(er) &&
+                    enemy.kind.canBeStomped() &&
                     playerVelocityY > 0f &&
                     playerRect.bottom <= er.top + enemy.height * 0.5f
             }
             if (stompedEnemy != null) {
-                enemies.remove(stompedEnemy)
+                val e = stompedEnemy
+                enemies.remove(e)
                 playerVelocityY = -720f
                 onGround = false
                 scoreBook.onStompEnemy()
+                hitStopTimer = StompFeel.HIT_STOP_S
+                shakeTimer = StompFeel.SHAKE_DURATION_S
+                ParticleSpawners.stompKillBurst(
+                    particles,
+                    centerX = e.x + e.width * 0.5f,
+                    centerY = e.y + e.height * 0.42f,
+                )
+                soundManager?.playStomp()
             } else {
                 val hitEnemyIndex = enemies.indexOfFirst { enemy ->
                     val er = Rect(enemy.x, enemy.y, enemy.x + enemy.width, enemy.y + enemy.height)
@@ -565,6 +716,10 @@ fun EndlessMode(
                         fishDashTimer = 0f
                         enemies.removeAt(hitEnemyIndex)
                         playerVelocityY = -320f
+                    } else if (hasSnowShield) {
+                        hasSnowShield = false
+                        playerVelocityY = -260f
+                        playerVelocityX = if (playerFacingRight) -180f else 180f
                     } else {
                         endRunDead()
                         continue
@@ -573,6 +728,32 @@ fun EndlessMode(
             }
 
             if (onGround) coyoteTimer = coyoteMax else coyoteTimer = max(0f, coyoteTimer - frameSeconds)
+
+            if (companionDrorUnlocked) {
+                val (nx, ny) = lerpDrorTowardTarget(
+                    drorWorldX,
+                    drorWorldY,
+                    playerX,
+                    playerY,
+                    playerFacingRight,
+                    size,
+                    frameSeconds,
+                    playerVelocityX,
+                )
+                drorWorldX = nx
+                drorWorldY = ny
+            }
+
+            if (dashActive) {
+                ParticleSpawners.fishDashTrail(
+                    particles,
+                    worldX = playerX,
+                    worldY = playerY,
+                    size = size,
+                    facingRight = playerFacingRight,
+                )
+            }
+            updateParticlesInPlace(particles, frameSeconds)
 
             scoreBook.tickFrame(playerX, frameSeconds)
 
@@ -584,36 +765,21 @@ fun EndlessMode(
     }
 
     val nightOuter = listOf(Color(0xFF1A237E), Color(0xFF283593), Color(0xFF3949AB), Color(0xFF5C6BC0))
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(nightOuter))
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = onExitToMenu) { Text("返回") }
+    val endlessHeaderTitle = if (runPreset == EndlessRunPreset.DailyChallenge) "今日无尽" else "极夜漂流"
+    val endlessTags =
+        buildList {
+            add(if (runPreset == EndlessRunPreset.DailyChallenge) "今日挑战" else "无尽")
+            if (rescuedTuanTuan) add("团团")
+            if (companionDrorUnlocked) add("Dror")
+            if (runPreset == EndlessRunPreset.DailyChallenge) add(EndlessDailyChallenge.todayBucketLocal())
         }
-        EndlessHud(
-            totalScore = scoreBook.totalScore(),
-            distanceUnits = playerX / 10f,
-            survivalSeconds = runElapsed,
-            multiplier = scoreBook.survivalMultiplier(),
-            fishSnacks = scoreBook.fishSnacksEaten,
-            beacons = scoreBook.beacons,
-            lorePages = scoreBook.lorePages,
-            distanceScore = scoreBook.distanceScore,
-            collectionScore = scoreBook.collectionScore,
-            actionScore = scoreBook.actionScore,
-            fishDashActive = fishDashTimer > 0f,
-            hasScarf = hasBubbleScarf,
-            assistReady = tuanTuanAssistReady,
-            assistTimer = tuanTuanAssistTimer,
-            currentSegmentKind = currentSegmentKind,
-        )
-        Card(modifier = Modifier.fillMaxWidth().weight(1f), shape = RoundedCornerShape(24.dp)) {
-            Box(Modifier.fillMaxSize()) {
+    val topAccent = if (runPreset == EndlessRunPreset.DailyChallenge) Color(0xFF4DB6AC) else Color(0xFF90CAF9)
+    val endlessSub = endlessSubtitle(runPreset, currentSegmentKind)
+
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(nightOuter))) {
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Box(Modifier.fillMaxSize()) {
                 Canvas(Modifier.fillMaxSize().clickable { jump() }) {
                     worldWidth = size.width
                     worldHeight = size.height
@@ -625,20 +791,8 @@ fun EndlessMode(
                     val span = findSpan(playerX + hero * 0.5f)
                     val bzz = span?.blizzardIntensity ?: 0f
 
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            listOf(Color(0xFF1E3A5F), Color(0xFF2C4870), Color(0xFF3D5A80)),
-                        ),
-                    )
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(Color(0xFFE8EAF6).copy(alpha = 0.5f), Color.Transparent),
-                            center = Offset(size.width * 0.85f, size.height * 0.12f),
-                            radius = size.width * 0.18f,
-                        ),
-                        radius = size.width * 0.04f,
-                        center = Offset(size.width * 0.85f, size.height * 0.12f),
-                    )
+                    translate(renderShakeX, renderShakeY) {
+                    drawEndlessNightBackdrop(cameraX, globalAnim, groundY, bzz)
                     repeat(34) { i ->
                         val seed = i * 7919f
                         val sx = (seed * 0.0007f % 1f) * size.width
@@ -710,6 +864,30 @@ fun EndlessMode(
                             EnemyKind.Bird -> {
                                 drawOval(Color(0xFF78909C), Offset(drawX + enemy.width * 0.25f, enemy.y + enemy.height * 0.28f), androidx.compose.ui.geometry.Size(enemy.width * 0.5f, enemy.height * 0.45f))
                             }
+                            EnemyKind.SpikedSeal -> {
+                                drawRoundRect(Color(0xFF607D8B), Offset(drawX, enemy.y), androidx.compose.ui.geometry.Size(enemy.width, enemy.height), CornerRadius(18f, 18f))
+                                repeat(4) { si ->
+                                    val spike = Path().apply {
+                                        val sx = drawX + enemy.width * (0.12f + si * 0.18f)
+                                        moveTo(sx, enemy.y + enemy.height * 0.18f)
+                                        lineTo(sx + enemy.width * 0.07f, enemy.y - enemy.height * 0.1f)
+                                        lineTo(sx + enemy.width * 0.14f, enemy.y + enemy.height * 0.18f)
+                                        close()
+                                    }
+                                    drawPath(spike, Color(0xFFECEFF1))
+                                }
+                            }
+                            EnemyKind.Owl -> {
+                                val owlWing = Path().apply {
+                                    moveTo(drawX, enemy.y + enemy.height * 0.62f)
+                                    lineTo(drawX + enemy.width * 0.26f, enemy.y + enemy.height * 0.06f)
+                                    lineTo(drawX + enemy.width * 0.5f, enemy.y + enemy.height * 0.34f)
+                                    lineTo(drawX + enemy.width * 0.74f, enemy.y + enemy.height * 0.06f)
+                                    lineTo(drawX + enemy.width, enemy.y + enemy.height * 0.62f)
+                                }
+                                drawPath(owlWing, Color(0xFF607D8B), style = Stroke(width = 10f))
+                                drawOval(Color(0xFF90A4AE), Offset(drawX + enemy.width * 0.22f, enemy.y + enemy.height * 0.2f), androidx.compose.ui.geometry.Size(enemy.width * 0.56f, enemy.height * 0.5f))
+                            }
                         }
                     }
                     fishSnacks.forEach { fishSnack ->
@@ -723,28 +901,87 @@ fun EndlessMode(
                         }
                         drawPath(fishPath, Color(0xFFFFAB91))
                     }
+                    drawStageForegroundDecor(
+                        groundY = groundY,
+                        globalAnim = globalAnim,
+                        palette = StageDecorPalette(
+                            glowColor = Color(0xFFE8EAF6),
+                            mistColor = Color(0xFFB3E5FC),
+                            shardColor = Color(0xFF81D4FA),
+                        ),
+                    )
+                    particles.forEach { p ->
+                        val px = p.x - cameraX
+                        if (px > -32f && px < size.width + 32f) {
+                            val t = (p.life / p.maxLife).coerceIn(0.05f, 1f)
+                            val a = t * 0.95f
+                            val rad = p.baseRadius * (0.35f + 0.65f * t)
+                            drawCircle(
+                                p.color.copy(alpha = p.color.alpha * a),
+                                rad,
+                                Offset(px, p.y),
+                            )
+                        }
+                    }
                     if (fishDashTimer > 0f) drawCircle(Color(0x55FFB74D), hero * 0.88f, Offset(playerScreenX + hero / 2, playerY + hero / 2))
                     if (hasBubbleScarf) drawCircle(Color(0x5539C5FF), hero * 0.96f, Offset(playerScreenX + hero / 2, playerY + hero / 2))
+                    if (hasSnowShield) drawCircle(Color(0x5590CAF9), hero * 1.06f, Offset(playerScreenX + hero / 2, playerY + hero / 2), style = Stroke(width = 5f))
+                    if (gustBootsTimer > 0f) drawCircle(Color(0x55FFF176), hero * 0.72f, Offset(playerScreenX + hero / 2, playerY + hero * 0.9f))
                     if (tuanTuanAssistTimer > 0f) {
                         drawCircle(Color(0x55A5D6A7), hero * 1.05f, Offset(playerScreenX + hero / 2, playerY + hero / 2))
                     }
-                    drawRoundRect(Color(0xFF263238), Offset(playerScreenX, playerY), androidx.compose.ui.geometry.Size(hero, hero), CornerRadius(22f, 22f))
-                    drawOval(Color(0xFFECEFF1), Offset(playerScreenX + hero * 0.18f, playerY + hero * 0.16f), androidx.compose.ui.geometry.Size(hero * 0.64f, hero * 0.72f))
-                    drawRect(
-                        color = if (fishDashTimer > 0f) Color(0xFFFFA726) else Color(0xFF4FC3F7),
-                        topLeft = Offset(playerScreenX + hero * 0.12f, playerY + hero * 0.08f),
-                        size = androidx.compose.ui.geometry.Size(hero * 0.76f, hero * 0.18f),
+                    if (companionDrorUnlocked) {
+                        val drx = drorWorldX - cameraX
+                        if (drx > -hero && drx < size.width + hero) {
+                            drawDrorCompanion(
+                                image = drorSprite,
+                                screenX = drx,
+                                screenY = drorWorldY,
+                                destWidth = hero * 0.42f,
+                                playerScreenX = playerScreenX,
+                                globalAnim = globalAnim,
+                            )
+                        }
+                    }
+                    val moving = guguIsMovingHorizontally(
+                        playerVelocityX,
+                        moveLeftPressed,
+                        moveRightPressed,
+                    )
+                    drawGuguCharacterSprite(
+                        image = guguSprite,
+                        layout = guguSpriteLayout,
+                        screenX = playerScreenX,
+                        screenY = playerY,
+                        destSize = hero,
+                        globalAnim = globalAnim,
+                        animTick = spriteAnimTick,
+                        facingRight = playerFacingRight,
+                        isMoving = moving,
                     )
                     if (bzz > 0.05f) {
                         drawRect(Color.White.copy(alpha = bzz * 0.35f))
                     }
+                    }
                 }
 
                 if (!started) {
-                    OverlayCard(
-                        title = "极夜漂流",
-                        description = "暴风雪中的碎冰航道。\n搜集补给、信标与残页，撑过更久、走得更远。\n点击屏幕开始。",
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable { jump() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        OverlayCard(
+                            title = if (runPreset == EndlessRunPreset.DailyChallenge) "今日无尽" else "极夜漂流",
+                            description = if (runPreset == EndlessRunPreset.DailyChallenge) {
+                                val b = EndlessDailyChallenge.todayBucketLocal()
+                                "本日地图种子固定（$b），便于公平比拼。\n与休闲无尽规则相同，成绩会计入「今日挑战」桶。\n点击屏幕开始。"
+                            } else {
+                                "暴风雪中的碎冰航道。\n搜集补给、信标与残页，撑过更久、走得更远。\n点击屏幕开始。"
+                            },
+                        )
+                    }
                 }
                 if (gameOver && lastBreakdown != null) {
                     Box(modifier = Modifier.fillMaxSize()) {
@@ -763,6 +1000,7 @@ fun EndlessMode(
                                 distanceUnits = playerX / 10f,
                                 survivalSeconds = runElapsed,
                                 playerIdShort = saveRepository.getOrCreatePlayerId().take(8),
+                                challengeBucket = lastChallengeBucket,
                                 onRestart = { resetEndless() },
                             )
                         }
@@ -770,24 +1008,99 @@ fun EndlessMode(
                 }
             }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HoldButton(modifier = Modifier.weight(1f), text = "左移", onPressedChange = { moveLeftPressed = it })
-            HoldButton(
-                modifier = Modifier.weight(1f),
-                text = "跳跃",
-                onPressedChange = { pressed ->
-                    jumpPressed = pressed
-                    if (pressed) jump()
-                },
-            )
-            HoldButton(modifier = Modifier.weight(1f), text = "右移", onPressedChange = { moveRightPressed = it })
+        GameStageControlDock {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                HoldButton(modifier = Modifier.weight(1f), text = "左移", onPressedChange = { moveLeftPressed = it })
+                HoldButton(
+                    modifier = Modifier.weight(1f),
+                    text = "跳跃",
+                    onPressedChange = { pressed ->
+                        jumpPressed = pressed
+                        if (pressed) jump()
+                    },
+                )
+                HoldButton(modifier = Modifier.weight(1f), text = "右移", onPressedChange = { moveRightPressed = it })
+            }
+            if (rescuedTuanTuan) {
+                HoldButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    text = if (tuanTuanAssistReady) "团团支援" else "团团休息中",
+                    onPressedChange = { p -> if (p) triggerAssist() },
+                )
+            }
         }
-        if (rescuedTuanTuan) {
-            HoldButton(
-                modifier = Modifier.fillMaxWidth(),
-                text = if (tuanTuanAssistReady) "团团支援" else "团团休息中",
-                onPressedChange = { p -> if (p) triggerAssist() },
+        }
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            GameStageTopBar(
+                title = endlessHeaderTitle,
+                subtitle = endlessSub,
+                tags = endlessTags,
+                onBack = onExitToMenu,
+                accentColor = topAccent
+            )
+            EndlessHud(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+                totalScore = scoreBook.totalScore(),
+                distanceUnits = playerX / 10f,
+                survivalSeconds = runElapsed,
+                multiplier = scoreBook.survivalMultiplier(),
+                fishSnacks = scoreBook.fishSnacksEaten,
+                beacons = scoreBook.beacons,
+                lorePages = scoreBook.lorePages,
+                distanceScore = scoreBook.distanceScore,
+                collectionScore = scoreBook.collectionScore,
+                actionScore = scoreBook.actionScore,
+                fishDashActive = fishDashTimer > 0f,
+                hasScarf = hasBubbleScarf,
+                assistReady = tuanTuanAssistReady,
+                assistTimer = tuanTuanAssistTimer,
+                currentSegmentKind = currentSegmentKind,
             )
         }
+    }
+}
+
+/** 无尽路面拼接专用 RNG：休闲每局新种子，每日挑战每局从当日种子重置。 */
+private fun endlessSubtitle(
+    preset: EndlessRunPreset,
+    kind: EndlessSegmentKind?,
+): String {
+    val area =
+        when (kind) {
+            EndlessSegmentKind.FlatChase -> "平地追逐航道"
+            EndlessSegmentKind.PitJump -> "裂谷跳跃航道"
+            EndlessSegmentKind.ThinIceGlide -> "薄冰滑行航道"
+            EndlessSegmentKind.BlizzardLowVis -> "风雪低能见航道"
+            EndlessSegmentKind.RewardSafe -> "补给休整航道"
+            EndlessSegmentKind.DangerMixed -> "混合危险航道"
+            EndlessSegmentKind.BranchChoice -> "双选险路航道"
+            null -> "等待航道生成"
+        }
+    return if (preset == EndlessRunPreset.DailyChallenge) {
+        "固定种子挑战：$area"
+    } else {
+        "自由无尽挑战：$area"
+    }
+}
+
+private class SegmentRng(private val preset: EndlessRunPreset) {
+    var random: Random = create()
+        private set
+
+    fun reseed() {
+        random = create()
+    }
+
+    private fun create(): Random = when (preset) {
+        EndlessRunPreset.Casual -> Random(ThreadLocalRandom.current().nextLong())
+        EndlessRunPreset.DailyChallenge -> Random(EndlessDailyChallenge.seedForToday())
     }
 }

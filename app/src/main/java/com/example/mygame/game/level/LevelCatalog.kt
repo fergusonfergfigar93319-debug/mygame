@@ -5,5 +5,6 @@ object LevelCatalog {
         when (level) {
             GameLevel.CedarVillageRuins -> LevelOneData.build(worldWidth, worldHeight)
             GameLevel.IceLakeEchoValley -> LevelTwoData.build(worldWidth, worldHeight)
+            GameLevel.MistDike -> LevelThreeData.build(worldWidth, worldHeight)
         }
 }

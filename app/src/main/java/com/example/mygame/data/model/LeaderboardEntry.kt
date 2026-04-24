@@ -15,4 +15,8 @@ data class LeaderboardEntry(
     val timestampMillis: Long,
     val rescuedTuanTuan: Boolean,
     val mode: String = "endless_polar_night",
+    /**
+     * 每日挑战桶（如 `yyyy-MM-dd`）；`null` 表示休闲无尽，不计入某日榜。
+     */
+    val challengeBucket: String? = null,
 )

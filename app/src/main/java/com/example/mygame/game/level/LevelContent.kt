@@ -1,6 +1,5 @@
 package com.example.mygame.game.level
 
-import androidx.compose.ui.graphics.Color
 import com.example.mygame.game.Block
 import com.example.mygame.game.Coin
 import com.example.mygame.game.Enemy
@@ -28,11 +27,5 @@ data class LevelContent(
     val coins: List<Coin>,
     val friendGoal: FriendGoal,
     val presentation: LevelPresentation,
-    val outerGradientColors: List<Color>,
-    val stageSkyColors: List<Color>,
-    val pitWaterColor: Color,
-    val groundGrassTop: Color,
-    val groundGrassBottom: Color,
-    val sunCore: Color,
-    val sunHaloEdge: Color,
+    val sceneTheme: StorySceneTheme,
 )

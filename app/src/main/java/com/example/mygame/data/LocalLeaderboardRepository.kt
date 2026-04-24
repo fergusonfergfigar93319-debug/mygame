@@ -11,8 +11,13 @@ class LocalLeaderboardRepository(context: Context) : LeaderboardRepository {
     private val prefs =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    override fun getTopEntries(limit: Int, sort: LeaderboardSort): List<LeaderboardEntry> {
-        val all = loadAll().sortedWith(comparatorFor(sort))
+    override fun getTopEntries(limit: Int, sort: LeaderboardSort, challengeBucket: String?): List<LeaderboardEntry> {
+        val all = loadAll()
+            .let { list ->
+                if (challengeBucket == null) list
+                else list.filter { it.challengeBucket == challengeBucket }
+            }
+            .sortedWith(comparatorFor(sort))
         return all.take(limit)
     }
 
@@ -24,8 +29,25 @@ class LocalLeaderboardRepository(context: Context) : LeaderboardRepository {
         saveAll(trimmed)
         val ranked = trimmed.sortedWith(comparatorFor(LeaderboardSort.ByTotalScore))
         val rank = ranked.indexOfFirst { it.id == entry.id } + 1
-        val madeTop20 = ranked.take(20).any { it.id == entry.id }
-        return LeaderboardSubmitResult(rankByScore = rank.coerceAtLeast(1), madeTop20 = madeTop20)
+        val bucket = entry.challengeBucket
+        val rankedInBucket =
+            if (bucket == null) emptyList()
+            else trimmed.filter { it.challengeBucket == bucket }
+                .sortedWith(comparatorFor(LeaderboardSort.ByTotalScore))
+        val rankInChallenge = bucket?.let { b ->
+            val ri = rankedInBucket.indexOfFirst { it.id == entry.id }
+            if (ri < 0) null else ri + 1
+        }
+        val madeTop20 = if (bucket != null) {
+            rankedInBucket.take(20).any { it.id == entry.id }
+        } else {
+            ranked.take(20).any { it.id == entry.id }
+        }
+        return LeaderboardSubmitResult(
+            rankByScore = rank.coerceAtLeast(1),
+            madeTop20 = madeTop20,
+            rankInChallengeBucket = rankInChallenge,
+        )
     }
 
     override fun getBestEntry(): LeaderboardEntry? =
@@ -85,6 +107,7 @@ class LocalLeaderboardRepository(context: Context) : LeaderboardRepository {
         put("timestampMillis", timestampMillis)
         put("rescuedTuanTuan", rescuedTuanTuan)
         put("mode", mode)
+        if (challengeBucket != null) put("challengeBucket", challengeBucket)
     }
 
     private fun entryFromJson(o: JSONObject): LeaderboardEntry = LeaderboardEntry(
@@ -100,6 +123,7 @@ class LocalLeaderboardRepository(context: Context) : LeaderboardRepository {
         timestampMillis = o.getLong("timestampMillis"),
         rescuedTuanTuan = o.optBoolean("rescuedTuanTuan", false),
         mode = o.optString("mode", "endless_polar_night"),
+        challengeBucket = o.optString("challengeBucket").takeIf { it.isNotEmpty() },
     )
 
     companion object {

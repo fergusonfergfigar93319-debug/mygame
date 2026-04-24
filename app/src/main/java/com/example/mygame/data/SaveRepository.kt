@@ -13,6 +13,13 @@ class SaveRepository(context: Context) {
 
     fun getRescuedTuanTuan(): Boolean = prefs.getBoolean(KEY_RESCUED_TUANTUAN, false)
 
+    /** 主线抵达冰湖后与 Dror 同行；也用于无尽模式中显示跟宠。 */
+    fun getCompanionDrorUnlocked(): Boolean = prefs.getBoolean(KEY_COMPANION_DROR, false)
+
+    fun saveCompanionDrorUnlocked() {
+        prefs.edit().putBoolean(KEY_COMPANION_DROR, true).apply()
+    }
+
     fun saveBestScore(score: Int) {
         prefs.edit().putInt(KEY_BEST_SCORE, score).apply()
     }
@@ -21,17 +28,19 @@ class SaveRepository(context: Context) {
         prefs.edit().putBoolean(KEY_RESCUED_TUANTUAN, true).apply()
     }
 
-    /** 上次进行游戏的关卡；通关第一关后会写入冰湖，便于下次启动直接接续。 */
+    /** 上次进行游戏的关卡；主线推进后会写入，便于下次启动直接接续。 */
     fun getResumeLevel(): GameLevel =
         when (prefs.getString(KEY_RESUME_LEVEL, VALUE_CEDAR)) {
             VALUE_ICE -> GameLevel.IceLakeEchoValley
+            VALUE_MIST -> GameLevel.MistDike
             else -> GameLevel.CedarVillageRuins
         }
 
     fun setResumeLevel(level: GameLevel) {
         val v = when (level) {
-            GameLevel.IceLakeEchoValley -> VALUE_ICE
             GameLevel.CedarVillageRuins -> VALUE_CEDAR
+            GameLevel.IceLakeEchoValley -> VALUE_ICE
+            GameLevel.MistDike -> VALUE_MIST
         }
         prefs.edit().putString(KEY_RESUME_LEVEL, v).apply()
     }
@@ -44,7 +53,7 @@ class SaveRepository(context: Context) {
         prefs.edit().putString(KEY_PLAYER_NICKNAME, trimmed).apply()
     }
 
-    /** 匿名玩家稳定 id，供联网榜/合并历史使用；本地生成一次后持久化。 */
+    /** 匿名玩家稳定 id，供联网榜或合并历史使用；本地生成一次后持久化。 */
     fun getOrCreatePlayerId(): String {
         val existing = prefs.getString(KEY_PLAYER_ID, null)
         if (!existing.isNullOrBlank()) return existing
@@ -57,9 +66,11 @@ class SaveRepository(context: Context) {
         const val PREFS_NAME = "gugu_gaga_game"
         const val KEY_BEST_SCORE = "best_score"
         const val KEY_RESCUED_TUANTUAN = "rescued_tuantuan"
+        const val KEY_COMPANION_DROR = "companion_dror_unlocked"
         const val KEY_RESUME_LEVEL = "resume_level"
         const val VALUE_CEDAR = "cedar"
         const val VALUE_ICE = "ice"
+        const val VALUE_MIST = "mist"
         const val KEY_PLAYER_NICKNAME = "player_nickname"
         const val KEY_PLAYER_ID = "player_anonymous_id"
         const val DEFAULT_NICKNAME = "咕咕嘎嘎"
