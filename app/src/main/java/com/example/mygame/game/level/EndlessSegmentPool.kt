@@ -25,13 +25,15 @@ object EndlessSegmentPool {
         random: Random,
         playerX: Float,
         lastRewardEndX: Float,
+        /** 数值越小，越容易插入 [EndlessSegmentKind.RewardSafe]（补给休整）段。 */
+        rewardSpacingWidthMultiplier: Float = EndlessBalanceConfig.rewardSpacingWorldWidthMultiplier,
     ): SegmentGeometry {
         val tier = when {
             runSeconds < EndlessBalanceConfig.tier0EndsAtSeconds -> 0
             runSeconds < EndlessBalanceConfig.tier1EndsAtSeconds -> 1
             else -> 2
         }
-        val needReward = playerX - lastRewardEndX > worldWidth * EndlessBalanceConfig.rewardSpacingWorldWidthMultiplier
+        val needReward = playerX - lastRewardEndX > worldWidth * rewardSpacingWidthMultiplier
         if (needReward) {
             return buildRewardSafe(worldWidth, worldHeight, random)
         }
@@ -102,8 +104,8 @@ object EndlessSegmentPool {
         val pitEnd = pitStart + t * (if (narrow) 0.65f else 0.95f)
         val pits = listOf(Pit(startX = pitStart, endX = pitEnd))
         val platforms = listOf(
-            Platform(x = t * 2.1f, y = gy - h * 0.2f, width = t * 1.2f, height = 24f),
-            Platform(x = pitEnd + t * 0.35f, y = gy - h * 0.24f, width = t * 1.35f, height = 24f),
+            Platform(x = t * 2.1f, y = gy - h * 0.2f, width = t * 1.2f, height = 24f, isFragile = true),
+            Platform(x = pitEnd + t * 0.35f, y = gy - h * 0.24f, width = t * 1.35f, height = 24f, isFragile = true),
         )
         val coins = listOf(
             Coin(x = t * 1.4f, y = gy - h * 0.35f, size = he * 0.4f),
@@ -125,15 +127,27 @@ object EndlessSegmentPool {
         val t = tile(w)
         val he = hero(w, h)
         val width = w * 1.02f
+        val shieldSeal =
+            Enemy(
+                x = t * 4.6f,
+                y = gy - he * 0.72f,
+                width = he * 0.78f,
+                height = he * 0.72f,
+                patrolStart = t * 3.9f,
+                patrolEnd = t * 6.8f,
+                speed = 108f,
+                kind = EnemyKind.Seal,
+                hasIceShield = true,
+            )
         return SegmentGeometry(
             width = width,
             kind = EndlessSegmentKind.ThinIceGlide,
             pits = emptyList(),
             platforms = listOf(
-                Platform(x = t * 3.5f, y = gy - h * 0.18f, width = t * 1.4f, height = 22f),
-                Platform(x = t * 6.2f, y = gy - h * 0.28f, width = t * 1.2f, height = 22f),
+                Platform(x = t * 3.5f, y = gy - h * 0.18f, width = t * 1.4f, height = 22f, isFragile = true),
+                Platform(x = t * 6.2f, y = gy - h * 0.28f, width = t * 1.2f, height = 22f, isFragile = true),
             ),
-            enemies = emptyList(),
+            enemies = listOf(shieldSeal),
             coins = listOf(
                 Coin(x = t * 2f, y = gy - h * 0.12f, size = he * 0.4f),
                 Coin(x = t * 5f, y = gy - h * 0.38f, size = he * 0.4f, kind = CoinKind.Beacon),
@@ -202,6 +216,7 @@ object EndlessSegmentPool {
                 patrolEnd = t * 4.6f,
                 speed = if (hard) 125f else 112f,
                 kind = EnemyKind.Seal,
+                hasIceShield = hard && r.nextBoolean(),
             ),
             Enemy(
                 x = t * 7f,
@@ -316,7 +331,7 @@ object EndlessSegmentPool {
             blocks = listOf(
                 Block(x = t * 4.2f, y = rowY, size = blockSize, type = BlockType.Question, reward = BlockReward.Fish),
                 Block(x = t * 4.75f, y = rowY, size = blockSize, type = BlockType.Brick),
-                Block(x = t * 5.3f, y = rowY, size = blockSize, type = BlockType.Question, reward = BlockReward.Coin),
+                Block(x = t * 5.3f, y = rowY, size = blockSize, type = BlockType.Question, reward = BlockReward.Magnet),
             ),
             speedMultiplier = 1f,
             blizzardIntensity = 0f,

@@ -1,5 +1,6 @@
 package com.example.mygame.game
 
+import android.graphics.Paint as AndroidPaint
 import android.graphics.Rect as AndRect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -45,6 +46,9 @@ fun DrawScope.drawGuguCharacterSprite(
     animTick: Int,
     facingRight: Boolean,
     isMoving: Boolean,
+    /** 脚底为锚的竖直缩放，用于呼吸感或终结残影。 */
+    breathScaleY: Float = 1f,
+    overallAlpha: Float = 1f,
 ) {
     if (layout.frameWidth <= 0 || layout.frameHeight <= 0) return
     val fw = layout.frameWidth
@@ -73,6 +77,15 @@ fun DrawScope.drawGuguCharacterSprite(
 
     val bmp = image.asAndroidBitmap()
     val c = drawContext.canvas.nativeCanvas
+    val paint =
+        if (overallAlpha >= 0.999f) {
+            null
+        } else {
+            AndroidPaint().apply {
+                isAntiAlias = true
+                alpha = (overallAlpha * 255f).toInt().coerceIn(0, 255)
+            }
+        }
     val srcL = srcOffset.x
     val srcT = srcOffset.y
     val srcR = (srcL + srcSize.width).coerceAtMost(bmp.width)
@@ -80,15 +93,27 @@ fun DrawScope.drawGuguCharacterSprite(
     if (srcR <= srcL || srcB <= srcT) return
     val srcRct = AndRect(srcL, srcT, srcR, srcB)
 
+    val scaleBody = breathScaleY != 1f
+    if (scaleBody) {
+        c.save()
+        val px = screenX + destSize * 0.5f
+        val py = drawY + destSize
+        c.translate(px, py)
+        c.scale(1f, breathScaleY)
+        c.translate(-px, -py)
+    }
     if (facingRight) {
         val l = screenX.toInt()
         val t = drawY.toInt()
-        c.drawBitmap(bmp, srcRct, AndRect(l, t, l + w, t + w), null)
+        c.drawBitmap(bmp, srcRct, AndRect(l, t, l + w, t + w), paint)
     } else {
         c.save()
         c.translate(screenX, drawY)
         c.scale(-1f, 1f, destSize * 0.5f, destSize * 0.5f)
-        c.drawBitmap(bmp, srcRct, AndRect(0, 0, w, w), null)
+        c.drawBitmap(bmp, srcRct, AndRect(0, 0, w, w), paint)
+        c.restore()
+    }
+    if (scaleBody) {
         c.restore()
     }
 }

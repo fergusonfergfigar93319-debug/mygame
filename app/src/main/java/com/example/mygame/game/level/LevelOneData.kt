@@ -5,6 +5,7 @@ import com.example.mygame.game.Block
 import com.example.mygame.game.BlockReward
 import com.example.mygame.game.BlockType
 import com.example.mygame.game.Coin
+import com.example.mygame.game.CoinKind
 import com.example.mygame.game.Enemy
 import com.example.mygame.game.EnemyKind
 import com.example.mygame.game.FriendGoal
@@ -28,6 +29,21 @@ object LevelOneData {
         val platforms = listOf(
             Platform(x = tile * 3.0f, y = groundY - worldHeight * 0.18f, width = tile * 1.5f, height = 24f),
             Platform(x = tile * 4.9f, y = groundY - worldHeight * 0.3f, width = tile * 1.4f, height = 24f),
+            // 薄冰教学：正下方为实地，碎板后安全落回地面
+            Platform(
+                x = tile * 5.35f,
+                y = groundY - worldHeight * 0.12f,
+                width = tile * 0.95f,
+                height = 22f,
+                isFragile = true,
+            ),
+            Platform(
+                x = tile * 5.95f,
+                y = groundY - worldHeight * 0.15f,
+                width = tile * 0.88f,
+                height = 22f,
+                isFragile = true,
+            ),
             Platform(x = tile * 8.1f, y = groundY - worldHeight * 0.22f, width = tile * 1.8f, height = 24f),
             Platform(x = tile * 10.2f, y = groundY - worldHeight * 0.34f, width = tile * 1.5f, height = 24f),
             Platform(x = tile * 13.4f, y = groundY - worldHeight * 0.24f, width = tile * 1.9f, height = 24f)
@@ -42,7 +58,8 @@ object LevelOneData {
             Block(x = tile * 8.6f, y = groundY - worldHeight * 0.36f, size = blockSize, type = BlockType.Question, reward = BlockReward.Fish),
             Block(x = tile * 9.15f, y = groundY - worldHeight * 0.36f, size = blockSize, type = BlockType.Brick),
             Block(x = tile * 12.9f, y = groundY - worldHeight * 0.22f, size = blockSize, type = BlockType.Question, reward = BlockReward.Boots),
-            Block(x = tile * 13.9f, y = groundY - worldHeight * 0.38f, size = blockSize, type = BlockType.Question, reward = BlockReward.Scarf)
+            Block(x = tile * 13.9f, y = groundY - worldHeight * 0.38f, size = blockSize, type = BlockType.Question, reward = BlockReward.Scarf),
+            Block(x = tile * 15.2f, y = groundY - worldHeight * 0.34f, size = blockSize, type = BlockType.Question, reward = BlockReward.Magnet),
         )
 
         val enemies = listOf(
@@ -81,8 +98,10 @@ object LevelOneData {
         val coins = listOf(
             Coin(x = tile * 2.2f, y = groundY - worldHeight * 0.12f, size = hero * 0.42f),
             Coin(x = tile * 5.3f, y = groundY - worldHeight * 0.4f, size = hero * 0.42f),
+            Coin(x = tile * 6.18f, y = groundY - worldHeight * 0.27f, size = hero * 0.42f, kind = CoinKind.LorePage),
             Coin(x = tile * 8.8f, y = groundY - worldHeight * 0.48f, size = hero * 0.42f),
             Coin(x = tile * 10.5f, y = groundY - worldHeight * 0.46f, size = hero * 0.42f),
+            Coin(x = tile * 11.15f, y = groundY - worldHeight * 0.5f, size = hero * 0.42f, kind = CoinKind.Beacon),
             Coin(x = tile * 13.7f, y = groundY - worldHeight * 0.34f, size = hero * 0.42f),
             Coin(x = tile * 15.2f, y = groundY - worldHeight * 0.18f, size = hero * 0.42f)
         )

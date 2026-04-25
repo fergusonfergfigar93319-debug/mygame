@@ -20,11 +20,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.mygame.ui.common.FloatingHudStatusLabel
 import com.example.mygame.ui.common.GameActionHoldButton
 import com.example.mygame.ui.common.GameHeroCard
 import com.example.mygame.ui.common.GameHudShell
 import com.example.mygame.ui.common.GameInfoPill
 import com.example.mygame.ui.common.GameOverlayPanel
+import com.example.mygame.ui.common.floatingHudTextShadow
 
 @Composable
 fun HoldButton(
@@ -49,62 +52,104 @@ fun ScoreBoard(
     hasBubbleScarf: Boolean,
     hasSnowShield: Boolean,
     gustBootsTimer: Float,
+    auroraMagnetTimer: Float,
     rescuedTuanTuan: Boolean,
     tuanTuanAssistReady: Boolean,
     tuanTuanAssistTimer: Float,
     goalStatusLine: String,
     modifier: Modifier = Modifier,
 ) {
-    GameHudShell(
-        title = "主线状态",
+    Column(
         modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        Text(
+            text = "主线状态",
+            style =
+                MaterialTheme.typography.titleMedium.copy(
+                    shadow = floatingHudTextShadow(),
+                ),
+            fontWeight = FontWeight.Black,
+            color = Color.White,
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StatBlock(label = "得分", value = score.toString())
-            StatBlock(label = "最高分", value = bestScore.toString())
-            StatBlock(label = "小鱼干", value = coinsCollected.toString())
-            StatBlock(label = "进度", value = "$progress%")
+            FloatingHudStat(label = "得分", value = score.toString())
+            FloatingHudStat(label = "最高分", value = bestScore.toString())
+            FloatingHudStat(label = "小鱼干", value = coinsCollected.toString())
+            FloatingHudStat(label = "进度", value = "$progress%")
         }
         LinearProgressIndicator(
             progress = { progress.coerceIn(0, 100) / 100f },
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
-            color = Color(0xFF2E7D32),
-            trackColor = Color(0xFFE3ECEF),
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(999.dp)),
+            color = Color(0xE664FFDA),
+            trackColor = Color(0x33FFFFFF),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GameInfoPill("鱼干冲刺", fishDashTimer > 0f)
-            GameInfoPill("泡泡围巾", hasBubbleScarf)
-            GameInfoPill("雪地护盾", hasSnowShield)
-            GameInfoPill("长跳靴", gustBootsTimer > 0f)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FloatingHudStatusLabel("鱼干冲刺", fishDashTimer > 0f)
+            FloatingHudStatusLabel("泡泡围巾", hasBubbleScarf)
+            FloatingHudStatusLabel("雪盾", hasSnowShield)
+            FloatingHudStatusLabel("长跳靴", gustBootsTimer > 0f)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GameInfoPill("团团", rescuedTuanTuan)
-            GameInfoPill("支援", tuanTuanAssistReady && tuanTuanAssistTimer <= 0f)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FloatingHudStatusLabel("磁针", auroraMagnetTimer > 0f)
+            FloatingHudStatusLabel("团团", rescuedTuanTuan)
+            FloatingHudStatusLabel("支援", tuanTuanAssistReady && tuanTuanAssistTimer <= 0f)
         }
         Text(
             text =
                 when {
+                    auroraMagnetTimer > 0f -> "状态：极光磁针正在吸引附近鱼干，适合冲进金币线。"
                     hasSnowShield && gustBootsTimer > 0f -> "状态：护盾和长跳靴都已激活，适合大胆推进。"
-                    tuanTuanAssistTimer > 0f -> "状态：团团正在用雪团掩护你前进。"
+                    tuanTuanAssistTimer > 0f -> "状态：团团正在用雪球掩护你前进。"
                     fishDashTimer > 0f && hasBubbleScarf -> "状态：鱼干冲刺和泡泡围巾同时生效，节奏很强。"
-                    fishDashTimer > 0f -> "状态：鱼干冲刺生效中。"
-                    hasBubbleScarf -> "状态：泡泡围巾会帮助你缓降。"
-                    hasSnowShield -> "状态：护盾可以抵挡一次碰撞。"
+                    fishDashTimer > 0f -> "状态：鱼干冲刺生效中，可以撞开部分危险。"
+                    hasBubbleScarf -> "状态：泡泡围巾会帮你缓降。"
+                    hasSnowShield -> "状态：雪盾可以抵挡一次碰撞。"
                     gustBootsTimer > 0f -> "状态：长跳靴生效中，跳得更高更远。"
                     rescuedTuanTuan && tuanTuanAssistReady -> "状态：团团已待命，随时可以发动支援。"
                     rescuedTuanTuan -> "状态：团团已经回到队伍。"
                     else -> goalStatusLine
                 },
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF54606D),
+            style =
+                MaterialTheme.typography.bodySmall.copy(
+                    shadow = floatingHudTextShadow(),
+                ),
+            color = Color(0xFFF5F5F5),
+            lineHeight = 18.sp,
+        )
+    }
+}
+
+@Composable
+private fun FloatingHudStat(
+    label: String,
+    value: String,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = label,
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    shadow = floatingHudTextShadow(),
+                ),
+            color = Color(0xE0ECEFF1),
+        )
+        Text(
+            text = value,
+            style =
+                MaterialTheme.typography.titleMedium.copy(
+                    shadow = floatingHudTextShadow(),
+                ),
+            fontWeight = FontWeight.Black,
+            color = Color.White,
         )
     }
 }
@@ -183,26 +228,6 @@ fun ChapterPreviewCard(
         description = description,
         alignTop = true,
     )
-}
-
-@Composable
-fun StatBlock(
-    label: String,
-    value: String,
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = Color(0xFF5B6470),
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF202733),
-        )
-    }
 }
 
 @Composable

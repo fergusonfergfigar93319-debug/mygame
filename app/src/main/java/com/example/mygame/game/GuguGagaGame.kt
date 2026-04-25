@@ -9,9 +9,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,6 +28,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,24 +41,35 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.mygame.R
 import com.example.mygame.audio.SoundManager
 import com.example.mygame.data.SaveRepository
+import com.example.mygame.game.boss.BossTickEvent
+import com.example.mygame.game.boss.TakamatsuBossController
+import com.example.mygame.game.BossState
 import com.example.mygame.game.CoinKind
+import com.example.mygame.game.ImpactWave
+import com.example.mygame.game.FRAGILE_ICE_STAND_S
 import com.example.mygame.game.level.GameLevel
 import com.example.mygame.game.level.LevelCatalog
 import com.example.mygame.game.level.LevelContent
 import com.example.mygame.game.level.StorySceneTheme
 import com.example.mygame.ui.common.GameStageControlDock
 import com.example.mygame.ui.common.GameStageTopBar
+import com.example.mygame.ui.common.PauseOverlay
+import com.example.mygame.ui.common.rememberDeviceTilt
 import com.example.mygame.ui.theme.MyGameTheme
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -84,8 +103,10 @@ fun GuguGagaGame(
     var hasBubbleScarf by remember { mutableStateOf(false) }
     var hasSnowShield by remember { mutableStateOf(false) }
     var gustBootsTimer by remember { mutableFloatStateOf(0f) }
+    var auroraMagnetTimer by remember { mutableFloatStateOf(0f) }
     var tuanTuanAssistTimer by remember { mutableFloatStateOf(0f) }
     var tuanTuanAssistReady by remember { mutableStateOf(false) }
+    var fishSnacksEatenThisRun by remember { mutableIntStateOf(0) }
     var chapterPreviewVisible by remember { mutableStateOf(false) }
     var coyoteTimer by remember { mutableFloatStateOf(0f) }
     var jumpPressed by remember { mutableStateOf(false) }
@@ -95,6 +116,13 @@ fun GuguGagaGame(
     var tutorialJumped by remember { mutableStateOf(false) }
     var tutorialCollectedPowerUp by remember { mutableStateOf(false) }
     var tutorialDefeatedEnemy by remember { mutableStateOf(false) }
+    var campUnlockNoticeVisible by remember { mutableStateOf(false) }
+
+    val deviceTilt by rememberDeviceTilt(maxOffsetPx = 80f)
+
+    var stompHapticNonce by remember { mutableIntStateOf(0) }
+    var momentumHapticNonce by remember { mutableIntStateOf(0) }
+    val haptic = LocalHapticFeedback.current
 
     val coyoteMax = 0.12f
 
@@ -102,6 +130,15 @@ fun GuguGagaGame(
     var worldHeight by remember { mutableFloatStateOf(1f) }
     var levelLength by remember { mutableFloatStateOf(2400f) }
     var cameraX by remember { mutableFloatStateOf(0f) }
+
+    val takamatsuBoss = remember { TakamatsuBossController() }
+    var isBossFight by remember { mutableStateOf(false) }
+    /** Boss 击败后延迟结算，避免顿帧与 victory UI 抢拍。 */
+    var isBossDefeatSequenceActive by remember { mutableStateOf(false) }
+    var bossDefeatFinishKey by remember { mutableIntStateOf(0) }
+    var isPaused by remember { mutableStateOf(false) }
+    val isPausedState = rememberUpdatedState(isPaused)
+    val impactWaves = remember { mutableStateListOf<ImpactWave>() }
 
     var playerX by remember { mutableFloatStateOf(100f) }
     var playerY by remember { mutableFloatStateOf(100f) }
@@ -123,8 +160,12 @@ fun GuguGagaGame(
     val fishSnacks = remember { mutableStateListOf<FishSnack>() }
     var friendGoal by remember { mutableStateOf<FriendGoal?>(null) }
     val particles = remember { mutableStateListOf<Particle>() }
+    val dashPhantoms = remember { mutableStateListOf<DashPhantom>() }
     var hitStopTimer by remember { mutableFloatStateOf(0f) }
-    var shakeTimer by remember { mutableFloatStateOf(0f) }
+    /** 当前帧震屏振幅（像素），每帧乘以 [StompFeel.SHAKE_DECAY_PER_FRAME]。 */
+    var shakeAmplitude by remember { mutableFloatStateOf(0f) }
+    var shakeBias by remember { mutableStateOf(StompFeel.ShakeBias.None) }
+    var shakeBiasFrames by remember { mutableIntStateOf(0) }
     var renderShakeX by remember { mutableFloatStateOf(0f) }
     var renderShakeY by remember { mutableFloatStateOf(0f) }
 
@@ -183,11 +224,20 @@ fun GuguGagaGame(
         fishSnacks.clear()
         floatingCoins.clear()
         particles.clear()
+        dashPhantoms.clear()
         hitStopTimer = 0f
-        shakeTimer = 0f
+        shakeAmplitude = 0f
+        shakeBias = StompFeel.ShakeBias.None
+        shakeBiasFrames = 0
         renderShakeX = 0f
         renderShakeY = 0f
         friendGoal = content.friendGoal
+        isBossFight = false
+        isBossDefeatSequenceActive = false
+        bossDefeatFinishKey = 0
+        isPaused = false
+        impactWaves.clear()
+        takamatsuBoss.reset()
         if (currentLevel == GameLevel.IceLakeEchoValley) {
             if (!saveRepository.getCompanionDrorUnlocked()) {
                 saveRepository.saveCompanionDrorUnlocked()
@@ -201,14 +251,19 @@ fun GuguGagaGame(
         hasBubbleScarf = false
         hasSnowShield = false
         gustBootsTimer = 0f
+        auroraMagnetTimer = 0f
         tuanTuanAssistTimer = 0f
         tuanTuanAssistReady = rescuedTuanTuan
+        fishSnacksEatenThisRun = 0
         chapterPreviewVisible = false
+        campUnlockNoticeVisible = false
         jumpPressed = false
         bonusScore = 0
         particles.clear()
         hitStopTimer = 0f
-        shakeTimer = 0f
+        shakeAmplitude = 0f
+        shakeBias = StompFeel.ShakeBias.None
+        shakeBiasFrames = 0
         renderShakeX = 0f
         renderShakeY = 0f
         rebuildLevel()
@@ -242,21 +297,41 @@ fun GuguGagaGame(
     }
 
     fun endRun(win: Boolean) {
+        isBossDefeatSequenceActive = false
+        bossDefeatFinishKey = 0
+        isPaused = false
         running = false
+        if (fishSnacksEatenThisRun > 0) {
+            saveRepository.addFishSnacks(fishSnacksEatenThisRun)
+            fishSnacksEatenThisRun = 0
+        }
         particles.clear()
+        dashPhantoms.clear()
         hitStopTimer = 0f
-        shakeTimer = 0f
+        shakeAmplitude = 0f
+        shakeBias = StompFeel.ShakeBias.None
+        shakeBiasFrames = 0
         renderShakeX = 0f
         renderShakeY = 0f
         gameOver = !win
         levelClear = win
+        if (win && currentLevel == GameLevel.MistDike && isBossFight) {
+            saveRepository.setTakamatsuDefeated()
+        }
         if (win) {
+            val shouldShowCampNotice =
+                currentLevel == GameLevel.CedarVillageRuins &&
+                    !saveRepository.hasSeenCampUnlockNotice()
             persistTuanTuanRescue()
             tuanTuanAssistReady = true
             chapterPreviewVisible = activeLevel?.presentation?.chapterPreviewTitle != null
             if (currentLevel == GameLevel.CedarVillageRuins) {
                 saveRepository.saveCompanionDrorUnlocked()
                 companionDrorUnlocked = true
+            }
+            if (shouldShowCampNotice) {
+                campUnlockNoticeVisible = true
+                saveRepository.markCampUnlockNoticeSeen()
             }
         }
         persistBestScore()
@@ -265,7 +340,7 @@ fun GuguGagaGame(
     fun triggerTuanTuanAssist() {
         if (!rescuedTuanTuan || !tuanTuanAssistReady || !started || gameOver || levelClear) return
         tuanTuanAssistReady = false
-        tuanTuanAssistTimer = 4.5f
+        tuanTuanAssistTimer = saveRepository.getTuanAssistDurationSeconds()
     }
 
     LaunchedEffect(worldWidth, worldHeight) {
@@ -275,10 +350,31 @@ fun GuguGagaGame(
         }
     }
 
+    LaunchedEffect(stompHapticNonce) {
+        if (stompHapticNonce > 0) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+    }
+
+    LaunchedEffect(momentumHapticNonce) {
+        if (momentumHapticNonce > 0) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+
+    LaunchedEffect(bossDefeatFinishKey) {
+        if (bossDefeatFinishKey == 0) return@LaunchedEffect
+        val k = bossDefeatFinishKey
+        delay(1850L)
+        if (bossDefeatFinishKey != k) return@LaunchedEffect
+        if (!isBossDefeatSequenceActive) return@LaunchedEffect
+        endRun(win = true)
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             delay(16)
-            if (hitStopTimer <= 0f) {
+            if (!isPausedState.value && hitStopTimer <= 0f) {
                 globalAnim += 0.05f
             }
         }
@@ -287,10 +383,15 @@ fun GuguGagaGame(
     LaunchedEffect(running, started) {
         while (running && started) {
             delay(100)
-            if (hitStopTimer <= 0f) {
+            if (!isPausedState.value && hitStopTimer <= 0f) {
                 spriteAnimTick++
             }
         }
+    }
+
+    LaunchedEffect(isPaused, started, gameOver, levelClear) {
+        if (!started || gameOver || levelClear) return@LaunchedEffect
+        if (isPaused) soundManager?.pauseBgm() else soundManager?.resumeBgm()
     }
 
     LaunchedEffect(running, worldWidth, worldHeight, fishDashTimer, hasBubbleScarf, hasSnowShield, gustBootsTimer, tuanTuanAssistTimer) {
@@ -309,17 +410,29 @@ fun GuguGagaGame(
 
         while (running) {
             delay(16)
+            if (isPausedState.value) continue
 
-            if (shakeTimer > 0f) {
-                val tBefore = shakeTimer
-                shakeTimer = max(0f, shakeTimer - frameSeconds)
-                val phase = (tBefore / StompFeel.SHAKE_DURATION_S).coerceIn(0f, 1f)
-                val amp = StompFeel.SHAKE_MAX_PX * phase
-                renderShakeX = (Random.nextFloat() - 0.5f) * 2f * amp
-                renderShakeY = (Random.nextFloat() - 0.5f) * 2f * amp
+            if (shakeAmplitude > StompFeel.SHAKE_CUTOFF_PX) {
+                val (sx, sy) =
+                    when (shakeBias) {
+                        StompFeel.ShakeBias.Horizontal ->
+                            StompFeel.randomShakeOffsetHorizontalDominant(shakeAmplitude, Random)
+                        StompFeel.ShakeBias.Vertical ->
+                            StompFeel.randomShakeOffsetVerticalDominant(shakeAmplitude, Random)
+                        StompFeel.ShakeBias.None ->
+                            StompFeel.randomShakeOffsetPx(shakeAmplitude, Random)
+                    }
+                renderShakeX = sx
+                renderShakeY = sy
+                shakeAmplitude *= StompFeel.SHAKE_DECAY_PER_FRAME
             } else {
+                shakeAmplitude = 0f
                 renderShakeX = 0f
                 renderShakeY = 0f
+            }
+            if (shakeBiasFrames > 0) {
+                shakeBiasFrames--
+                if (shakeBiasFrames == 0) shakeBias = StompFeel.ShakeBias.None
             }
             if (hitStopTimer > 0f) {
                 hitStopTimer = max(0f, hitStopTimer - frameSeconds)
@@ -329,6 +442,7 @@ fun GuguGagaGame(
             val dashActive = fishDashTimer > 0f
             fishDashTimer = max(0f, fishDashTimer - frameSeconds)
             gustBootsTimer = max(0f, gustBootsTimer - frameSeconds)
+            auroraMagnetTimer = max(0f, auroraMagnetTimer - frameSeconds)
             tuanTuanAssistTimer = max(0f, tuanTuanAssistTimer - frameSeconds)
 
             val size = playerSize()
@@ -365,6 +479,16 @@ fun GuguGagaGame(
                 playerVelocityY *= 0.52f
             }
             playerX = (playerX + playerVelocityX * frameSeconds).coerceIn(0f, levelLength - size)
+            if (!isBossFight && !gameOver && !levelClear && started && activeLevel?.bossArena != null) {
+                val spec = activeLevel!!.bossArena!!
+                if (playerX >= spec.triggerAtPlayerX) {
+                    isBossFight = true
+                    friendGoal = null
+                    enemies.clear()
+                    impactWaves.clear()
+                    takamatsuBoss.start(spec, groundY, size)
+                }
+            }
             if (!tutorialMoved && currentLevel == GameLevel.CedarVillageRuins) {
                 tutorialMoved = abs(playerX - worldWidth * 0.12f) > worldWidth * 0.08f
             }
@@ -420,6 +544,7 @@ fun GuguGagaGame(
                                 BlockReward.Coin -> {
                                     blocks[index] = blocks[index].copy(used = true)
                                     coinsCollected += 1
+                                    soundManager?.playCoinPickup()
                                     floatingCoins += FloatingCoin(
                                         x = block.x + block.size * 0.25f,
                                         y = block.y - block.size * 0.35f,
@@ -445,6 +570,7 @@ fun GuguGagaGame(
                                     blocks[index] = blocks[index].copy(used = true)
                                     tutorialCollectedPowerUp = true
                                     hasBubbleScarf = true
+                                    soundManager?.playPowerUp()
                                     floatingCoins += FloatingCoin(
                                         x = block.x + block.size * 0.18f,
                                         y = block.y - block.size * 0.25f,
@@ -457,6 +583,7 @@ fun GuguGagaGame(
                                     blocks[index] = blocks[index].copy(used = true)
                                     tutorialCollectedPowerUp = true
                                     hasSnowShield = true
+                                    soundManager?.playPowerUp()
                                     floatingCoins += FloatingCoin(
                                         x = block.x + block.size * 0.2f,
                                         y = block.y - block.size * 0.2f,
@@ -469,6 +596,7 @@ fun GuguGagaGame(
                                     blocks[index] = blocks[index].copy(used = true)
                                     tutorialCollectedPowerUp = true
                                     gustBootsTimer = 8f
+                                    soundManager?.playPowerUp()
                                     floatingCoins += FloatingCoin(
                                         x = block.x + block.size * 0.2f,
                                         y = block.y - block.size * 0.24f,
@@ -476,6 +604,19 @@ fun GuguGagaGame(
                                         velocityY = -240f,
                                         life = 0.65f,
                                     )
+                                }
+                                BlockReward.Magnet -> {
+                                    blocks[index] = blocks[index].copy(used = true)
+                                    tutorialCollectedPowerUp = true
+                                    auroraMagnetTimer = saveRepository.getMagnetDurationSeconds()
+                                    floatingCoins += FloatingCoin(
+                                        x = block.x + block.size * 0.2f,
+                                        y = block.y - block.size * 0.24f,
+                                        size = block.size * 0.6f,
+                                        velocityY = -260f,
+                                        life = 0.75f,
+                                    )
+                                    soundManager?.playMagnetPickup()
                                 }
                             }
                         }
@@ -487,12 +628,25 @@ fun GuguGagaGame(
             if (landed && playerVelocityY >= 0f) {
                 nextY = landingY
                 if (wasInAir && playerVelocityY > 45f) {
-                    ParticleSpawners.landingDust(
-                        particles,
-                        worldX = playerX,
-                        footY = landingY + size,
-                        playerWidth = size,
-                    )
+                    if (playerVelocityY >= StompFeel.HARD_LAND_IMPACT_VY) {
+                        shakeAmplitude = max(shakeAmplitude, StompFeel.SHAKE_HARD_LAND_PX)
+                        shakeBias = StompFeel.ShakeBias.Vertical
+                        shakeBiasFrames = StompFeel.SHAKE_MOMENTUM_BIAS_FRAMES
+                        momentumHapticNonce++
+                        ParticleSpawners.hardLandingDust(
+                            particles,
+                            worldX = playerX,
+                            footY = landingY + size,
+                            playerWidth = size,
+                        )
+                    } else {
+                        ParticleSpawners.landingDust(
+                            particles,
+                            worldX = playerX,
+                            footY = landingY + size,
+                            playerWidth = size,
+                        )
+                    }
                     soundManager?.playLand()
                 }
                 playerVelocityY = 0f
@@ -503,9 +657,144 @@ fun GuguGagaGame(
 
             playerY = nextY
 
-            if (playerY > worldHeight) {
+            if (playerY > worldHeight && !isBossDefeatSequenceActive) {
                 endRun(win = false)
                 continue
+            }
+
+            if (isBossFight && takamatsuBoss.running) {
+                for (tickEvent in takamatsuBoss.tick(frameSeconds)) {
+                    when (tickEvent) {
+                        is BossTickEvent.GroundImpact -> {
+                            impactWaves += tickEvent.wave
+                            ParticleSpawners.bossImpactWaveRim(
+                                particles,
+                                tickEvent.wave.centerX,
+                                tickEvent.wave.surfaceY,
+                                tickEvent.wave.halfWidth,
+                            )
+                        }
+                        is BossTickEvent.HeavyStompFeel -> {
+                            if (tickEvent.hitStop > hitStopTimer) {
+                                hitStopTimer = tickEvent.hitStop
+                            }
+                            shakeAmplitude = max(shakeAmplitude, tickEvent.shake)
+                            if (tickEvent.shakeBias != StompFeel.ShakeBias.None) {
+                                shakeBias = tickEvent.shakeBias
+                                shakeBiasFrames = StompFeel.SHAKE_MOMENTUM_BIAS_FRAMES
+                            }
+                            if (tickEvent.playBossSlamSfx) {
+                                soundManager?.playBossLand()
+                                soundManager?.duckBgmOnHeavyStomp(0.22f, 220L)
+                            }
+                        }
+                        is BossTickEvent.RequestSpawnMinion -> {
+                            enemies += Enemy(
+                                x = tickEvent.x,
+                                y = tickEvent.y,
+                                width = tickEvent.width,
+                                height = tickEvent.height,
+                                patrolStart = tickEvent.x - 20f,
+                                patrolEnd = tickEvent.x + 200f,
+                                speed = 105f,
+                                kind = tickEvent.kind,
+                                direction = 1f,
+                            )
+                        }
+                        is BossTickEvent.MarkPlatformsFragile -> {
+                            if (tickEvent.enabled) {
+                                for (i in platforms.indices) {
+                                    val p = platforms[i]
+                                    if (!p.isFragile) {
+                                        platforms[i] = p.copy(isFragile = true, fragileTimeLeft = FRAGILE_ICE_STAND_S)
+                                    }
+                                }
+                            }
+                        }
+                        is BossTickEvent.BossDefeated -> {
+                            if (isBossDefeatSequenceActive) break
+                            isBossDefeatSequenceActive = true
+                            bossDefeatFinishKey++
+                            enemies.clear()
+                            impactWaves.clear()
+                            val be = takamatsuBoss.entity
+                            soundManager?.playBossDefeat()
+                            soundManager?.duckBgmOnHeavyStomp(0.1f, 2500L)
+                            hitStopTimer = max(hitStopTimer, StompFeel.BOSS_DEATH_HIT_STOP_S)
+                            shakeAmplitude = max(shakeAmplitude, StompFeel.SHAKE_MAX_PX * 1.15f)
+                            shakeBias = StompFeel.ShakeBias.Vertical
+                            shakeBiasFrames = StompFeel.SHAKE_MOMENTUM_BIAS_FRAMES
+                            stompHapticNonce++
+                            ParticleSpawners.stompKillBurst(
+                                particles,
+                                centerX = be.x + be.width * 0.5f,
+                                centerY = be.y + be.height * 0.42f,
+                                countMultiplier = 2f,
+                                speedScale = 0.5f,
+                            )
+                        }
+                    }
+                }
+            }
+            if (!running) {
+                continue
+            }
+
+            if (impactWaves.isNotEmpty()) {
+                val pcx = playerX + size * 0.5f
+                val pBot = playerY + size
+                for (i in impactWaves.lastIndex downTo 0) {
+                    val w = impactWaves[i]
+                    w.halfWidth += w.growSpeed * frameSeconds
+                    w.life -= frameSeconds
+                    if (w.life <= 0f) {
+                        impactWaves.removeAt(i)
+                        continue
+                    }
+                    if (onGround && abs(pcx - w.centerX) < w.halfWidth &&
+                        pBot >= w.surfaceY - 18f && pBot <= w.surfaceY + 22f
+                    ) {
+                        playerVelocityY = -480f
+                        onGround = false
+                        momentumHapticNonce++
+                        shakeAmplitude = max(shakeAmplitude, 16f)
+                        w.life = 0f
+                    }
+                }
+                impactWaves.removeAll { it.life <= 0f }
+            }
+
+            val pBottom = playerY + size
+            val pLeft = playerX
+            val pRight = playerX + size
+            val epsPlat = 8f
+            for (pi in platforms.lastIndex downTo 0) {
+                val p = platforms[pi]
+                if (!p.isFragile) continue
+                val standingOnFragile =
+                    onGround && pRight > p.x && pLeft < p.x + p.width &&
+                        pBottom >= p.y - epsPlat && pBottom <= p.y + epsPlat * 2f
+                if (standingOnFragile) {
+                    val t = (p.fragileTimeLeft ?: FRAGILE_ICE_STAND_S) - frameSeconds
+                    if (t <= 0f) {
+                        ParticleSpawners.fragileIceShatter(
+                            particles,
+                            centerX = p.x + p.width * 0.5f,
+                            centerY = p.y + 3f,
+                        )
+                        platforms.removeAt(pi)
+                        shakeAmplitude = max(shakeAmplitude, StompFeel.SHAKE_LIGHT_PX)
+                        onGround = false
+                        playerVelocityY = 50f
+                        soundManager?.playIceCrack()
+                    } else {
+                        platforms[pi] = p.copy(fragileTimeLeft = t)
+                    }
+                } else {
+                    if (p.fragileTimeLeft != null) {
+                        platforms[pi] = p.copy(fragileTimeLeft = null)
+                    }
+                }
             }
 
             for (index in blocks.indices) {
@@ -627,6 +916,31 @@ fun GuguGagaGame(
             fishSnacks.addAll(nextFishSnacks)
 
             val playerRect = Rect(playerX, playerY, playerX + size, playerY + size)
+            if (auroraMagnetTimer > 0f && coins.isNotEmpty()) {
+                val magnetRadius = size * 5.2f
+                val pullSpeed = 680f
+                val playerCenterX = playerX + size * 0.5f
+                val playerCenterY = playerY + size * 0.5f
+                val pulledCoins =
+                    coins.map { coin ->
+                        val coinCenterX = coin.x + coin.size * 0.5f
+                        val coinCenterY = coin.y + coin.size * 0.5f
+                        val dx = playerCenterX - coinCenterX
+                        val dy = playerCenterY - coinCenterY
+                        val dist = hypot(dx, dy)
+                        if (dist in 1f..magnetRadius) {
+                            val step = min(pullSpeed * frameSeconds, dist)
+                            coin.copy(
+                                x = coin.x + dx / dist * step,
+                                y = coin.y + dy / dist * step,
+                            )
+                        } else {
+                            coin
+                        }
+                    }
+                coins.clear()
+                coins.addAll(pulledCoins)
+            }
 
             val collectedCoins = coins.filter { coin ->
                 val coinRect = Rect(coin.x, coin.y, coin.x + coin.size, coin.y + coin.size)
@@ -634,7 +948,21 @@ fun GuguGagaGame(
             }
             if (collectedCoins.isNotEmpty()) {
                 coinsCollected += collectedCoins.size
+                val storyCollectBonus =
+                    collectedCoins.sumOf { coin ->
+                        when (coin.kind) {
+                            CoinKind.Normal -> 0
+                            CoinKind.Beacon -> 35
+                            CoinKind.LorePage -> 120
+                        }
+                    }
+                bonusScore += storyCollectBonus
                 coins.removeAll(collectedCoins.toSet())
+                if (collectedCoins.any { it.kind == CoinKind.LorePage || it.kind == CoinKind.Beacon }) {
+                    soundManager?.playPowerUp()
+                } else {
+                    soundManager?.playCoinPickup()
+                }
             }
 
             val eatenFish = fishSnacks.firstOrNull { fishSnack ->
@@ -644,7 +972,8 @@ fun GuguGagaGame(
             if (eatenFish != null) {
                 val ex = eatenFish
                 fishSnacks.remove(eatenFish)
-                fishDashTimer = 7f
+                fishSnacksEatenThisRun += 1
+                fishDashTimer = saveRepository.getFishDashDurationSeconds()
                 tutorialCollectedPowerUp = true
                 bonusScore += 50
                 ParticleSpawners.fishSnackBurst(
@@ -655,57 +984,169 @@ fun GuguGagaGame(
                 soundManager?.playEatFish()
             }
 
-            val stompedEnemy = enemies.firstOrNull { enemy ->
+            var bossStompHandled = false
+            if (isBossFight && takamatsuBoss.isEntityReady) {
+                val be = takamatsuBoss.entity
+                if (be.state != BossState.DYING && be.state != BossState.INTRO) {
+                    val bossRect = Rect(be.x, be.y, be.x + be.width, be.y + be.height)
+                    val stompBoss =
+                        playerRect.overlaps(bossRect) &&
+                            playerVelocityY > 0f &&
+                            playerRect.bottom <= be.y + be.height * 0.5f
+                    if (stompBoss) {
+                        bossStompHandled = true
+                        when {
+                            takamatsuBoss.isBossAirborneForStompIgnore(groundY) -> {
+                                playerVelocityY = -400f
+                                onGround = false
+                                hitStopTimer = StompFeel.HIT_STOP_LIGHT_S
+                                soundManager?.playShieldBounce()
+                            }
+                            be.state == BossState.SHIELDED && be.hasShield &&
+                                fishDashTimer <= 0f && tuanTuanAssistTimer <= 0f -> {
+                                playerVelocityY = -400f
+                                onGround = false
+                                hitStopTimer = StompFeel.HIT_STOP_LIGHT_S
+                                soundManager?.playShieldBounce()
+                            }
+                            be.state == BossState.SHIELDED && be.hasShield &&
+                                (fishDashTimer > 0f || tuanTuanAssistTimer > 0f) -> {
+                                takamatsuBoss.notifyShieldBroken()
+                                playerVelocityY = -720f
+                                onGround = false
+                                hitStopTimer = StompFeel.BOSS_SHIELD_BREAK_HIT_STOP_S
+                                shakeAmplitude = max(shakeAmplitude, StompFeel.SHAKE_MAX_PX)
+                                shakeBias = StompFeel.ShakeBias.Vertical
+                                shakeBiasFrames = StompFeel.SHAKE_MOMENTUM_BIAS_FRAMES
+                                stompHapticNonce++
+                                ParticleSpawners.stompKillBurst(
+                                    particles,
+                                    centerX = be.x + be.width * 0.5f,
+                                    centerY = be.y + be.height * 0.42f,
+                                )
+                                soundManager?.playBossShieldBreak()
+                                soundManager?.duckBgmOnHeavyStomp(0.2f, 240L)
+                                bonusScore += 200
+                            }
+                            be.state == BossState.STUNNED || be.state == BossState.ENRAGED -> {
+                                playerVelocityY = -400f
+                                onGround = false
+                                hitStopTimer = StompFeel.HIT_STOP_LIGHT_S
+                                soundManager?.playShieldBounce()
+                            }
+                            else -> {
+                                playerVelocityY = -400f
+                                onGround = false
+                                hitStopTimer = StompFeel.HIT_STOP_LIGHT_S
+                                soundManager?.playShieldBounce()
+                            }
+                        }
+                    }
+                }
+            }
+
+            val stompedEnemy =
+                if (bossStompHandled) {
+                    null
+                } else {
+                    enemies.firstOrNull { enemy ->
                 val enemyRect = Rect(enemy.x, enemy.y, enemy.x + enemy.width, enemy.y + enemy.height)
                 playerRect.overlaps(enemyRect) &&
                     enemy.kind.canBeStomped() &&
                     playerVelocityY > 0f &&
                     playerRect.bottom <= enemyRect.top + enemy.height * 0.5f
             }
+                }
             if (stompedEnemy != null) {
                 val e = stompedEnemy
+                if (e.hasIceShield && fishDashTimer <= 0f && tuanTuanAssistTimer <= 0f) {
+                    playerVelocityY = -400f
+                    onGround = false
+                    hitStopTimer = StompFeel.HIT_STOP_LIGHT_S
+                    shakeAmplitude = max(shakeAmplitude, StompFeel.SHAKE_LIGHT_PX)
+                    soundManager?.playShieldBounce()
+                } else {
                 enemies.remove(e)
                 tutorialDefeatedEnemy = true
                 playerVelocityY = -720f
                 onGround = false
                 bonusScore += 25
                 hitStopTimer = StompFeel.HIT_STOP_S
-                shakeTimer = StompFeel.SHAKE_DURATION_S
+                shakeAmplitude = max(shakeAmplitude, StompFeel.SHAKE_MAX_PX)
+                shakeBias = StompFeel.ShakeBias.None
+                shakeBiasFrames = 0
+                stompHapticNonce++
                 ParticleSpawners.stompKillBurst(
                     particles,
                     centerX = e.x + e.width * 0.5f,
                     centerY = e.y + e.height * 0.42f,
                 )
                 soundManager?.playStomp()
+                soundManager?.duckBgmOnHeavyStomp()
+                }
             } else {
+                if (!bossStompHandled) {
                 val hitEnemyIndex = enemies.indexOfFirst { enemy ->
                     val enemyRect = Rect(enemy.x, enemy.y, enemy.x + enemy.width, enemy.y + enemy.height)
                     playerRect.overlaps(enemyRect)
                 }
                 if (hitEnemyIndex >= 0) {
                     if (fishDashTimer > 0f) {
+                        val e = enemies[hitEnemyIndex]
+                        val ecx = e.x + e.width * 0.5f
+                        val ecy = e.y + e.height * 0.42f
                         fishDashTimer = 0f
                         enemies.removeAt(hitEnemyIndex)
                         tutorialDefeatedEnemy = true
-                        playerVelocityY = -320f
+                        playerVelocityY = if (e.hasIceShield) -420f else -320f
+                        if (e.hasIceShield) {
+                            hitStopTimer = StompFeel.HIT_STOP_S
+                            shakeAmplitude = max(shakeAmplitude, StompFeel.SHAKE_MAX_PX)
+                            shakeBias = StompFeel.ShakeBias.None
+                            shakeBiasFrames = 0
+                            stompHapticNonce++
+                            ParticleSpawners.stompKillBurst(
+                                particles,
+                                centerX = ecx,
+                                centerY = ecy,
+                            )
+                            soundManager?.playStomp()
+                            soundManager?.duckBgmOnHeavyStomp()
+                            bonusScore += 25
+                        } else {
+                            shakeAmplitude = max(shakeAmplitude, StompFeel.SHAKE_DASH_PX)
+                            shakeBias = StompFeel.ShakeBias.Horizontal
+                            shakeBiasFrames = StompFeel.SHAKE_MOMENTUM_BIAS_FRAMES
+                            momentumHapticNonce++
+                            ParticleSpawners.dashPierceBurst(
+                                particles,
+                                centerX = ecx,
+                                centerY = ecy,
+                                facingRight = playerFacingRight,
+                            )
+                        }
                     } else if (hasSnowShield) {
                         hasSnowShield = false
                         playerVelocityY = -260f
                         playerVelocityX = if (playerFacingRight) -180f else 180f
-                        hitStopTimer = StompFeel.HIT_STOP_S * 0.7f
-                    } else {
+                        hitStopTimer = StompFeel.HIT_STOP_LIGHT_S
+                        shakeAmplitude = max(shakeAmplitude, StompFeel.SHAKE_LIGHT_PX)
+                    } else if (!isBossDefeatSequenceActive) {
                         endRun(win = false)
                         continue
                     }
                 }
+                }
             }
 
+            if (!isBossFight) {
             friendGoal?.let { flag ->
                 val flagRect = Rect(flag.x - 24f, flag.groundY - flag.height, flag.x + 48f, flag.groundY)
                 if (playerRect.overlaps(flagRect)) {
                     endRun(win = true)
                     continue
                 }
+            }
             }
 
             if (onGround) {
@@ -737,12 +1178,33 @@ fun GuguGagaGame(
                     size = size,
                     facingRight = playerFacingRight,
                 )
+                ParticleSpawners.trySpawnDashPhantom(
+                    dashPhantoms,
+                    worldX = playerX,
+                    worldY = playerY,
+                    destSize = size,
+                    facingRight = playerFacingRight,
+                    animTick = spriteAnimTick,
+                    isMoving = guguIsMovingHorizontally(
+                        playerVelocityX,
+                        moveLeftPressed,
+                        moveRightPressed,
+                    ),
+                )
             }
+            updateDashPhantomsInPlace(dashPhantoms, frameSeconds)
             updateParticlesInPlace(particles, frameSeconds)
 
             score = coinsCollected * 10 + (playerX / 24f).toInt() + if (fishDashTimer > 0f) 25 else 0 + bonusScore
             val targetCam =
-                (playerX - worldWidth * 0.35f).coerceIn(0f, max(levelLength - worldWidth, 0f))
+                if (isBossFight && activeLevel?.bossArena != null) {
+                    (activeLevel!!.bossArena!!.arenaCenterWorldX - worldWidth * 0.35f).coerceIn(
+                        0f,
+                        max(levelLength - worldWidth, 0f),
+                    )
+                } else {
+                    (playerX - worldWidth * 0.35f).coerceIn(0f, max(levelLength - worldWidth, 0f))
+                }
             cameraX += (targetCam - cameraX) * min(1f, 12f * frameSeconds)
         }
     }
@@ -767,6 +1229,7 @@ fun GuguGagaGame(
             else if (hasBubbleScarf) add("泡泡围巾")
             else if (hasSnowShield) add("护盾")
             else if (gustBootsTimer > 0f) add("长跳")
+            else if (auroraMagnetTimer > 0f) add("磁针")
         }
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(outerGradient))) {
         Column(Modifier.fillMaxSize()) {
@@ -785,11 +1248,26 @@ fun GuguGagaGame(
                         val theme = stage?.sceneTheme ?: defaultStorySceneTheme()
 
                         translate(renderShakeX, renderShakeY) {
+                        val tf = Offset(
+                            deviceTilt.x * StoryParallax.TILT_LAYER_FAR,
+                            deviceTilt.y * StoryParallax.TILT_LAYER_FAR,
+                        )
+                        val tm = Offset(
+                            deviceTilt.x * StoryParallax.TILT_LAYER_MID,
+                            deviceTilt.y * StoryParallax.TILT_LAYER_MID,
+                        )
+                        val tFore = Offset(
+                            deviceTilt.x * StoryParallax.TILT_LAYER_FORE,
+                            deviceTilt.y * StoryParallax.TILT_LAYER_FORE,
+                        )
                         drawStorySceneBackdrop(
                             theme = theme,
                             cameraX = cameraX,
                             globalAnim = globalAnim,
                             groundY = groundY,
+                            tiltParallaxFar = tf,
+                            tiltParallaxMid = tm,
+                            tiltParallaxFore = tFore,
                         )
 
                         var segmentStart = 0f
@@ -818,8 +1296,38 @@ fun GuguGagaGame(
                         platforms.forEach { platform ->
                             val drawX = platform.x - cameraX
                             if (drawX + platform.width < -40f || drawX > size.width + 40f) return@forEach
-                            drawRoundRect(theme.platformTopColor, Offset(drawX, platform.y), androidx.compose.ui.geometry.Size(platform.width, platform.height), CornerRadius(16f, 16f))
-                            drawRoundRect(theme.platformBottomColor, Offset(drawX, platform.y + platform.height * 0.55f), androidx.compose.ui.geometry.Size(platform.width, platform.height * 0.45f), CornerRadius(12f, 12f))
+                            val shiverX =
+                                if (platform.isFragile && platform.fragileTimeLeft != null) {
+                                    val prog =
+                                        1f - (platform.fragileTimeLeft!! / FRAGILE_ICE_STAND_S).coerceIn(0f, 1f)
+                                    sin(globalAnim * 28f) * 5.5f * prog
+                                } else {
+                                    0f
+                                }
+                            val top =
+                                if (platform.isFragile) {
+                                    Color(0xFFB3E5FC)
+                                } else {
+                                    theme.platformTopColor
+                                }
+                            val bot =
+                                if (platform.isFragile) {
+                                    Color(0xFF64B5F6)
+                                } else {
+                                    theme.platformBottomColor
+                                }
+                            drawRoundRect(
+                                top,
+                                Offset(drawX + shiverX, platform.y),
+                                androidx.compose.ui.geometry.Size(platform.width, platform.height),
+                                CornerRadius(16f, 16f),
+                            )
+                            drawRoundRect(
+                                bot,
+                                Offset(drawX + shiverX, platform.y + platform.height * 0.55f),
+                                androidx.compose.ui.geometry.Size(platform.width, platform.height * 0.45f),
+                                CornerRadius(12f, 12f),
+                            )
                         }
 
                         blocks.forEach { block ->
@@ -886,6 +1394,71 @@ fun GuguGagaGame(
                             drawPath(flagPath, Color(0xFFFFCDD2), style = Stroke(width = 3f))
                         }
 
+                        impactWaves.forEach { w ->
+                            val t = (w.life / w.maxLife).coerceIn(0.12f, 1f)
+                            val l = w.centerX - w.halfWidth - cameraX
+                            val waveW = w.halfWidth * 2f
+                            if (l + waveW > -40f && l < size.width + 40f) {
+                                drawRect(
+                                    Color(0xFF4FC3F7).copy(alpha = 0.14f * t + 0.1f),
+                                    topLeft = Offset(l, w.surfaceY - 10f),
+                                    size = androidx.compose.ui.geometry.Size(waveW, 16f)
+                                )
+                                drawLine(
+                                    Color(0xFFE0F7FA).copy(alpha = 0.5f * t + 0.2f),
+                                    start = Offset(l, w.surfaceY),
+                                    end = Offset(l + waveW, w.surfaceY),
+                                    strokeWidth = 4f
+                                )
+                            }
+                        }
+                        if (isBossFight && takamatsuBoss.isEntityReady) {
+                            val b = takamatsuBoss.entity
+                            val bx = b.x - cameraX
+                            if (bx + b.width > -40f && bx < size.width + 40f) {
+                                val bossBreathY = 1f + 0.04f * sin(globalAnim * 6f)
+                                val flashAlpha =
+                                    (b.damageFlashTimer / BOSS_DAMAGE_FLASH_MAX_S).coerceIn(0f, 1f) * 0.82f
+                                withTransform({
+                                    translate(
+                                        left = bx + b.width * 0.5f,
+                                        top = b.y + b.height,
+                                    )
+                                    scale(scaleX = 1f, scaleY = bossBreathY, pivot = Offset.Zero)
+                                    translate(left = -b.width * 0.5f, top = -b.height)
+                                }) {
+                                    drawRoundRect(
+                                        Color(0xFFFAFAFA),
+                                        Offset(0f, 0f),
+                                        androidx.compose.ui.geometry.Size(b.width, b.height * 0.5f),
+                                        CornerRadius(16f, 20f),
+                                    )
+                                    drawRoundRect(
+                                        Color(0xFFE8E8E8),
+                                        Offset(0f, b.height * 0.5f),
+                                        androidx.compose.ui.geometry.Size(b.width, b.height * 0.5f),
+                                        CornerRadius(14f, 16f),
+                                    )
+                                    if (b.hasShield) {
+                                        drawCircle(
+                                            Color(0x8829B6F6),
+                                            min(b.width, b.height) * 0.7f,
+                                            Offset(b.width * 0.5f, b.height * 0.42f),
+                                            style = Stroke(width = 5f),
+                                        )
+                                    }
+                                    if (flashAlpha > 0f) {
+                                        drawRoundRect(
+                                            Color.White.copy(alpha = flashAlpha),
+                                            Offset(0f, 0f),
+                                            androidx.compose.ui.geometry.Size(b.width, b.height),
+                                            CornerRadius(12f, 14f),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         enemies.forEach { enemy ->
                             val drawX = enemy.x - cameraX
                             when (enemy.kind) {
@@ -943,6 +1516,34 @@ fun GuguGagaGame(
                                     drawCircle(Color.Black, enemy.width * 0.03f, Offset(drawX + enemy.width * 0.42f, enemy.y + enemy.height * 0.42f))
                                     drawCircle(Color.Black, enemy.width * 0.03f, Offset(drawX + enemy.width * 0.58f, enemy.y + enemy.height * 0.42f))
                                 }
+                                EnemyKind.SnowMole -> {
+                                    drawOval(
+                                        theme.sealBodyColor.copy(alpha = 0.9f),
+                                        Offset(drawX, enemy.y + enemy.height * 0.12f),
+                                        androidx.compose.ui.geometry.Size(enemy.width, enemy.height * 0.72f),
+                                    )
+                                    drawOval(
+                                        theme.sealBellyColor.copy(alpha = 0.85f),
+                                        Offset(drawX + enemy.width * 0.18f, enemy.y + enemy.height * 0.46f),
+                                        androidx.compose.ui.geometry.Size(enemy.width * 0.64f, enemy.height * 0.28f),
+                                    )
+                                    drawCircle(Color(0xFF1A2A33), enemy.width * 0.045f, Offset(drawX + enemy.width * 0.38f, enemy.y + enemy.height * 0.36f))
+                                    drawCircle(Color(0xFF1A2A33), enemy.width * 0.045f, Offset(drawX + enemy.width * 0.62f, enemy.y + enemy.height * 0.36f))
+                                    drawLine(
+                                        Color(0xFFB7CED8),
+                                        Offset(drawX + enemy.width * 0.08f, enemy.y + enemy.height * 0.78f),
+                                        Offset(drawX + enemy.width * 0.92f, enemy.y + enemy.height * 0.78f),
+                                        strokeWidth = 4f,
+                                    )
+                                }
+                            }
+                            if (enemy.hasIceShield) {
+                                drawCircle(
+                                    Color(0x8829B6F6),
+                                    min(enemy.width, enemy.height) * 0.62f,
+                                    Offset(drawX + enemy.width * 0.5f, enemy.y + enemy.height * 0.42f),
+                                    style = Stroke(width = 5f),
+                                )
                             }
                         }
 
@@ -959,15 +1560,17 @@ fun GuguGagaGame(
                             drawRoundRect(theme.fishTailColor, Offset(drawX + fishSnack.size * 0.6f, fishSnack.y + fishSnack.size * 0.18f), androidx.compose.ui.geometry.Size(fishSnack.size * 0.26f, fishSnack.size * 0.52f), CornerRadius(10f, 10f))
                         }
 
-                        drawStageForegroundDecor(
-                            groundY = groundY,
-                            globalAnim = globalAnim,
-                            palette = StageDecorPalette(
-                                glowColor = theme.sunCoreColor,
-                                mistColor = theme.foregroundMistColor,
-                                shardColor = theme.foregroundShardColor,
-                            ),
-                        )
+                        translate(tFore.x, tFore.y) {
+                            drawStageForegroundDecor(
+                                groundY = groundY,
+                                globalAnim = globalAnim,
+                                palette = StageDecorPalette(
+                                    glowColor = theme.sunCoreColor,
+                                    mistColor = theme.foregroundMistColor,
+                                    shardColor = theme.foregroundShardColor,
+                                ),
+                            )
+                        }
 
                         particles.forEach { p ->
                             val px = p.x - cameraX
@@ -990,6 +1593,14 @@ fun GuguGagaGame(
                         }
                         if (gustBootsTimer > 0f) {
                             drawCircle(Color(0x55FFF176), hero * 0.72f, Offset(playerScreenX + hero / 2, playerY + hero * 0.9f))
+                        }
+                        if (auroraMagnetTimer > 0f) {
+                            drawCircle(
+                                Color(0x6635F3FF),
+                                hero * (1.18f + 0.08f * sin(globalAnim * 3f)),
+                                Offset(playerScreenX + hero / 2, playerY + hero / 2),
+                                style = Stroke(width = 4f),
+                            )
                         }
                         if (tuanTuanAssistTimer > 0f) {
                             drawCircle(Color(0x55A5D6A7), hero * 1.08f, Offset(playerScreenX + hero / 2, playerY + hero / 2))
@@ -1021,6 +1632,26 @@ fun GuguGagaGame(
                             moveLeftPressed,
                             moveRightPressed,
                         )
+                        val guguBreathY = 1f + 0.035f * sin(globalAnim * 5.5f)
+                        for (ph in dashPhantoms) {
+                            val sx = ph.worldX - cameraX
+                            if (sx > -ph.destSize * 2 && sx < size.width + ph.destSize * 2) {
+                                val pa = (ph.life / ph.maxLife).coerceIn(0f, 1f) * 0.5f
+                                drawGuguCharacterSprite(
+                                    image = guguSprite,
+                                    layout = guguSpriteLayout,
+                                    screenX = sx,
+                                    screenY = ph.worldY,
+                                    destSize = ph.destSize,
+                                    globalAnim = globalAnim,
+                                    animTick = ph.animTick,
+                                    facingRight = ph.facingRight,
+                                    isMoving = ph.isMoving,
+                                    breathScaleY = 1f,
+                                    overallAlpha = pa,
+                                )
+                            }
+                        }
                         drawGuguCharacterSprite(
                             image = guguSprite,
                             layout = guguSpriteLayout,
@@ -1031,6 +1662,7 @@ fun GuguGagaGame(
                             animTick = spriteAnimTick,
                             facingRight = playerFacingRight,
                             isMoving = moving,
+                            breathScaleY = guguBreathY,
                         )
                         }
                     }
@@ -1049,6 +1681,12 @@ fun GuguGagaGame(
                     }
 
                     if (gameOver) {
+                        val failDescription =
+                            if (currentLevel == GameLevel.MistDike && isBossFight) {
+                                "本次得分 $score，收集小鱼干 $coinsCollected。\n高松鹅有护盾时，先用鱼干冲刺或团团支援破盾，再寻找踩踏窗口。"
+                            } else {
+                                "本次得分 $score，收集小鱼干 $coinsCollected。\n${pres?.failHint ?: ""}"
+                            }
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -1057,7 +1695,7 @@ fun GuguGagaGame(
                         ) {
                             OverlayCard(
                                 title = "闯关失败",
-                                description = "本次得分 $score，收集小鱼干 $coinsCollected。\n${pres?.failHint ?: ""}",
+                                description = failDescription,
                             )
                         }
                     }
@@ -1090,6 +1728,50 @@ fun GuguGagaGame(
                             }
                         }
                     }
+                    if (campUnlockNoticeVisible) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clickable {
+                                    campUnlockNoticeVisible = false
+                                    jump()
+                                },
+                            contentAlignment = Alignment.TopCenter,
+                        ) {
+                            ChapterPreviewCard(
+                                title = "团团归队，营地开放",
+                                description = "这次收集到的小鱼干已经存进补给营地。回到主页后可以先升级冲刺、团团支援或补给航道，再继续北上。",
+                            )
+                        }
+                    }
+                    if (started && running && !gameOver && !levelClear && !isBossDefeatSequenceActive) {
+                        IconButton(
+                            onClick = { isPaused = true },
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .statusBarsPadding()
+                                    .padding(top = 8.dp, end = 8.dp)
+                                    .size(48.dp),
+                        ) {
+                            Icon(
+                                Icons.Rounded.Pause,
+                                contentDescription = "暂停",
+                                tint = Color(0xFFE3EEF8),
+                            )
+                        }
+                    }
+                    if (isPaused && started && !gameOver && !levelClear) {
+                        PauseOverlay(
+                            onResume = { isPaused = false },
+                            onQuit = {
+                                isPaused = false
+                                onExitToMenu?.invoke()
+                            },
+                            soundManager = soundManager,
+                            saveRepository = saveRepository,
+                        )
+                    }
                 }
             }
             GameStageControlDock {
@@ -1117,13 +1799,14 @@ fun GuguGagaGame(
                 }
             }
         }
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        ) {
+        if (!isBossDefeatSequenceActive) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1149,10 +1832,24 @@ fun GuguGagaGame(
                     hasBubbleScarf = hasBubbleScarf,
                     hasSnowShield = hasSnowShield,
                     gustBootsTimer = gustBootsTimer,
+                    auroraMagnetTimer = auroraMagnetTimer,
                     rescuedTuanTuan = rescuedTuanTuan,
                     tuanTuanAssistReady = tuanTuanAssistReady,
                     tuanTuanAssistTimer = tuanTuanAssistTimer,
                     goalStatusLine = activeLevel?.presentation?.hudGoalLine ?: "准备出发…"
+                )
+            }
+            if (isBossFight && takamatsuBoss.isEntityReady) {
+                val b = takamatsuBoss.entity
+                val hpFrac = (b.hp / b.maxHp).coerceIn(0.02f, 1f)
+                LinearProgressIndicator(
+                    progress = { hpFrac },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                        .height(7.dp),
+                    color = Color(0xFFC62828),
+                    trackColor = Color(0xFF12090A).copy(alpha = 0.5f),
                 )
             }
             if (tutorialHint != null) {
@@ -1161,6 +1858,7 @@ fun GuguGagaGame(
                     title = "新手引导",
                     description = tutorialHint,
                 )
+            }
             }
         }
     }

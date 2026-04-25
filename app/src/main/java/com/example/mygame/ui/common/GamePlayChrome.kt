@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,14 +25,109 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+/** 无底板 HUD：雪地/蓝天背景下保证正文可读。 */
+fun floatingHudTextShadow(): Shadow =
+    Shadow(
+        color = Color(0xCC000000),
+        offset = Offset(1.5f, 2.5f),
+        blurRadius = 5f,
+    )
+
+@Composable
+fun FloatingHudStatusLabel(
+    label: String,
+    active: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = label,
+        modifier = modifier,
+        style =
+            MaterialTheme.typography.labelMedium.copy(
+                shadow = floatingHudTextShadow(),
+            ),
+        color =
+            if (active) {
+                Color(0xFFB3E5FC)
+            } else {
+                Color(0xFF78909C).copy(alpha = 0.65f)
+            },
+        fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+    )
+}
+
+@Composable
+fun FloatingHudIconStat(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    iconTint: Color = Color(0xFF90CAF9),
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = iconTint)
+        Column {
+            Text(
+                text = label,
+                style =
+                    MaterialTheme.typography.labelSmall.copy(
+                        shadow = floatingHudTextShadow(),
+                    ),
+                color = Color(0xE0ECEFF1),
+            )
+            Text(
+                text = value,
+                style =
+                    MaterialTheme.typography.bodySmall.copy(
+                        shadow = floatingHudTextShadow(),
+                    ),
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+fun FloatingHudIconResource(
+    icon: ImageVector,
+    value: String,
+    modifier: Modifier = Modifier,
+    iconTint: Color = Color(0xFF80CBC4),
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = iconTint)
+        Text(
+            text = value,
+            style =
+                MaterialTheme.typography.labelLarge.copy(
+                    shadow = floatingHudTextShadow(),
+                ),
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable

@@ -10,7 +10,14 @@ data class Platform(
      * 仅作用于脚底站稳、无水平输入时的速度衰减。
      */
     val surfaceFriction: Float = 1f,
+    /** 脆弱薄冰：站立后 [fragileTimeLeft] 倒计时，归零后碎裂。 */
+    val isFragile: Boolean = false,
+    /** 剩余可站立时间（秒），非脆弱或未站上去时为 `null`；离板重置。 */
+    val fragileTimeLeft: Float? = null,
 )
+
+/** 脆弱薄冰自站定起至碎裂的时长（秒）。 */
+const val FRAGILE_ICE_STAND_S = 0.45f
 
 /** 结合地面 [surfaceFriction] 得到本帧水平阻尼系数（无输入时 v 乘该值）。 */
 fun horizontalGroundDampening(baseFriction: Float, surfaceFriction: Float): Float {
@@ -68,7 +75,11 @@ data class Enemy(
     val patrolEnd: Float,
     val speed: Float,
     val kind: EnemyKind = EnemyKind.Seal,
-    val direction: Float = 1f
+    val direction: Float = 1f,
+    /**
+     * 冰盾：通常踩踏只会弹开（轻顿帧）；仅在鱼干冲刺或「团团掩护」期间可踩碎，视为正常踩怪。
+     */
+    val hasIceShield: Boolean = false,
 )
 
 enum class EnemyKind {
@@ -76,6 +87,7 @@ enum class EnemyKind {
     Bird,
     SpikedSeal,
     Owl,
+    SnowMole,
 }
 
 fun EnemyKind.canBeStomped(): Boolean = this != EnemyKind.SpikedSeal
@@ -104,6 +116,7 @@ enum class BlockReward {
     Scarf,
     Shield,
     Boots,
+    Magnet,
 }
 
 data class Block(
@@ -138,4 +151,63 @@ data class FriendGoal(
     val x: Float,
     val groundY: Float,
     val height: Float
+)
+
+// --- 高松鹅 Takamatsu Goose Boss ---
+
+/**
+ * 主线 Boss 战状态机；由同模块控制器类推进时间轴。
+ * [SHIELDED] 期间 [BossEntity.hasShield] 为 true，需鱼干冲刺或团团掩护时重踩才破盾。
+ */
+enum class BossState {
+    /** 进场，镜头已锁。 */
+    INTRO,
+    /** 跳跃压迫 + 落地冲击波。 */
+    JUMPING,
+    /** 开冰盾，可刷小怪；破盾后由控制器切入 [STUNNED]。 */
+    SHIELDED,
+    /** 被破盾后的硬直。 */
+    STUNNED,
+    /** 全平台变脆弱薄冰，Boss 更激进。 */
+    ENRAGED,
+    /** 演出。 */
+    DYING,
+}
+
+/** Boss 受击/破盾时白闪峰值时长（秒），绘制用 [BossEntity.damageFlashTimer] 归一化。 */
+const val BOSS_DAMAGE_FLASH_MAX_S = 0.18f
+
+data class BossEntity(
+    var x: Float,
+    var y: Float,
+    val width: Float,
+    val height: Float,
+    var hp: Float = 100f,
+    val maxHp: Float = 100f,
+    var state: BossState = BossState.INTRO,
+    /** 状态内已流逝时间（秒），供控制器做分段逻辑。 */
+    var stateTime: Float = 0f,
+    var hasShield: Boolean = false,
+    /** 大于 0 时在身体上叠白色闪屏。 */
+    var damageFlashTimer: Float = 0f,
+)
+
+/**
+ * 地面外扩的「冰刺波」判定位；半宽每帧外扩，与玩家脚底相交则判定命中。
+ */
+data class ImpactWave(
+    val centerX: Float,
+    var halfWidth: Float,
+    val surfaceY: Float,
+    var life: Float,
+    val maxLife: Float = 0.5f,
+    val growSpeed: Float = 520f,
+)
+
+/**
+ * 在 [LevelContent] 中挂接；存在时 [GuguGagaGame] 在达到 [triggerAtPlayerX] 后切 Boss 战与锁镜头。
+ */
+data class BossArenaSpec(
+    val triggerAtPlayerX: Float,
+    val arenaCenterWorldX: Float,
 )

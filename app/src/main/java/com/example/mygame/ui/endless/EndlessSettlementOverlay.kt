@@ -34,10 +34,18 @@ fun EndlessSettlementOverlay(
     survivalSeconds: Float,
     playerIdShort: String,
     challengeBucket: String?,
+    dailyAttemptCount: Int?,
+    previousDailyBestScore: Int?,
     onRestart: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showDetail by remember { mutableStateOf(false) }
+    val improvedDailyBest =
+        challengeBucket != null && previousDailyBestScore != null && breakdown.finalTotal > previousDailyBestScore
+    val dailyDelta =
+        previousDailyBestScore
+            ?.takeIf { challengeBucket != null && it > 0 && breakdown.finalTotal <= it }
+            ?.let { it - breakdown.finalTotal }
 
     GameOverlayPanel(
         title = "极夜漂流结算",
@@ -71,6 +79,17 @@ fun EndlessSettlementOverlay(
                 text = "挑战日：$challengeBucket · 种子版本 ${EndlessDailyChallenge.SEED_SALT_V1}",
                 color = Color(0xFF607D8B),
             )
+            dailyAttemptCount?.let {
+                Text(
+                    text = "今日第 $it 次尝试",
+                    color = Color(0xFF607D8B),
+                )
+            }
+            when {
+                improvedDailyBest -> Text("刷新今日最佳！", color = Color(0xFF1B8A5A), fontWeight = FontWeight.Bold)
+                dailyDelta != null -> Text("距离今日最佳还差 $dailyDelta 分", color = Color(0xFF607D8B))
+                previousDailyBestScore == 0 -> Text("这是今天的第一条成绩记录。", color = Color(0xFF607D8B))
+            }
         }
         Text("匿名 id：$playerIdShort", color = Color(0xFF607D8B))
 

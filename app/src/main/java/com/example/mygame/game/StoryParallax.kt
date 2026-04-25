@@ -34,6 +34,20 @@ object StoryParallax {
 
     /** 无尽：极光帶。 */
     const val AURORA = 0.06f
+
+    // --- 设备重力视差（主线 [drawStorySceneBackdrop]）：远、中、近三层相对 [rememberDeviceTilt] 最大像素比例 ---
+
+    /** 天穹 / 日轮。 */
+    const val TILT_LAYER_FAR = 0.2f
+
+    /** 云、脊线、林线、山丘、废屋、地平线雾。 */
+    const val TILT_LAYER_MID = 0.6f
+
+    /** 近景飘雪与 `SceneDecor` 前景雾片。 */
+    const val TILT_LAYER_FORE = 1.4f
+
+    /** 天空渐变色扩绘，防倾斜时露边。 */
+    const val TILT_SKY_OVERSCAN_PX = 100f
 }
 
 /** 用于无限横向平铺的装饰层：在视口内稳定取模。 */

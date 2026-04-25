@@ -1,6 +1,7 @@
 package com.example.mygame.game.level
 
 import com.example.mygame.game.Block
+import com.example.mygame.game.BossArenaSpec
 import com.example.mygame.game.Coin
 import com.example.mygame.game.Enemy
 import com.example.mygame.game.FriendGoal
@@ -28,4 +29,6 @@ data class LevelContent(
     val friendGoal: FriendGoal,
     val presentation: LevelPresentation,
     val sceneTheme: StorySceneTheme,
+    /** 非空时，到达触发 X 后进入高松鹅竞技场（锁镜头、Boss 状态机），通关条件由 Boss 结算接管。 */
+    val bossArena: BossArenaSpec? = null,
 )
