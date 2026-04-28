@@ -32,6 +32,8 @@ class EndlessScoreBook(
         private set
     var stomps: Int = 0
         private set
+    var perfectSlides: Int = 0
+        private set
 
     private var fishChainTimer: Float = 0f
     private var fishChain: Int = 0
@@ -46,6 +48,7 @@ class EndlessScoreBook(
         beacons = 0
         lorePages = 0
         stomps = 0
+        perfectSlides = 0
         fishChainTimer = 0f
         fishChain = 0
     }
@@ -119,6 +122,11 @@ class EndlessScoreBook(
 
     fun onPerfectJumpChainBonus() {
         actionScore += cfg.perfectJumpChainBonus
+    }
+
+    fun onPerfectSlide() {
+        perfectSlides += 1
+        actionScore += cfg.perfectSlidePoints
     }
 
     fun onAssistUsed() {

@@ -49,17 +49,23 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.SetMeal
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Today
-import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.SettingsSuggest
 import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -68,6 +74,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -78,12 +86,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.example.mygame.R
 import com.example.mygame.audio.SoundManager
 import com.example.mygame.data.CampUpgradeKind
 import com.example.mygame.data.SaveRepository
+import com.example.mygame.haptic.HapticManager
 import com.example.mygame.game.modes.EndlessDailyChallenge
 import kotlin.math.sin
 
@@ -106,6 +118,21 @@ private data class LobbyRecommendation(
     val onClick: () -> Unit,
 )
 
+private data class LobbyBgmChoice(
+    val key: String,
+    val label: String,
+    val description: String,
+    val track: SoundManager.BgmTrack,
+)
+
+private val LobbyBgmChoices =
+    listOf(
+        LobbyBgmChoice("cozy", "悠闲雪夜", "柔和铃音与暖和弦，适合首页停留。", SoundManager.BgmTrack.LobbyCozy),
+        LobbyBgmChoice("story", "冒险旋律", "更有追逐感，适合准备进入赛道。", SoundManager.BgmTrack.Story),
+        LobbyBgmChoice("endless", "快跑节奏", "节奏更流动，适合挑战前热身。", SoundManager.BgmTrack.Endless),
+        LobbyBgmChoice("none", "不播放", "首页保持安静，只保留音效。", SoundManager.BgmTrack.None),
+    )
+
 @Composable
 fun HomeMenu(
     saveRepository: SaveRepository,
@@ -125,6 +152,9 @@ fun HomeMenu(
     val totalFishSnacks = saveRepository.getTotalFishSnacks()
     val todayBucket = EndlessDailyChallenge.todayBucketLocal()
     val todayAttempts = saveRepository.getDailyChallengeAttemptCount(todayBucket)
+    val context = LocalContext.current
+    val hapticManager = remember { HapticManager(context, saveRepository) }
+
     fun withUiSound(action: () -> Unit): () -> Unit = {
         soundManager.playUiSelect()
         action()
@@ -142,7 +172,7 @@ fun HomeMenu(
         when {
             !rescuedTuanTuan ->
                 LobbyRecommendation(
-                    title = "继续主线",
+                    title = "开始快跑",
                     subtitle = "从雪松村废墟出发，救回第一位伙伴团团。",
                     actionLabel = "立即出发",
                     icon = Icons.Rounded.Explore,
@@ -168,21 +198,22 @@ fun HomeMenu(
                 LobbyRecommendation(
                     title = "推进北境线索",
                     subtitle = "继续追击高松鹅，解锁更多图鉴和剧情记录。",
-                    actionLabel = "继续主线",
+                    actionLabel = "开始快跑",
                     icon = Icons.Rounded.Star,
                     onClick = withUiSound(onStory),
                 )
             else ->
                 LobbyRecommendation(
-                    title = "刷新极夜成绩",
-                    subtitle = "雪原暂时平静，可以去极夜漂流挑战更高分。",
-                    actionLabel = "开始漂流",
+                    title = "刷新快跑纪录",
+                    subtitle = "雪原赛道已经开放，去跑出新的最远距离。",
+                    actionLabel = "开始快跑",
                     icon = Icons.Rounded.Waves,
                     onClick = withUiSound(onEndless),
                 )
         }
 
     var showAudioBubble by remember { mutableStateOf(false) }
+    var showFeedbackDialog by remember { mutableStateOf(false) }
     val infiniteTransition = rememberInfiniteTransition(label = "lobby_motion")
     val breathScale by infiniteTransition.animateFloat(
         initialValue = 0.985f,
@@ -195,6 +226,12 @@ fun HomeMenu(
         targetValue = 0.9f,
         animationSpec = infiniteRepeatable(tween(2400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "edge_shimmer",
+    )
+    val developerPulse by infiniteTransition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "developer_pulse",
     )
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -239,7 +276,19 @@ fun HomeMenu(
                         ),
             )
 
-            LobbyTopAssetBar(playerNickname, bestScore, totalFishSnacks, rescuedTuanTuan, drorUnlocked)
+            LobbyTopAssetBar(
+                nickname = playerNickname,
+                bestScore = bestScore,
+                fish = totalFishSnacks,
+                rescuedTuanTuan = rescuedTuanTuan,
+                drorUnlocked = drorUnlocked,
+                developerPulse = developerPulse,
+                feedbackCount = saveRepository.getFeedbackCount(),
+                onFeedback = {
+                    soundManager.playUiSelect()
+                    showFeedbackDialog = true
+                },
+            )
 
             Column(
                 modifier =
@@ -251,7 +300,7 @@ fun HomeMenu(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
-                    text = if (isTakamatsuDefeated) "极夜之后的黎明" else "咕咕嘎嘎",
+                    text = if (isTakamatsuDefeated) "企鹅快跑" else "企鹅快跑",
                     style =
                         MaterialTheme.typography.displaySmall.copy(
                             shadow = Shadow(Color(0xAA000000), Offset(2f, 4f), blurRadius = 8f),
@@ -261,7 +310,7 @@ fun HomeMenu(
                     lineHeight = 40.sp,
                 )
                 Text(
-                    text = if (isTakamatsuDefeated) "雪原归于平静，新的旅途仍在继续" else "追击高松鹅的极夜之旅",
+                    text = if (isTakamatsuDefeated) "雪原归于平静，新的赛道仍在继续" else "咕咕嘎嘎的冰原跑酷之旅",
                     style =
                         MaterialTheme.typography.titleMedium.copy(
                             shadow = Shadow(Color(0x88000000), Offset(0f, 2f), blurRadius = 6f),
@@ -270,8 +319,8 @@ fun HomeMenu(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 RecommendationCard(recommendation)
-                QuickModeButton("主线剧情", Icons.Rounded.Explore, withUiSound(onStory))
-                QuickModeButton("极夜漂流", Icons.Rounded.Waves, withUiSound(onEndless))
+                QuickModeButton("企鹅快跑", Icons.Rounded.Explore, withUiSound(onStory))
+                QuickModeButton("自由跑酷", Icons.Rounded.Waves, withUiSound(onEndless))
                 QuickModeButton("今日挑战", Icons.Rounded.Today, withUiSound(onEndlessDaily))
             }
 
@@ -301,7 +350,14 @@ fun HomeMenu(
                 expanded = showAudioBubble,
                 saveRepository = saveRepository,
                 soundManager = soundManager,
+                hapticManager = hapticManager,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 102.dp),
+            )
+            FeedbackDialog(
+                visible = showFeedbackDialog,
+                saveRepository = saveRepository,
+                soundManager = soundManager,
+                onDismiss = { showFeedbackDialog = false },
             )
         }
     }
@@ -397,6 +453,9 @@ private fun LobbyTopAssetBar(
     fish: Int,
     rescuedTuanTuan: Boolean,
     drorUnlocked: Boolean,
+    developerPulse: Float,
+    feedbackCount: Int,
+    onFeedback: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp),
@@ -418,10 +477,72 @@ private fun LobbyTopAssetBar(
                 CompanionDot("团团", rescuedTuanTuan)
                 CompanionDot("Dror", drorUnlocked)
             }
+            DeveloperCreditCard(
+                pulse = developerPulse,
+                feedbackCount = feedbackCount,
+                onFeedback = onFeedback,
+            )
             AssetCapsule {
                 Icon(Icons.Rounded.SetMeal, contentDescription = null, tint = WarmGold, modifier = Modifier.size(16.dp))
                 Text("$fish", style = MaterialTheme.typography.labelMedium, color = WarmGold, fontWeight = FontWeight.Bold)
             }
+        }
+    }
+}
+
+@Composable
+private fun DeveloperCreditCard(
+    pulse: Float,
+    feedbackCount: Int,
+    onFeedback: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .scale(pulse)
+                .clip(RoundedCornerShape(22.dp))
+                .background(Brush.horizontalGradient(listOf(Color(0x66071423), Color(0x334DFFFF))))
+                .border(1.dp, AccentCyan.copy(alpha = 0.5f), RoundedCornerShape(22.dp))
+                .clickable(onClick = onFeedback)
+                .padding(horizontal = 9.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(43.dp)
+                        .clip(CircleShape)
+                        .background(AccentCyan.copy(alpha = 0.16f)),
+            )
+            Image(
+                painter = painterResource(R.drawable.developer_qq_avatar),
+                contentDescription = "开发者 QQ 头像",
+                contentScale = ContentScale.Crop,
+                modifier =
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .border(1.dp, Color.White.copy(alpha = 0.72f), CircleShape),
+            )
+        }
+        Column(modifier = Modifier.widthIn(max = 156.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text("开发者", style = MaterialTheme.typography.labelSmall, color = AccentCyan, fontWeight = FontWeight.Bold)
+            Text(
+                "不是团员为啥要做青年大学习",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                lineHeight = 13.sp,
+            )
+            Text(
+                if (feedbackCount > 0) "反馈 $feedbackCount 条 · 点击提交意见" else "点击提交反馈",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xB3FFFFFF),
+                maxLines = 1,
+            )
         }
     }
 }
@@ -513,10 +634,14 @@ private fun LobbyDock(
             border = BorderStroke(1.dp, Color(0x99FFFFFF)),
             elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
         ) {
-            Text("进入冒险", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("开始快跑", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         }
         LobbyDockIcon(Icons.Rounded.Leaderboard, "榜单", onLeaderboard)
-        LobbyDockIcon(Icons.Rounded.Tune, if (showAudioBubble) "收起" else "音频", onToggleAudio)
+        LobbyDockIcon(
+            Icons.Rounded.SettingsSuggest,
+            if (showAudioBubble) "收起" else "体验",
+            onToggleAudio,
+        )
     }
 }
 
@@ -537,36 +662,248 @@ private fun LobbyDockIcon(icon: ImageVector, label: String, onClick: () -> Unit)
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LobbyAudioQuickBubble(
     expanded: Boolean,
     saveRepository: SaveRepository,
     soundManager: SoundManager,
+    hapticManager: HapticManager,
     modifier: Modifier = Modifier,
 ) {
     if (!expanded) return
     var bgmEnabled by remember { mutableStateOf(saveRepository.getBgmEnabled()) }
     var sfxEnabled by remember { mutableStateOf(saveRepository.getSfxEnabled()) }
+    var hapticSlider by remember { mutableFloatStateOf(saveRepository.getHapticIntensity()) }
+    var lobbyBgmTrack by remember { mutableStateOf(saveRepository.getLobbyBgmTrack()) }
     LaunchedEffect(expanded) {
         bgmEnabled = saveRepository.getBgmEnabled()
         sfxEnabled = saveRepository.getSfxEnabled()
+        hapticSlider = saveRepository.getHapticIntensity()
+        lobbyBgmTrack = saveRepository.getLobbyBgmTrack()
     }
+    val thumbInteraction = remember { MutableInteractionSource() }
     Column(
-        modifier = modifier.widthIn(min = 172.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xE6071423)).border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(20.dp)).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier.widthIn(min = 224.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xE6071423)).border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(20.dp)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("音频", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
+        Text(
+            "音频与触觉",
+            style = MaterialTheme.typography.labelLarge,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+        )
         AudioToggleRow("背景音乐", bgmEnabled, if (bgmEnabled) Icons.Rounded.MusicNote else Icons.Rounded.MusicOff) {
             soundManager.playUiSelect()
             bgmEnabled = !bgmEnabled
             saveRepository.setBgmEnabled(bgmEnabled)
             soundManager.setBgmEnabled(bgmEnabled)
+            if (bgmEnabled) {
+                val choice = LobbyBgmChoices.firstOrNull { it.key == lobbyBgmTrack } ?: LobbyBgmChoices.first()
+                soundManager.setBgm(choice.track)
+            }
+        }
+        Text("首页曲风", style = MaterialTheme.typography.labelMedium, color = Color(0xCCFFFFFF), fontWeight = FontWeight.SemiBold)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LobbyBgmChoices.forEach { choice ->
+                LobbyBgmChoiceRow(
+                    choice = choice,
+                    selected = lobbyBgmTrack == choice.key,
+                    onClick = {
+                        soundManager.playUiSelect()
+                        lobbyBgmTrack = choice.key
+                        saveRepository.setLobbyBgmTrack(choice.key)
+                        if (choice.track != SoundManager.BgmTrack.None) {
+                            bgmEnabled = true
+                            saveRepository.setBgmEnabled(true)
+                            soundManager.setBgmEnabled(true)
+                        }
+                        soundManager.setBgm(choice.track)
+                    },
+                )
+            }
         }
         AudioToggleRow("音效", sfxEnabled, if (sfxEnabled) Icons.AutoMirrored.Rounded.VolumeUp else Icons.AutoMirrored.Rounded.VolumeOff) {
             soundManager.playUiSelect()
             sfxEnabled = !sfxEnabled
             saveRepository.setSfxEnabled(sfxEnabled)
             soundManager.setSfxEnabled(sfxEnabled)
+        }
+        Text("触感力度", style = MaterialTheme.typography.labelMedium, color = Color(0xCCFFFFFF), fontWeight = FontWeight.SemiBold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("关", style = MaterialTheme.typography.labelSmall, color = Color(0x88FFFFFF), modifier = Modifier.width(20.dp), textAlign = TextAlign.End)
+            Slider(
+                value = hapticSlider,
+                onValueChange = { hapticSlider = it },
+                onValueChangeFinished = {
+                    saveRepository.setHapticIntensity(hapticSlider)
+                    hapticManager.previewWithIntensity(hapticSlider)
+                },
+                valueRange = 0f..1f,
+                modifier = Modifier.weight(1f).height(28.dp),
+                colors =
+                    SliderDefaults.colors(
+                        thumbColor = Color.White,
+                        activeTrackColor = AccentCyan,
+                        inactiveTrackColor = Color(0x33FFFFFF),
+                    ),
+                thumb = {
+                    SliderDefaults.Thumb(
+                        interactionSource = thumbInteraction,
+                        colors =
+                            SliderDefaults.colors(
+                                thumbColor = Color.White,
+                                activeTrackColor = AccentCyan,
+                                inactiveTrackColor = Color(0x33FFFFFF),
+                            ),
+                        thumbSize = DpSize(20.dp, 20.dp),
+                        modifier = Modifier.shadow(4.dp, CircleShape, ambientColor = AccentCyan.copy(0.45f), spotColor = AccentCyan),
+                    )
+                },
+            )
+            Text("强", style = MaterialTheme.typography.labelSmall, color = Color(0x88FFFFFF), modifier = Modifier.width(20.dp))
+        }
+        Text(
+            if (hapticSlider <= 0.02f) "（已关闭震动）" else "当前 ${(hapticSlider * 100f).toInt()}%",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0x66FFFFFF),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun FeedbackDialog(
+    visible: Boolean,
+    saveRepository: SaveRepository,
+    soundManager: SoundManager,
+    onDismiss: () -> Unit,
+) {
+    if (!visible) return
+    var category by remember { mutableStateOf("体验建议") }
+    var content by remember { mutableStateOf("") }
+    var submittedCount by remember { mutableStateOf<Int?>(null) }
+    val categories = listOf("体验建议", "玩法道具", "地图关卡", "问题反馈")
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(Brush.verticalGradient(listOf(Color(0xF20B1B2D), Color(0xF2255269))))
+                    .border(1.dp, AccentCyan.copy(alpha = 0.5f), RoundedCornerShape(26.dp))
+                    .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Image(
+                    painter = painterResource(R.drawable.developer_qq_avatar),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(44.dp).clip(CircleShape).border(1.dp, Color.White.copy(alpha = 0.75f), CircleShape),
+                )
+                Column(Modifier.weight(1f)) {
+                    Text("玩家反馈", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Black)
+                    Text("提交后会先保存在本地，方便后续整理优化。", style = MaterialTheme.typography.labelSmall, color = Color(0xB3FFFFFF))
+                }
+            }
+            Text(
+                "开发者：不是团员为啥要做青年大学习",
+                style = MaterialTheme.typography.labelMedium,
+                color = AccentCyan,
+                fontWeight = FontWeight.Bold,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                categories.forEach { item ->
+                    Text(
+                        text = item,
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (category == item) AccentCyan.copy(alpha = 0.22f) else Color(0x1FFFFFFF))
+                                .border(1.dp, if (category == item) AccentCyan else Color(0x22FFFFFF), RoundedCornerShape(14.dp))
+                                .clickable {
+                                    soundManager.playUiSelect()
+                                    category = item
+                                }
+                                .padding(vertical = 8.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (category == item) Color.White else Color(0xCCFFFFFF),
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                    )
+                }
+            }
+            OutlinedTextField(
+                value = content,
+                onValueChange = { content = it.take(300) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("写下你的建议或遇到的问题") },
+                placeholder = { Text("例如：第二关裂隙太难、希望增加新道具、首页按钮可以更明显……") },
+                minLines = 4,
+                maxLines = 6,
+                singleLine = false,
+            )
+            Text("${content.length}/300", style = MaterialTheme.typography.labelSmall, color = Color(0x88FFFFFF), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.End)
+            submittedCount?.let {
+                Text("已收到第 $it 条反馈，感谢帮企鹅快跑变得更好。", style = MaterialTheme.typography.bodySmall, color = WarmGold, fontWeight = FontWeight.SemiBold)
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onDismiss) {
+                    Text("关闭", color = Color(0xCCFFFFFF))
+                }
+                Button(
+                    onClick = {
+                        soundManager.playPowerUp()
+                        submittedCount = saveRepository.savePlayerFeedback(category, content)
+                        content = ""
+                    },
+                    enabled = content.trim().length >= 4,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan, contentColor = Color(0xFF071423)),
+                    shape = RoundedCornerShape(18.dp),
+                ) {
+                    Text("提交反馈", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LobbyBgmChoiceRow(
+    choice: LobbyBgmChoice,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(if (selected) AccentCyan.copy(alpha = 0.18f) else Color(0x18FFFFFF))
+                .border(1.dp, if (selected) AccentCyan.copy(alpha = 0.74f) else Color(0x22FFFFFF), RoundedCornerShape(14.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(if (selected) AccentCyan else Color(0x66FFFFFF)),
+        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(choice.label, style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.Bold)
+            Text(choice.description, style = MaterialTheme.typography.labelSmall, color = Color(0xAAFFFFFF), lineHeight = 14.sp)
         }
     }
 }

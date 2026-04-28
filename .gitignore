@@ -1,6 +1,10 @@
 *.iml
 .gradle
 /local.properties
+
+# JVM crash dumps
+hs_err_pid*.log
+replay_pid*.log
 # IDE（个人环境差异大，整目录忽略）
 /.idea/
 .DS_Store

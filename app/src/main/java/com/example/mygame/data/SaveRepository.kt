@@ -41,10 +41,45 @@ class SaveRepository(context: Context) {
         prefs.edit().putBoolean(KEY_BGM_ENABLED, enabled).apply()
     }
 
+    fun getLobbyBgmTrack(): String = prefs.getString(KEY_LOBBY_BGM_TRACK, VALUE_LOBBY_BGM_COZY) ?: VALUE_LOBBY_BGM_COZY
+
+    fun setLobbyBgmTrack(value: String) {
+        val sanitized =
+            when (value) {
+                VALUE_LOBBY_BGM_COZY, VALUE_LOBBY_BGM_STORY, VALUE_LOBBY_BGM_ENDLESS, VALUE_LOBBY_BGM_NONE -> value
+                else -> VALUE_LOBBY_BGM_COZY
+            }
+        prefs.edit().putString(KEY_LOBBY_BGM_TRACK, sanitized).apply()
+    }
+
     fun getSfxEnabled(): Boolean = prefs.getBoolean(KEY_SFX_ENABLED, true)
 
     fun setSfxEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_SFX_ENABLED, enabled).apply()
+    }
+
+    fun getFeedbackCount(): Int = prefs.getInt(KEY_FEEDBACK_COUNT, 0).coerceAtLeast(0)
+
+    fun savePlayerFeedback(category: String, content: String): Int {
+        val trimmed = content.trim()
+        if (trimmed.isBlank()) return getFeedbackCount()
+        val next = getFeedbackCount() + 1
+        val payload = "${System.currentTimeMillis()}|${category.trim()}|${trimmed.replace("\n", "\\n")}"
+        prefs
+            .edit()
+            .putInt(KEY_FEEDBACK_COUNT, next)
+            .putString(KEY_FEEDBACK_PREFIX + next, payload)
+            .apply()
+        return next
+    }
+
+    /**
+     * 震动力度缩放：0f 为关闭，1f 为设备允许的最大等效强度（在 [HapticManager] 内再映射为振幅/时长）。
+     */
+    fun getHapticIntensity(): Float = prefs.getFloat(KEY_HAPTIC_INTENSITY, 0.7f).coerceIn(0f, 1f)
+
+    fun setHapticIntensity(value: Float) {
+        prefs.edit().putFloat(KEY_HAPTIC_INTENSITY, value.coerceIn(0f, 1f)).apply()
     }
 
     /** 上次进行游戏的关卡；主线推进后会写入，便于下次启动直接接续。 */
@@ -105,6 +140,13 @@ class SaveRepository(context: Context) {
 
     fun markCampUnlockNoticeSeen() {
         prefs.edit().putBoolean(KEY_SEEN_CAMP_UNLOCK_NOTICE, true).apply()
+    }
+
+    fun hasCompletedRunner3DTutorial(): Boolean =
+        prefs.getBoolean(KEY_RUNNER3D_TUTORIAL_DONE, false)
+
+    fun markRunner3DTutorialDone() {
+        prefs.edit().putBoolean(KEY_RUNNER3D_TUTORIAL_DONE, true).apply()
     }
 
     fun hasVisitedCamp(): Boolean = prefs.getBoolean(KEY_VISITED_CAMP, false)
@@ -190,7 +232,15 @@ class SaveRepository(context: Context) {
         const val KEY_RESCUED_TUANTUAN = "rescued_tuantuan"
         const val KEY_TAKAMATSU_DEFEATED = "takamatsu_defeated"
         const val KEY_BGM_ENABLED = "bgm_enabled"
+        const val KEY_LOBBY_BGM_TRACK = "lobby_bgm_track"
+        const val VALUE_LOBBY_BGM_COZY = "cozy"
+        const val VALUE_LOBBY_BGM_STORY = "story"
+        const val VALUE_LOBBY_BGM_ENDLESS = "endless"
+        const val VALUE_LOBBY_BGM_NONE = "none"
         const val KEY_SFX_ENABLED = "sfx_enabled"
+        const val KEY_FEEDBACK_COUNT = "feedback_count"
+        const val KEY_FEEDBACK_PREFIX = "feedback_"
+        const val KEY_HAPTIC_INTENSITY = "haptic_intensity"
         const val KEY_COMPANION_DROR = "companion_dror_unlocked"
         const val KEY_RESUME_LEVEL = "resume_level"
         const val VALUE_CEDAR = "cedar"
@@ -208,6 +258,7 @@ class SaveRepository(context: Context) {
         const val KEY_DAILY_BEST_PREFIX = "daily_best_"
         const val KEY_SEEN_CAMP_UNLOCK_NOTICE = "seen_camp_unlock_notice"
         const val KEY_VISITED_CAMP = "visited_camp"
+        const val KEY_RUNNER3D_TUTORIAL_DONE = "runner3d_tutorial_done"
         const val CAMP_MAX_LEVEL = 2
     }
 }

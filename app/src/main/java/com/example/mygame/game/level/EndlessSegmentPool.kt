@@ -82,12 +82,29 @@ object EndlessSegmentPool {
                 kind = CoinKind.Normal,
             )
         }
+        val lowArch =
+            if (!wide || r.nextInt(100) < 35) {
+                listOf(
+                    Enemy(
+                        x = t * 5.2f,
+                        y = gy - he * 0.95f,
+                        width = he * 1.05f,
+                        height = he * 0.55f,
+                        patrolStart = t * 5.2f,
+                        patrolEnd = t * 5.2f + he * 1.05f,
+                        speed = 0f,
+                        kind = EnemyKind.LowIceArch,
+                    ),
+                )
+            } else {
+                emptyList()
+            }
         return SegmentGeometry(
             width = width,
             kind = EndlessSegmentKind.FlatChase,
             pits = emptyList(),
             platforms = emptyList(),
-            enemies = emptyList(),
+            enemies = lowArch,
             coins = coins,
             blocks = emptyList(),
             speedMultiplier = 1f,
@@ -111,6 +128,7 @@ object EndlessSegmentPool {
             Coin(x = t * 1.4f, y = gy - h * 0.35f, size = he * 0.4f),
             Coin(x = pitEnd + t * 0.9f, y = gy - h * 0.32f, size = he * 0.4f),
         )
+        val blockSize = t * 0.42f
         return SegmentGeometry(
             width = width,
             kind = EndlessSegmentKind.PitJump,
@@ -118,7 +136,15 @@ object EndlessSegmentPool {
             platforms = platforms,
             enemies = emptyList(),
             coins = coins,
-            blocks = emptyList(),
+            blocks = listOf(
+                Block(
+                    x = t * 2.75f,
+                    y = gy - h * 0.34f,
+                    size = blockSize,
+                    type = BlockType.Question,
+                    reward = BlockReward.Boots,
+                ),
+            ),
         )
     }
 
@@ -152,7 +178,15 @@ object EndlessSegmentPool {
                 Coin(x = t * 2f, y = gy - h * 0.12f, size = he * 0.4f),
                 Coin(x = t * 5f, y = gy - h * 0.38f, size = he * 0.4f, kind = CoinKind.Beacon),
             ),
-            blocks = emptyList(),
+            blocks = listOf(
+                Block(
+                    x = t * 2.45f,
+                    y = gy - h * 0.29f,
+                    size = t * 0.42f,
+                    type = BlockType.Question,
+                    reward = BlockReward.Scarf,
+                ),
+            ),
             speedMultiplier = EndlessBalanceConfig.thinIceSpeedMultiplier,
         )
     }
@@ -189,7 +223,15 @@ object EndlessSegmentPool {
             platforms = listOf(Platform(x = t * 2.4f, y = gy - h * 0.22f, width = t * 1.1f, height = 24f)),
             enemies = listOfNotNull(seal, bird),
             coins = listOf(Coin(x = t * 1.5f, y = gy - h * 0.15f, size = he * 0.38f)),
-            blocks = emptyList(),
+            blocks = listOf(
+                Block(
+                    x = t * 2.2f,
+                    y = gy - h * 0.31f,
+                    size = t * 0.42f,
+                    type = BlockType.Question,
+                    reward = BlockReward.Shield,
+                ),
+            ),
             blizzardIntensity = if (dense) {
                 EndlessBalanceConfig.blizzardIntensityDense
             } else {
@@ -330,7 +372,18 @@ object EndlessSegmentPool {
             ),
             blocks = listOf(
                 Block(x = t * 4.2f, y = rowY, size = blockSize, type = BlockType.Question, reward = BlockReward.Fish),
-                Block(x = t * 4.75f, y = rowY, size = blockSize, type = BlockType.Brick),
+                Block(
+                    x = t * 4.75f,
+                    y = rowY,
+                    size = blockSize,
+                    type = BlockType.Question,
+                    reward =
+                        when (r.nextInt(3)) {
+                            0 -> BlockReward.Shield
+                            1 -> BlockReward.Boots
+                            else -> BlockReward.Scarf
+                        },
+                ),
                 Block(x = t * 5.3f, y = rowY, size = blockSize, type = BlockType.Question, reward = BlockReward.Magnet),
             ),
             speedMultiplier = 1f,

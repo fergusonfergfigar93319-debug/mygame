@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.mygame.audio.SoundManager
 import com.example.mygame.data.LocalLeaderboardRepository
 import com.example.mygame.data.SaveRepository
+import com.example.mygame.ui.runner3d.Runner3DScreen
 import com.example.mygame.game.GuguGagaGame
 import com.example.mygame.game.modes.EndlessMode
 import com.example.mygame.game.modes.EndlessRunPreset
@@ -39,6 +40,7 @@ private enum class AppScreen {
     Story,
     Endless,
     EndlessDaily,
+    Runner3D,
     Leaderboard,
     Codex,
     Camp,
@@ -76,8 +78,18 @@ fun GameRoot(
 
     LaunchedEffect(screen) {
         when (screen) {
+            AppScreen.Home ->
+                soundManager.setBgm(
+                    when (saveRepository.getLobbyBgmTrack()) {
+                        "story" -> SoundManager.BgmTrack.Story
+                        "endless" -> SoundManager.BgmTrack.Endless
+                        "none" -> SoundManager.BgmTrack.None
+                        else -> SoundManager.BgmTrack.LobbyCozy
+                    },
+                )
             AppScreen.Story -> soundManager.setBgm(SoundManager.BgmTrack.Story)
-            AppScreen.Endless, AppScreen.EndlessDaily -> soundManager.setBgm(SoundManager.BgmTrack.Endless)
+            AppScreen.Endless, AppScreen.EndlessDaily, AppScreen.Runner3D ->
+                soundManager.setBgm(SoundManager.BgmTrack.Endless)
             else -> soundManager.setBgm(SoundManager.BgmTrack.None)
         }
     }
@@ -89,8 +101,8 @@ fun GameRoot(
                     HomeMenu(
                         saveRepository = saveRepository,
                         soundManager = soundManager,
-                        onStory = { navigateWithTransition(AppScreen.Story) },
-                        onEndless = { navigateWithTransition(AppScreen.Endless) },
+                        onStory = { navigateWithTransition(AppScreen.Runner3D) },
+                        onEndless = { navigateWithTransition(AppScreen.Runner3D) },
                         onEndlessDaily = { navigateWithTransition(AppScreen.EndlessDaily) },
                         onLeaderboard = { navigateWithTransition(AppScreen.Leaderboard) },
                         onCodex = { navigateWithTransition(AppScreen.Codex) },
@@ -120,6 +132,14 @@ fun GameRoot(
                         onExitToMenu = { navigateWithTransition(AppScreen.Home) },
                         runPreset = EndlessRunPreset.DailyChallenge,
                     )
+
+                AppScreen.Runner3D -> {
+                    Runner3DScreen(
+                        soundManager = soundManager,
+                        saveRepository = saveRepository,
+                        onExitToMenu = { navigateWithTransition(AppScreen.Home) },
+                    )
+                }
 
                 AppScreen.Leaderboard ->
                     LeaderboardScreen(

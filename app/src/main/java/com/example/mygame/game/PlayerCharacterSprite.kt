@@ -49,6 +49,10 @@ fun DrawScope.drawGuguCharacterSprite(
     /** 脚底为锚的竖直缩放，用于呼吸感或终结残影。 */
     breathScaleY: Float = 1f,
     overallAlpha: Float = 1f,
+    /**
+     * 若小于 [destSize]，以脚底（[screenY] + [destSize]）为锚绘制更矮的命中框高度，用于蹲下视觉。
+     */
+    footAnchoredHeight: Float? = null,
 ) {
     if (layout.frameWidth <= 0 || layout.frameHeight <= 0) return
     val fw = layout.frameWidth
@@ -68,12 +72,15 @@ fun DrawScope.drawGuguCharacterSprite(
         fh.coerceAtMost(image.height - srcOffset.y),
     )
     val w = destSize.toInt().coerceAtLeast(1)
+    val hDest = (footAnchoredHeight ?: destSize).coerceIn(destSize * 0.4f, destSize)
+    val h = hDest.toInt().coerceAtLeast(1)
+    val footY = screenY + destSize
     val bobY = if (isMoving) {
         sin(globalAnim * 5f) * destSize * 0.02f
     } else {
         sin(globalAnim * 2.2f) * destSize * 0.04f
     }
-    val drawY = screenY + bobY
+    val drawY = (footY - hDest) + bobY
 
     val bmp = image.asAndroidBitmap()
     val c = drawContext.canvas.nativeCanvas
@@ -97,7 +104,7 @@ fun DrawScope.drawGuguCharacterSprite(
     if (scaleBody) {
         c.save()
         val px = screenX + destSize * 0.5f
-        val py = drawY + destSize
+        val py = drawY + hDest
         c.translate(px, py)
         c.scale(1f, breathScaleY)
         c.translate(-px, -py)
@@ -105,12 +112,12 @@ fun DrawScope.drawGuguCharacterSprite(
     if (facingRight) {
         val l = screenX.toInt()
         val t = drawY.toInt()
-        c.drawBitmap(bmp, srcRct, AndRect(l, t, l + w, t + w), paint)
+        c.drawBitmap(bmp, srcRct, AndRect(l, t, l + w, t + h), paint)
     } else {
         c.save()
         c.translate(screenX, drawY)
-        c.scale(-1f, 1f, destSize * 0.5f, destSize * 0.5f)
-        c.drawBitmap(bmp, srcRct, AndRect(0, 0, w, w), paint)
+        c.scale(-1f, 1f, destSize * 0.5f, hDest * 0.5f)
+        c.drawBitmap(bmp, srcRct, AndRect(0, 0, w, h), paint)
         c.restore()
     }
     if (scaleBody) {
@@ -119,7 +126,7 @@ fun DrawScope.drawGuguCharacterSprite(
 }
 
 /**
- * 是否视为跑动。左右键按下或水平速度超阈值时视为移动。
+ * 是否视为跑动。摇杆有水平意图或水平速度超阈值时视为移动。
  */
-fun guguIsMovingHorizontally(velocityX: Float, left: Boolean, right: Boolean, threshold: Float = 40f): Boolean =
-    left || right || abs(velocityX) > threshold
+fun guguIsMovingHorizontally(velocityX: Float, hasHorizontalInput: Boolean, threshold: Float = 40f): Boolean =
+    hasHorizontalInput || abs(velocityX) > threshold

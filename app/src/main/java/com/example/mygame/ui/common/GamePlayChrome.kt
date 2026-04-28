@@ -1,8 +1,9 @@
 package com.example.mygame.ui.common
 
-import android.view.MotionEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +23,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -30,7 +30,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -129,7 +129,6 @@ fun FloatingHudIconResource(
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun GameActionHoldButton(
     text: String,
@@ -144,19 +143,19 @@ fun GameActionHoldButton(
                 .background(
                     brush = Brush.verticalGradient(listOf(Color(0xFFF2F9FF), Color(0xFFD8EAF5))),
                     shape = RoundedCornerShape(16.dp),
-                ).pointerInteropFilter { event ->
-                    when (event.action) {
-                        MotionEvent.ACTION_DOWN -> {
-                            onPressedChange(true)
-                            true
-                        }
-
-                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                )
+                .pointerInput(onPressedChange) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        onPressedChange(true)
+                        try {
+                            do {
+                                val event = awaitPointerEvent()
+                                val stillPressed = event.changes.any { it.pressed }
+                            } while (stillPressed)
+                        } finally {
                             onPressedChange(false)
-                            true
                         }
-
-                        else -> true
                     }
                 },
         contentAlignment = Alignment.Center,

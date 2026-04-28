@@ -54,6 +54,9 @@ fun EndlessHud(
     actionScore: Int,
     fishDashActive: Boolean,
     hasScarf: Boolean,
+    snowShieldActive: Boolean,
+    gustBootsActive: Boolean,
+    slideFlowActive: Boolean,
     magnetActive: Boolean,
     assistReady: Boolean,
     assistTimer: Float,
@@ -83,6 +86,9 @@ fun EndlessHud(
     val statusLineActive =
         fishDashActive ||
             hasScarf ||
+            snowShieldActive ||
+            gustBootsActive ||
+            slideFlowActive ||
             magnetActive ||
             assistTimer > 0f ||
             (assistReady && assistTimer <= 0f)
@@ -213,6 +219,9 @@ fun EndlessHud(
         ) {
             FloatingHudStatusLabel("鱼干冲刺", fishDashActive)
             FloatingHudStatusLabel("泡泡围巾", hasScarf)
+            FloatingHudStatusLabel("雪壳护盾", snowShieldActive)
+            FloatingHudStatusLabel("风种长跳", gustBootsActive)
+            FloatingHudStatusLabel("滑铲顺风", slideFlowActive)
             FloatingHudStatusLabel("磁针吸附", magnetActive)
             FloatingHudStatusLabel("团团掩护", assistTimer > 0f)
             FloatingHudStatusLabel("团团就绪", assistReady && assistTimer <= 0f)

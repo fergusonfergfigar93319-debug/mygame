@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
@@ -42,26 +44,31 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.mygame.R
 import com.example.mygame.audio.SoundManager
 import com.example.mygame.data.SaveRepository
+import com.example.mygame.haptic.HapticManager
 import com.example.mygame.game.boss.BossTickEvent
 import com.example.mygame.game.boss.TakamatsuBossController
 import com.example.mygame.game.BossState
 import com.example.mygame.game.CoinKind
 import com.example.mygame.game.ImpactWave
 import com.example.mygame.game.FRAGILE_ICE_STAND_S
+import com.example.mygame.game.LevelNpc
+import com.example.mygame.game.NpcKind
+import com.example.mygame.game.WorldPickup
+import com.example.mygame.game.WorldPickupKind
 import com.example.mygame.game.level.GameLevel
 import com.example.mygame.game.level.LevelCatalog
 import com.example.mygame.game.level.LevelContent
 import com.example.mygame.game.level.StorySceneTheme
+import com.example.mygame.ui.common.GameActionHoldButton
 import com.example.mygame.ui.common.GameStageControlDock
+import com.example.mygame.ui.common.GameVirtualJoystick
 import com.example.mygame.ui.common.GameStageTopBar
 import com.example.mygame.ui.common.PauseOverlay
 import com.example.mygame.ui.common.rememberDeviceTilt
@@ -69,6 +76,7 @@ import com.example.mygame.ui.theme.MyGameTheme
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
@@ -122,7 +130,7 @@ fun GuguGagaGame(
 
     var stompHapticNonce by remember { mutableIntStateOf(0) }
     var momentumHapticNonce by remember { mutableIntStateOf(0) }
-    val haptic = LocalHapticFeedback.current
+    val hapticManager = remember { HapticManager(context, saveRepository) }
 
     val coyoteMax = 0.12f
 
@@ -146,8 +154,11 @@ fun GuguGagaGame(
     var playerVelocityY by remember { mutableFloatStateOf(0f) }
     var onGround by remember { mutableStateOf(false) }
 
-    var moveLeftPressed by remember { mutableStateOf(false) }
-    var moveRightPressed by remember { mutableStateOf(false) }
+    /** -1f～1f，由左下角虚拟横轴摇杆驱动。 */
+    var joystickX by remember { mutableFloatStateOf(0f) }
+    var crouchPressed by remember { mutableStateOf(false) }
+    /** 重开、进入新关卡时与摇杆 [resetKey] 同步归零。 */
+    var inputSession by remember { mutableIntStateOf(0) }
     var playerFacingRight by remember { mutableStateOf(true) }
     var spriteAnimTick by remember { mutableIntStateOf(0) }
 
@@ -158,7 +169,13 @@ fun GuguGagaGame(
     val blocks = remember { mutableStateListOf<Block>() }
     val floatingCoins = remember { mutableStateListOf<FloatingCoin>() }
     val fishSnacks = remember { mutableStateListOf<FishSnack>() }
+    val levelNpcs = remember { mutableStateListOf<LevelNpc>() }
+    val worldPickups = remember { mutableStateListOf<WorldPickup>() }
     var friendGoal by remember { mutableStateOf<FriendGoal?>(null) }
+    var npcBubbleText by remember { mutableStateOf<String?>(null) }
+    var npcBubbleTimer by remember { mutableFloatStateOf(0f) }
+    var mechanicHintText by remember { mutableStateOf<String?>(null) }
+    var mechanicHintTimer by remember { mutableFloatStateOf(0f) }
     val particles = remember { mutableStateListOf<Particle>() }
     val dashPhantoms = remember { mutableStateListOf<DashPhantom>() }
     var hitStopTimer by remember { mutableFloatStateOf(0f) }
@@ -232,6 +249,14 @@ fun GuguGagaGame(
         renderShakeX = 0f
         renderShakeY = 0f
         friendGoal = content.friendGoal
+        levelNpcs.clear()
+        levelNpcs.addAll(content.npcs)
+        worldPickups.clear()
+        worldPickups.addAll(content.worldPickups)
+        npcBubbleText = null
+        npcBubbleTimer = 0f
+        mechanicHintText = null
+        mechanicHintTimer = 0f
         isBossFight = false
         isBossDefeatSequenceActive = false
         bossDefeatFinishKey = 0
@@ -258,6 +283,9 @@ fun GuguGagaGame(
         chapterPreviewVisible = false
         campUnlockNoticeVisible = false
         jumpPressed = false
+        crouchPressed = false
+        joystickX = 0f
+        inputSession++
         bonusScore = 0
         particles.clear()
         hitStopTimer = 0f
@@ -289,7 +317,7 @@ fun GuguGagaGame(
         }
         if (onGround || coyoteTimer > 0f) {
             tutorialJumped = true
-            playerVelocityY = if (gustBootsTimer > 0f) -1120f else -980f
+            playerVelocityY = if (gustBootsTimer > 0f) -1160f else -1040f
             onGround = false
             coyoteTimer = 0f
             soundManager?.playJump()
@@ -352,13 +380,13 @@ fun GuguGagaGame(
 
     LaunchedEffect(stompHapticNonce) {
         if (stompHapticNonce > 0) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            hapticManager.performStomp()
         }
     }
 
     LaunchedEffect(momentumHapticNonce) {
         if (momentumHapticNonce > 0) {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            hapticManager.performMomentum()
         }
     }
 
@@ -394,18 +422,18 @@ fun GuguGagaGame(
         if (isPaused) soundManager?.pauseBgm() else soundManager?.resumeBgm()
     }
 
-    LaunchedEffect(running, worldWidth, worldHeight, fishDashTimer, hasBubbleScarf, hasSnowShield, gustBootsTimer, tuanTuanAssistTimer) {
+    LaunchedEffect(running, worldWidth, worldHeight) {
         if (!running || worldWidth <= 1f || worldHeight <= 1f) return@LaunchedEffect
 
         val frameSeconds = 0.016f
-        val gravity = 2100f
+        val gravity = 1980f
         val runSpeed =
             when {
-                fishDashTimer > 0f -> 365f
-                gustBootsTimer > 0f -> 330f
-                else -> 290f
+                fishDashTimer > 0f -> 385f
+                gustBootsTimer > 0f -> 345f
+                else -> 305f
             }
-        val friction = 0.78f
+        val friction = 0.82f
         val groundY = groundTop()
 
         while (running) {
@@ -462,12 +490,16 @@ fun GuguGagaGame(
             )
             val horizontalDamp = horizontalGroundDampening(friction, surfaceFrictionFactor)
 
-            playerVelocityX = when {
-                moveLeftPressed && !moveRightPressed -> -runSpeed
-                moveRightPressed && !moveLeftPressed -> runSpeed
-                else -> playerVelocityX * horizontalDamp
+            val joy = joystickX.coerceIn(-1f, 1f)
+            val crouchMul = if (crouchPressed && onGround) 0.55f else 1f
+            val targetV = joy * runSpeed * crouchMul
+            if (abs(joy) < 0.01f) {
+                playerVelocityX *= horizontalDamp
+            } else {
+                val alpha = 1f - exp(-14f * frameSeconds)
+                playerVelocityX += (targetV - playerVelocityX) * alpha
             }
-            if (abs(playerVelocityX) > 20f) {
+            if (abs(playerVelocityX) > 22f) {
                 playerFacingRight = playerVelocityX > 0f
             }
 
@@ -627,35 +659,73 @@ fun GuguGagaGame(
 
             if (landed && playerVelocityY >= 0f) {
                 nextY = landingY
-                if (wasInAir && playerVelocityY > 45f) {
-                    if (playerVelocityY >= StompFeel.HARD_LAND_IMPACT_VY) {
-                        shakeAmplitude = max(shakeAmplitude, StompFeel.SHAKE_HARD_LAND_PX)
-                        shakeBias = StompFeel.ShakeBias.Vertical
-                        shakeBiasFrames = StompFeel.SHAKE_MOMENTUM_BIAS_FRAMES
-                        momentumHapticNonce++
-                        ParticleSpawners.hardLandingDust(
-                            particles,
-                            worldX = playerX,
-                            footY = landingY + size,
-                            playerWidth = size,
-                        )
-                    } else {
-                        ParticleSpawners.landingDust(
-                            particles,
-                            worldX = playerX,
-                            footY = landingY + size,
-                            playerWidth = size,
-                        )
-                    }
-                    soundManager?.playLand()
+                val springPlat = platforms.firstOrNull { p ->
+                    p.bounceImpulse > 0f &&
+                        playerRight > p.x && playerLeft < p.x + p.width &&
+                        abs(p.y - size - landingY) < 5f
                 }
-                playerVelocityY = 0f
-                onGround = true
+                if (wasInAir && springPlat != null) {
+                    playerVelocityY = -springPlat.bounceImpulse
+                    onGround = false
+                    mechanicHintText = "弹力苔垫会把咕咕嘎嘎向上弹起，按住摇杆可以控制落点。"
+                    mechanicHintTimer = 2.2f
+                    soundManager?.playJump()
+                    ParticleSpawners.landingDust(
+                        particles,
+                        worldX = playerX,
+                        footY = landingY + size,
+                        playerWidth = size,
+                    )
+                } else {
+                    if (wasInAir && playerVelocityY > 45f) {
+                        if (playerVelocityY >= StompFeel.HARD_LAND_IMPACT_VY) {
+                            shakeAmplitude = max(shakeAmplitude, StompFeel.SHAKE_HARD_LAND_PX)
+                            shakeBias = StompFeel.ShakeBias.Vertical
+                            shakeBiasFrames = StompFeel.SHAKE_MOMENTUM_BIAS_FRAMES
+                            momentumHapticNonce++
+                            ParticleSpawners.hardLandingDust(
+                                particles,
+                                worldX = playerX,
+                                footY = landingY + size,
+                                playerWidth = size,
+                            )
+                        } else {
+                            ParticleSpawners.landingDust(
+                                particles,
+                                worldX = playerX,
+                                footY = landingY + size,
+                                playerWidth = size,
+                            )
+                        }
+                        soundManager?.playLand()
+                    }
+                    playerVelocityY = 0f
+                    onGround = true
+                }
             } else {
                 onGround = false
             }
 
             playerY = nextY
+            if (onGround) {
+                val pBot = playerY + size
+                val epsB = 8f
+                var belt = 0f
+                for (p in platforms) {
+                    if (p.conveyorBelt == 0f) continue
+                    if (playerRight > p.x && playerLeft < p.x + p.width &&
+                        pBot >= p.y - epsB && pBot <= p.y + epsB * 2f
+                    ) {
+                        belt = p.conveyorBelt
+                        break
+                    }
+                }
+                if (belt != 0f) {
+                    playerX = (playerX + belt * frameSeconds).coerceIn(0f, levelLength - size)
+                    mechanicHintText = if (belt > 0f) "顺向履带会推着你前进，蹲下可以更稳地微调。" else "逆向履带会把你往回带，提前加速或跳离它。"
+                    mechanicHintTimer = max(mechanicHintTimer, 0.7f)
+                }
+            }
 
             if (playerY > worldHeight && !isBossDefeatSequenceActive) {
                 endRun(win = false)
@@ -965,6 +1035,42 @@ fun GuguGagaGame(
                 }
             }
 
+            val collectedPickups = worldPickups.filter { wp ->
+                val r = Rect(wp.x, wp.y, wp.x + wp.size, wp.y + wp.size)
+                playerRect.overlaps(r)
+            }
+            if (collectedPickups.isNotEmpty()) {
+                for (wp in collectedPickups) {
+                    when (wp.kind) {
+                        WorldPickupKind.Snowberry -> {
+                            bonusScore += 18
+                            mechanicHintText = "雪浆果：获得少量奖励分。"
+                            mechanicHintTimer = 1.8f
+                            soundManager?.playCoinPickup()
+                            ParticleSpawners.landingDust(
+                                particles,
+                                worldX = wp.x + wp.size * 0.2f,
+                                footY = wp.y + wp.size,
+                                playerWidth = wp.size,
+                            )
+                        }
+                        WorldPickupKind.GustSeed -> {
+                            gustBootsTimer = max(gustBootsTimer, 2.8f)
+                            mechanicHintText = "风种：短时间延长长跳，适合接高台路线。"
+                            mechanicHintTimer = 2.2f
+                            soundManager?.playPowerUp()
+                        }
+                        WorldPickupKind.GlintFragment -> {
+                            bonusScore += 32
+                            mechanicHintText = "微光片：隐藏路线奖励，继续探索会有更高收益。"
+                            mechanicHintTimer = 2.2f
+                            soundManager?.playPowerUp()
+                        }
+                    }
+                }
+                worldPickups.removeAll(collectedPickups.toSet())
+            }
+
             val eatenFish = fishSnacks.firstOrNull { fishSnack ->
                 val fishRect = Rect(fishSnack.x, fishSnack.y, fishSnack.x + fishSnack.size, fishSnack.y + fishSnack.size)
                 playerRect.overlaps(fishRect)
@@ -1155,6 +1261,26 @@ fun GuguGagaGame(
                 coyoteTimer = max(0f, coyoteTimer - frameSeconds)
             }
 
+            if (!isBossFight && levelNpcs.isNotEmpty() && !gameOver && !levelClear) {
+                val pCx = playerX + size * 0.5f
+                val pBot = playerY + size
+                val n = levelNpcs.find { npc ->
+                    val ncx = npc.x + npc.width * 0.5f
+                    abs(ncx - pCx) < size * 1.2f && pBot >= npc.y - 4f && pBot <= groundY + 8f
+                }
+                if (n != null) {
+                    npcBubbleText = n.line
+                    npcBubbleTimer = 2.6f
+                } else {
+                    npcBubbleTimer = max(0f, npcBubbleTimer - frameSeconds)
+                    if (npcBubbleTimer <= 0f) npcBubbleText = null
+                }
+            }
+            if (mechanicHintText != null) {
+                mechanicHintTimer = max(0f, mechanicHintTimer - frameSeconds)
+                if (mechanicHintTimer <= 0f) mechanicHintText = null
+            }
+
             if (companionDrorUnlocked) {
                 val (nx, ny) = lerpDrorTowardTarget(
                     drorWorldX,
@@ -1187,8 +1313,7 @@ fun GuguGagaGame(
                     animTick = spriteAnimTick,
                     isMoving = guguIsMovingHorizontally(
                         playerVelocityX,
-                        moveLeftPressed,
-                        moveRightPressed,
+                        abs(joystickX) > 0.12f,
                     ),
                 )
             }
@@ -1215,7 +1340,7 @@ fun GuguGagaGame(
     val tutorialHint =
         when {
             currentLevel != GameLevel.CedarVillageRuins || tutorialDefeatedEnemy -> null
-            !tutorialMoved -> "先按住左右按钮移动，熟悉企鹅起步的节奏。"
+            !tutorialMoved -> "先拖动摇杆左右试探，习惯加速与回中刹停的手感。"
             !tutorialJumped -> "现在试试跳跃。轻点更利落，按住会跳得更高。"
             !tutorialCollectedPowerUp -> "去顶一下问号箱，拿到第一个道具。"
             else -> "最后试着踩掉前方敌人，或者顶着护盾安全通过。"
@@ -1328,6 +1453,43 @@ fun GuguGagaGame(
                                 androidx.compose.ui.geometry.Size(platform.width, platform.height * 0.45f),
                                 CornerRadius(12f, 12f),
                             )
+                            if (platform.bounceImpulse > 0f) {
+                                val by = platform.y + 7f
+                                var x0 = drawX + shiverX + 10f
+                                while (x0 < drawX + shiverX + platform.width - 14f) {
+                                    val pathZ = Path().apply {
+                                        moveTo(x0, by)
+                                        lineTo(x0 + 5f, by + 5f)
+                                        lineTo(x0 + 10f, by)
+                                    }
+                                    drawPath(pathZ, Color(0xFF5D4037), style = Stroke(width = 3f))
+                                    x0 += 16f
+                                }
+                            }
+                            if (platform.conveyorBelt != 0f) {
+                                val up = platform.conveyorBelt > 0f
+                                var ax = drawX + shiverX + 8f
+                                val yArr = platform.y - 3f
+                                while (ax < drawX + shiverX + platform.width - 16f) {
+                                    val pth = Path().apply {
+                                        if (up) {
+                                            moveTo(ax, yArr)
+                                            lineTo(ax + 9f, yArr)
+                                            lineTo(ax + 4.5f, yArr - 4f)
+                                        } else {
+                                            moveTo(ax + 9f, yArr)
+                                            lineTo(ax, yArr)
+                                            lineTo(ax + 4.5f, yArr - 4f)
+                                        }
+                                        close()
+                                    }
+                                    drawPath(
+                                        pth,
+                                        Color(0xE0FFFFFF).copy(alpha = 0.55f),
+                                    )
+                                    ax += 24f
+                                }
+                            }
                         }
 
                         blocks.forEach { block ->
@@ -1367,6 +1529,53 @@ fun GuguGagaGame(
                             drawCircle(glow, coin.size * 0.55f, Offset(cx, cy))
                             drawCircle(fill, coin.size / 2, Offset(cx, cy))
                             drawCircle(Color(0xFFFFF4C2), coin.size / 3.1f, Offset(cx, cy), style = Stroke(width = 4f))
+                        }
+
+                        worldPickups.forEach { wp ->
+                            val wdx = wp.x - cameraX
+                            if (wdx + wp.size < -16f || wdx > size.width + 16f) return@forEach
+                            val bobW = sin(globalAnim * 2.5f + wp.x * 0.01f) * (wp.size * 0.06f)
+                            val cwy = wp.y + bobW + wp.size * 0.5f
+                            val cwx = wdx + wp.size * 0.5f
+                            when (wp.kind) {
+                                WorldPickupKind.Snowberry -> {
+                                    drawCircle(Color(0x33E53935), wp.size * 0.5f, Offset(cwx, cwy))
+                                    drawCircle(Color(0xFFD32F2F), wp.size * 0.4f, Offset(cwx, cwy))
+                                    drawLine(
+                                        Color(0xFF81C784),
+                                        Offset(cwx - 2f, cwy - wp.size * 0.4f),
+                                        Offset(cwx + 1f, cwy - wp.size * 0.5f),
+                                        strokeWidth = 3f,
+                                    )
+                                }
+                                WorldPickupKind.GustSeed -> {
+                                    val leaf = Path().apply {
+                                        moveTo(cwx, cwy - wp.size * 0.35f)
+                                        quadraticTo(
+                                            cwx + wp.size * 0.4f, cwy,
+                                            cwx, cwy + wp.size * 0.3f
+                                        )
+                                        quadraticTo(
+                                            cwx - wp.size * 0.4f, cwy,
+                                            cwx, cwy - wp.size * 0.35f
+                                        )
+                                    }
+                                    drawPath(leaf, Color(0xFF66BB6A))
+                                }
+                                WorldPickupKind.GlintFragment -> {
+                                    for (i in 0..3) {
+                                        val ang = i * 1.57f + globalAnim
+                                        val rr = wp.size * 0.2f
+                                        drawLine(
+                                            Color(0xFFFFF59D).copy(alpha = 0.9f),
+                                            Offset(cwx, cwy),
+                                            Offset(cwx + cos(ang) * rr, cwy + sin(ang) * rr),
+                                            strokeWidth = 3.5f,
+                                        )
+                                    }
+                                    drawCircle(Color(0xFFFFEB3B), wp.size * 0.2f, Offset(cwx, cwy), style = Stroke(width = 2f))
+                                }
+                            }
                         }
 
                         floatingCoins.forEach { coin ->
@@ -1536,6 +1745,26 @@ fun GuguGagaGame(
                                         strokeWidth = 4f,
                                     )
                                 }
+                                EnemyKind.LowIceArch -> {
+                                    val arch =
+                                        Path().apply {
+                                            moveTo(drawX, enemy.y + enemy.height)
+                                            quadraticTo(
+                                                drawX + enemy.width * 0.5f,
+                                                enemy.y - enemy.height * 0.62f,
+                                                drawX + enemy.width,
+                                                enemy.y + enemy.height,
+                                            )
+                                        }
+                                    drawPath(arch, Color(0xFFB3E5FC), style = Stroke(width = 11f))
+                                    drawPath(arch, Color.White.copy(alpha = 0.7f), style = Stroke(width = 4f))
+                                    drawLine(
+                                        Color(0xAA64FFDA),
+                                        Offset(drawX + enemy.width * 0.16f, enemy.y + enemy.height + 7f),
+                                        Offset(drawX + enemy.width * 0.84f, enemy.y + enemy.height + 7f),
+                                        strokeWidth = 3f,
+                                    )
+                                }
                             }
                             if (enemy.hasIceShield) {
                                 drawCircle(
@@ -1544,6 +1773,57 @@ fun GuguGagaGame(
                                     Offset(drawX + enemy.width * 0.5f, enemy.y + enemy.height * 0.42f),
                                     style = Stroke(width = 5f),
                                 )
+                            }
+                        }
+
+                        levelNpcs.forEach { npc ->
+                            val ndx = npc.x - cameraX
+                            if (ndx + npc.width < -20f || ndx > size.width + 20f) return@forEach
+                            when (npc.kind) {
+                                NpcKind.Sign -> {
+                                    drawRoundRect(
+                                        Color(0xFF5D4037),
+                                        Offset(ndx + npc.width * 0.35f, npc.y - npc.height * 0.1f),
+                                        androidx.compose.ui.geometry.Size(npc.width * 0.3f, npc.height * 1.1f),
+                                        CornerRadius(4f, 4f),
+                                    )
+                                    drawRoundRect(
+                                        Color(0xFFFFF8E1).copy(alpha = 0.92f),
+                                        Offset(ndx + 2f, npc.y),
+                                        androidx.compose.ui.geometry.Size(npc.width - 4f, npc.height * 0.75f),
+                                        CornerRadius(6f, 6f),
+                                    )
+                                    drawLine(
+                                        Color(0xFF6D4C41),
+                                        Offset(ndx + npc.width * 0.2f, npc.y + npc.height * 0.35f),
+                                        Offset(ndx + npc.width * 0.8f, npc.y + npc.height * 0.35f),
+                                        strokeWidth = 2f,
+                                    )
+                                }
+                                else -> {
+                                    val sk =
+                                        when (npc.kind) {
+                                            NpcKind.Elder -> Color(0xFF5C6A72) to Color(0xFFCFD8DC)
+                                            NpcKind.Scout -> Color(0xFF455A64) to Color(0xFFB0BEC5)
+                                            NpcKind.Villager -> theme.sealBodyColor to theme.sealBellyColor
+                                            NpcKind.Sign -> theme.sealBodyColor to theme.sealBellyColor
+                                        }
+                                    drawOval(
+                                        sk.first,
+                                        Offset(ndx + npc.width * 0.12f, npc.y + npc.height * 0.18f),
+                                        androidx.compose.ui.geometry.Size(npc.width * 0.76f, npc.height * 0.58f),
+                                    )
+                                    drawOval(
+                                        sk.second,
+                                        Offset(ndx + npc.width * 0.22f, npc.y + npc.height * 0.38f),
+                                        androidx.compose.ui.geometry.Size(npc.width * 0.56f, npc.height * 0.3f),
+                                    )
+                                    drawCircle(
+                                        sk.first,
+                                        npc.width * 0.2f,
+                                        Offset(ndx + npc.width * 0.5f, npc.y + npc.height * 0.2f),
+                                    )
+                                }
                             }
                         }
 
@@ -1629,9 +1909,10 @@ fun GuguGagaGame(
 
                         val moving = guguIsMovingHorizontally(
                             playerVelocityX,
-                            moveLeftPressed,
-                            moveRightPressed,
+                            abs(joystickX) > 0.12f,
                         )
+                        val crouchVisual = crouchPressed && onGround
+                        val footH = if (crouchVisual) hero * 0.74f else null
                         val guguBreathY = 1f + 0.035f * sin(globalAnim * 5.5f)
                         for (ph in dashPhantoms) {
                             val sx = ph.worldX - cameraX
@@ -1663,6 +1944,7 @@ fun GuguGagaGame(
                             facingRight = playerFacingRight,
                             isMoving = moving,
                             breathScaleY = guguBreathY,
+                            footAnchoredHeight = footH,
                         )
                         }
                     }
@@ -1777,23 +2059,39 @@ fun GuguGagaGame(
             GameStageControlDock {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    HoldButton(text = "左移", modifier = Modifier.weight(1f), onPressedChange = { moveLeftPressed = it })
-                    HoldButton(
-                        text = "跳跃",
-                        modifier = Modifier.weight(1f),
-                        onPressedChange = { pressed ->
-                            jumpPressed = pressed
-                            if (pressed) jump()
-                        }
+                    GameVirtualJoystick(
+                        onHorizontalChange = { joystickX = it },
+                        resetKey = inputSession,
+                        modifier = Modifier.padding(end = 4.dp, bottom = 2.dp),
+                        totalSize = 124.dp,
                     )
-                    HoldButton(text = "右移", modifier = Modifier.weight(1f), onPressedChange = { moveRightPressed = it })
+                    Spacer(Modifier.weight(1f))
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        HoldButton(
+                            text = "跳跃",
+                            modifier = Modifier.width(112.dp),
+                            onPressedChange = { pressed ->
+                                jumpPressed = pressed
+                                if (pressed) jump()
+                            }
+                        )
+                        GameActionHoldButton(
+                            text = "蹲下",
+                            modifier = Modifier.width(112.dp),
+                            onPressedChange = { crouchPressed = it }
+                        )
+                    }
                 }
                 if (rescuedTuanTuan) {
                     HoldButton(
                         text = if (tuanTuanAssistReady) "团团支援" else "团团休息中",
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         onPressedChange = { pressed -> if (pressed) triggerTuanTuanAssist() }
                     )
                 }
@@ -1857,6 +2155,20 @@ fun GuguGagaGame(
                     modifier = Modifier.padding(top = 6.dp),
                     title = "新手引导",
                     description = tutorialHint,
+                )
+            }
+            if (npcBubbleText != null) {
+                TutorialHintCard(
+                    modifier = Modifier.padding(top = if (tutorialHint != null) 4.dp else 6.dp),
+                    title = "路人与留言",
+                    description = npcBubbleText!!,
+                )
+            }
+            if (mechanicHintText != null) {
+                TutorialHintCard(
+                    modifier = Modifier.padding(top = if (tutorialHint != null || npcBubbleText != null) 4.dp else 6.dp),
+                    title = "机制提示",
+                    description = mechanicHintText!!,
                 )
             }
             }

@@ -5,8 +5,10 @@ import com.example.mygame.game.BossArenaSpec
 import com.example.mygame.game.Coin
 import com.example.mygame.game.Enemy
 import com.example.mygame.game.FriendGoal
+import com.example.mygame.game.LevelNpc
 import com.example.mygame.game.Pit
 import com.example.mygame.game.Platform
+import com.example.mygame.game.WorldPickup
 
 data class LevelPresentation(
     val introTitle: String,
@@ -31,4 +33,6 @@ data class LevelContent(
     val sceneTheme: StorySceneTheme,
     /** 非空时，到达触发 X 后进入高松鹅竞技场（锁镜头、Boss 状态机），通关条件由 Boss 结算接管。 */
     val bossArena: BossArenaSpec? = null,
+    val npcs: List<LevelNpc> = emptyList(),
+    val worldPickups: List<WorldPickup> = emptyList(),
 )

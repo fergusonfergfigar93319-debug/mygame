@@ -14,6 +14,16 @@ data class Platform(
     val isFragile: Boolean = false,
     /** 剩余可站立时间（秒），非脆弱或未站上去时为 `null`；离板重置。 */
     val fragileTimeLeft: Float? = null,
+    /**
+     * 自上方落到平台顶时额外向上冲量（下跳速度，像素/秒 量级，与起跳 1040 同阶）。
+     * 用于弹簧石、苔垫等；0 为关闭。
+     */
+    val bounceImpulse: Float = 0f,
+    /**
+     * 传送/履带：站定时每帧将玩家世界 X 平移，正值向右（秒·速度）。
+     * 与冰面侧向滑动不同，是被动位移，用于风道、转冰篦。
+     */
+    val conveyorBelt: Float = 0f,
 )
 
 /** 脆弱薄冰自站定起至碎裂的时长（秒）。 */
@@ -88,9 +98,10 @@ enum class EnemyKind {
     SpikedSeal,
     Owl,
     SnowMole,
+    LowIceArch,
 }
 
-fun EnemyKind.canBeStomped(): Boolean = this != EnemyKind.SpikedSeal
+fun EnemyKind.canBeStomped(): Boolean = this != EnemyKind.SpikedSeal && this != EnemyKind.LowIceArch
 
 enum class CoinKind {
     Normal,
@@ -151,6 +162,46 @@ data class FriendGoal(
     val x: Float,
     val groundY: Float,
     val height: Float
+)
+
+enum class NpcKind {
+    /** 一般村民/路人 */
+    Villager,
+    /** 可对话的长者 */
+    Elder,
+    /** 放哨/斥候 */
+    Scout,
+    /** 告示牌/图腾桩（无头） */
+    Sign,
+}
+
+/**
+ * 友好 NPC，靠近即显示 [line] 气泡；不影响碰撞（装饰性，可与玩家重叠时不伤害）。
+ */
+data class LevelNpc(
+    val x: Float,
+    val y: Float,
+    val width: Float,
+    val height: Float,
+    val kind: NpcKind = NpcKind.Villager,
+    val line: String,
+)
+
+enum class WorldPickupKind {
+    /** 浆果：少量加分 */
+    Snowberry,
+    /** 风种：续少许长跳 */
+    GustSeed,
+    /** 微光片：等同一枚收集鱼干计数外的加分用（此处按小奖励分处理） */
+    GlintFragment,
+}
+
+/** 可拾取环境道具，与问号箱/金币互补。 */
+data class WorldPickup(
+    val x: Float,
+    val y: Float,
+    val size: Float,
+    val kind: WorldPickupKind = WorldPickupKind.Snowberry,
 )
 
 // --- 高松鹅 Takamatsu Goose Boss ---

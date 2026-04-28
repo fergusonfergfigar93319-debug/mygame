@@ -18,6 +18,7 @@ data class EndlessScoringConfig(
     val fishChainBonusPerExtra: Int = 5,
     val stompActionPoints: Int = 25,
     val perfectJumpChainBonus: Int = 35,
+    val perfectSlidePoints: Int = 30,
     val assistActionPoints: Int = 40,
 )
 

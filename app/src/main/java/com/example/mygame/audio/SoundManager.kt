@@ -58,6 +58,7 @@ class SoundManager(context: Context) {
 
     enum class BgmTrack {
         None,
+        LobbyCozy,
         Story,
         Endless,
     }
@@ -97,6 +98,7 @@ class SoundManager(context: Context) {
         }
         val res =
             when (track) {
+                BgmTrack.LobbyCozy -> R.raw.bgm_lobby_cozy
                 BgmTrack.Story -> R.raw.bgm_story
                 BgmTrack.Endless -> R.raw.bgm_endless
                 BgmTrack.None -> return
