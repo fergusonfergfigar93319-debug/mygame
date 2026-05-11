@@ -16,3 +16,46 @@ local.properties
 
 # 根目录临时截图
 /1773992521968.jpeg
+
+# --- Unity (6000+) ---
+# 生成目录与本地缓存（勿提交）
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+MemoryCaptures/
+Recordings/
+
+# 本地出包与大型制品（可按需保留 Build/ 下的脚本而忽略 apk）
+/[Bb]uild/
+*.apk
+*.aab
+
+# Android / Gradle 本地 Unity 构建缓存
+.utmp/
+
+# Visual Studio / Rider / VS Code 由 Unity 生成的工程文件（可重建）
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# 崩溃与诊断
+sysinfo.txt
+CrashReports/
+
+# Plastic / Collaborate（若未使用可忽略）
+.ignore.conf
+
+# Unity 崩溃/恢复产生的临时场景（勿提交）
+Assets/_Recovery/
