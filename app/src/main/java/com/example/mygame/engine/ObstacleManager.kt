@@ -271,6 +271,7 @@ class ObstacleManager {
             when (obs.type) {
                 ObstacleType.Fence -> if (playerBottom < obs.height * 0.5f) return CollisionResult(true, obs.type)
                 ObstacleType.LowArch -> if (!isSliding && playerBottom < 1f) return CollisionResult(true, obs.type)
+                ObstacleType.Seal -> if (playerBottom < obs.height * 0.5f) return CollisionResult(true, obs.type)
                 ObstacleType.Pit -> if (playerBottom <= 0.01f) return CollisionResult(true, obs.type)
                 else -> return CollisionResult(true, obs.type)
             }
