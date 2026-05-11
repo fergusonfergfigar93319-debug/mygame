@@ -779,6 +779,8 @@ fun GuguGagaGame(
                                         platforms[i] = p.copy(isFragile = true, fragileTimeLeft = FRAGILE_ICE_STAND_S)
                                     }
                                 }
+                                mechanicHintText = "狂暴阶段：躲开落地冲击，趁高松鹅落地后从上方重踩！"
+                                mechanicHintTimer = 3.0f
                             }
                         }
                         is BossTickEvent.BossDefeated -> {
@@ -1134,11 +1136,28 @@ fun GuguGagaGame(
                                 soundManager?.duckBgmOnHeavyStomp(0.2f, 240L)
                                 bonusScore += 200
                             }
-                            be.state == BossState.STUNNED || be.state == BossState.ENRAGED -> {
+                            be.state == BossState.STUNNED -> {
                                 playerVelocityY = -400f
                                 onGround = false
                                 hitStopTimer = StompFeel.HIT_STOP_LIGHT_S
                                 soundManager?.playShieldBounce()
+                            }
+                            be.state == BossState.ENRAGED && takamatsuBoss.notifyEnragedStomp() -> {
+                                playerVelocityY = -720f
+                                onGround = false
+                                hitStopTimer = StompFeel.HIT_STOP_S
+                                shakeAmplitude = max(shakeAmplitude, StompFeel.SHAKE_MAX_PX)
+                                shakeBias = StompFeel.ShakeBias.None
+                                shakeBiasFrames = 0
+                                stompHapticNonce++
+                                ParticleSpawners.stompKillBurst(
+                                    particles,
+                                    centerX = be.x + be.width * 0.5f,
+                                    centerY = be.y + be.height * 0.42f,
+                                )
+                                soundManager?.playStomp()
+                                soundManager?.duckBgmOnHeavyStomp()
+                                bonusScore += 150
                             }
                             else -> {
                                 playerVelocityY = -400f
