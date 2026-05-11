@@ -43,6 +43,12 @@ sealed class BossTickEvent {
  */
 class TakamatsuBossController {
 
+    private companion object {
+        const val STUN_DAMAGE = 28f
+        const val ENRAGED_STOMP_DAMAGE = 22f
+        const val ENRAGED_STOMP_COOLDOWN_S = 0.35f
+    }
+
     lateinit var entity: BossEntity
         private set
     var running: Boolean = false
@@ -63,6 +69,7 @@ class TakamatsuBossController {
     private var minionsSpawned: Int = 0
     private var pendingDefeated: Boolean = false
     private var centerX: Float = 0f
+    private var enragedStompCooldown: Float = 0f
 
     fun reset() {
         running = false
@@ -71,6 +78,7 @@ class TakamatsuBossController {
         minionsSpawned = 0
         jumpT = 0f
         spawnAcc = 0f
+        enragedStompCooldown = 0f
     }
 
     fun start(arena: BossArenaSpec, groundY: Float, hero: Float) {
@@ -100,9 +108,11 @@ class TakamatsuBossController {
         entity.damageFlashTimer = BOSS_DAMAGE_FLASH_MAX_S
     }
 
-    /** P1 起跳、双脚离地：不允许正常踩头，用冰盾格挡感弹开。 */
+    /** P1/P3 起跳、双脚离地：不允许正常踩头，用冰盾格挡感弹开。 */
     fun isBossAirborneForStompIgnore(groundY: Float): Boolean =
-        running && entity.state == BossState.JUMPING && (entity.y + entity.height) < groundY - hero * 0.2f
+        running &&
+            (entity.state == BossState.JUMPING || entity.state == BossState.ENRAGED) &&
+            isAirborneForStomp(entity, groundY)
 
     /**
      * 可踩踏的 Boss 体（P2 带盾、P3 无盾的地面阶段、虚弱）。
@@ -110,16 +120,34 @@ class TakamatsuBossController {
     fun canReceiveStomp(): Boolean {
         if (!running) return false
         return when (entity.state) {
-            BossState.SHIELDED, BossState.STUNNED, BossState.ENRAGED -> true
-            BossState.JUMPING -> (entity.y + entity.height) >= groundY - hero * 0.2f
+            BossState.SHIELDED, BossState.STUNNED -> true
+            BossState.ENRAGED -> !isAirborneForStomp(entity) && enragedStompCooldown <= 0f
+            BossState.JUMPING -> !isAirborneForStomp(entity)
             else -> false
         }
+    }
+
+    fun notifyEnragedStomp(): Boolean {
+        if (!running) return false
+        val e = entity
+        if (e.state != BossState.ENRAGED) return false
+        if (isAirborneForStomp(e) || enragedStompCooldown > 0f) return false
+
+        applyBossDamage(ENRAGED_STOMP_DAMAGE)
+        enragedStompCooldown = ENRAGED_STOMP_COOLDOWN_S
+        if (e.hp <= 0f) {
+            e.state = BossState.DYING
+            e.stateTime = 0f
+            e.hasShield = false
+        }
+        return true
     }
 
     fun tick(dt: Float): List<BossTickEvent> {
         if (!running) return emptyList()
         val e = entity
         e.damageFlashTimer = kotlin.math.max(0f, e.damageFlashTimer - dt)
+        enragedStompCooldown = max(0f, enragedStompCooldown - dt)
         e.stateTime += dt
         val out = ArrayList<BossTickEvent>()
 
@@ -176,8 +204,7 @@ class TakamatsuBossController {
             BossState.STUNNED -> {
                 e.y = groundY - e.height
                 if (e.stateTime >= 2.1f) {
-                    e.hp = max(0f, e.hp - 28f)
-                    e.damageFlashTimer = BOSS_DAMAGE_FLASH_MAX_S
+                    applyBossDamage(STUN_DAMAGE)
                     e.stateTime = 0f
                     if (e.hp <= 0f) {
                         e.state = BossState.DYING
@@ -186,6 +213,7 @@ class TakamatsuBossController {
                         e.state = BossState.ENRAGED
                         e.hasShield = false
                         jumpT = 0f
+                        enragedStompCooldown = ENRAGED_STOMP_COOLDOWN_S
                         out += BossTickEvent.MarkPlatformsFragile(true)
                     } else {
                         e.state = BossState.JUMPING
@@ -205,6 +233,15 @@ class TakamatsuBossController {
             }
         }
         return out
+    }
+
+    private fun isAirborneForStomp(e: BossEntity, groundY: Float = this.groundY): Boolean =
+        (e.y + e.height) < groundY - hero * 0.2f
+
+    private fun applyBossDamage(amount: Float) {
+        val e = entity
+        e.hp = max(0f, e.hp - amount)
+        e.damageFlashTimer = BOSS_DAMAGE_FLASH_MAX_S
     }
 
     private fun makeBossSlamAtLanding(): List<BossTickEvent> {
