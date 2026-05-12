@@ -1,60 +1,96 @@
 Open-source visual assets integrated into this project.
+Keep this file if you redistribute the project to preserve source/license traceability.
 
-1) Kenney Game Icons (OpenGameArt mirror)
-   Source:
-   - https://lpc.opengameart.org/content/game-icons
-   File archive:
-   - https://lpc.opengameart.org/sites/default/files/Kenney_gameIcons.zip
-   License note:
-   - Attribution to "Kenney.nl" is optional per source page.
+──────────────────────────────────────────────────────────────────────────────
+1. Kenney Game Icons (OpenGameArt mirror)
+   URL     : https://lpc.opengameart.org/content/game-icons
+   Archive : https://lpc.opengameart.org/sites/default/files/Kenney_gameIcons.zip
+   License : Attribution to "Kenney.nl" is optional per source page.
    Files used (renamed into Resources):
-   - CodexIcons/icon_companion_star.png
-   - CodexIcons/icon_companion_dror.png
-   - CodexIcons/icon_boss_defeat.png
-   - CodexIcons/icon_camp.png
-   - CodexIcons/icon_tutorial.png
-   - CodexIcons/icon_locked.png
+     CodexIcons/icon_companion_star.png
+     CodexIcons/icon_companion_dror.png
+     CodexIcons/icon_boss_defeat.png
+     CodexIcons/icon_camp.png
+     CodexIcons/icon_tutorial.png
+     CodexIcons/icon_locked.png
 
-2) Seamless Pattern Pack (OpenGameArt)
-   Source:
-   - https://opengameart.org/content/seamless-pattern-pack
-   File archive:
-   - https://opengameart.org/sites/default/files/seamless_pattern_pack.zip
-   License note:
-   - Public Domain / CC0 style usage per source page.
+──────────────────────────────────────────────────────────────────────────────
+2. Seamless Pattern Pack (OpenGameArt)
+   URL     : https://opengameart.org/content/seamless-pattern-pack
+   Archive : https://opengameart.org/sites/default/files/seamless_pattern_pack.zip
+   License : Public Domain / CC0.
    Files used (renamed into Resources/Textures):
-   - tex_ice_surface.jpg (from ice02.jpg)
-   - tex_stone_surface.png (from cobblestone.png)
-   - tex_metal_surface.png (from metal.png)
-   - tex_fabric_surface.png (from blue_textile.png)
+     tex_ice_surface.jpg        from ice02.jpg
+     tex_stone_surface.png      from cobblestone.png
+     tex_metal_surface.png      from metal.png
+     tex_fabric_surface.png     from blue_textile.png
 
-Usage in project:
-- Codex panel icon badges now load the above icon sprites from Resources.
-- Boss encounter and road tiles now apply these textures where available.
-
-3) Nature Kit + CC0 lowpoly model add-ons (OpenGameArt)
+──────────────────────────────────────────────────────────────────────────────
+3. Nature Kit + CC0 Lowpoly Model Add-ons (OpenGameArt)
    Sources:
-   - https://opengameart.org/content/nature-kit
-   - https://opengameart.org/content/lowpoly-stones
-   - https://opengameart.org/content/lowpoly-leaf-tree
-   Archives:
-   - Nature Kit (2.1).zip
-   - stones.zip
-   - leaftree_0.zip
-   License note:
-   - Source pages indicate CC0 / no mandatory attribution.
-   Files used (Resources/Models):
-   - tree_pineSmallA.fbx
-   - tree_pineTallA.fbx
-   - tree_simple.fbx
-   - tree_palmShort.fbx
-   - rock_largeA.fbx
-   - rock_smallA.fbx
-   - cliff_block_stone.fbx
-   - cliff_block_rock.fbx
-   - log_stackLarge.fbx
-   - mushroom_redGroup.fbx
-   - stone_1.fbx
-   - stone_2.fbx
-   - cactus_tall.fbx
-   - leaftree.fbx (+ leaftree.PNG)
+     https://opengameart.org/content/nature-kit
+     https://opengameart.org/content/lowpoly-stones
+     https://opengameart.org/content/lowpoly-leaf-tree
+   License : CC0 / no mandatory attribution per source pages.
+   Files used (Resources/PenguinRun/Models/):
+     tree_pineSmallA.fbx
+     tree_pineTallA.fbx
+     tree_simple.fbx
+     tree_palmShort.fbx
+     rock_largeA.fbx
+     rock_smallA.fbx
+     cliff_block_stone.fbx
+     cliff_block_rock.fbx
+     log_stackLarge.fbx
+     mushroom_redGroup.fbx
+     stone_1.fbx
+     stone_2.fbx
+     cactus_tall.fbx
+     leaftree.fbx  (+leaftree.PNG)
+
+──────────────────────────────────────────────────────────────────────────────
+4. Planned model additions for content pack themes (PLACEHOLDER)
+   Place files in Assets/Resources/PenguinRun/Models/ and fill attribution below.
+
+   Coral reef theme:
+     coral_branch.fbx / coral_pillar.fbx / coral_fan.fbx
+     Suggested: https://opengameart.org/content/cc0-nature-pack-extended (CC0)
+     Status: PLACEHOLDER
+     Attribution: <fill when added>
+
+   Sky / Cloud theme:
+     cloud_platform.fbx / windmill_vane.fbx / thundercloud.fbx
+     Suggested: https://opengameart.org/content/cloud-skybox-pack (CC0)
+     Status: PLACEHOLDER
+     Attribution: <fill when added>
+
+   Mist / Stone theme:
+     fog_pillar.fbx / mist_barrier.fbx
+     Suggested: reuse cliff_block_stone with mist-color tint (already in project)
+     Status: Reuse existing
+
+   Aurora / Crystal theme:
+     crystal_prism.fbx / aurora_gate.fbx
+     Suggested: https://opengameart.org/content/crystal-pack (CC0)
+     Status: PLACEHOLDER
+     Attribution: <fill when added>
+
+   IMPORT CHECKLIST for each model:
+   [ ] Confirmed CC0 or CC-BY source
+   [ ] Attribution recorded in this file
+   [ ] .fbx placed at Assets/Resources/PenguinRun/Models/<modelName>.fbx
+   [ ] Unity import scale verified (check against existing models in scene)
+   [ ] modelName string matches Resources.Load call in SegmentSpawner.cs exactly
+   [ ] LOD / polygon count acceptable (<3000 tris for obstacles)
+
+──────────────────────────────────────────────────────────────────────────────
+5. Usage in project:
+   - Obstacle and enemy models are loaded via Resources.Load<GameObject>("PenguinRun/Models/<name>")
+   - Boss silhouettes use procedural geometry (no external models currently)
+   - Texture pack applied via TintModel() at runtime; no separate texture import needed for obstacles
+
+──────────────────────────────────────────────────────────────────────────────
+LICENSE POLICY:
+  CC0  : No attribution required, but appreciated.
+  CC-BY: Attribution REQUIRED. Record author + URL + license in this file before committing.
+  Non-commercial / ND / SA: DO NOT USE without explicit approval.

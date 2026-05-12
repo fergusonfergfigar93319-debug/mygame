@@ -169,6 +169,7 @@ namespace PenguinRun.Game.UI
 
         private static Sprite _roundedSprite;
         private static Sprite _circleSprite;
+        private static Sprite _triangleSprite;
         private static Sprite _glowSprite;
         private static Sprite _solidUiSprite;
 
@@ -189,6 +190,16 @@ namespace PenguinRun.Game.UI
                 if (_circleSprite == null)
                     _circleSprite = CreateCircleFallback();
                 return _circleSprite;
+            }
+        }
+
+        public static Sprite TriangleSprite
+        {
+            get
+            {
+                if (_triangleSprite == null)
+                    _triangleSprite = CreateTriangleFallback();
+                return _triangleSprite;
             }
         }
 
@@ -266,6 +277,27 @@ namespace PenguinRun.Game.UI
             }
             tex.Apply();
             return Sprite.Create(tex, new Rect(0f, 0f, d, d), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        private static Sprite CreateTriangleFallback()
+        {
+            const int s = 64;
+            var tex = new Texture2D(s, s, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            var clear = new Color(1f, 1f, 1f, 0f);
+            var mid = (s - 1) * 0.5f;
+            for (var y = 0; y < s; y++)
+            for (var x = 0; x < s; x++)
+            {
+                var t = y / (float)(s - 1);
+                var halfWidth = Mathf.Lerp(mid, 0f, t);
+                tex.SetPixel(x, y, Mathf.Abs(x - mid) <= halfWidth ? Color.white : clear);
+            }
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0f, 0f, s, s), new Vector2(0.5f, 0.5f), 100f);
         }
 
         private static Sprite CreateGlowFallback()
@@ -355,6 +387,15 @@ namespace PenguinRun.Game.UI
                     img.type = Image.Type.Simple;
                 }
             }
+            return rt;
+        }
+
+        public static RectTransform CreateTriangle(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 sizeDelta, Vector2 anchoredPosition, Color bg)
+        {
+            var rt = CreateRect(name, parent, anchorMin, anchorMax, sizeDelta, anchoredPosition, bg);
+            var img = rt.GetComponent<Image>();
+            img.sprite = TriangleSprite;
+            img.type = Image.Type.Simple;
             return rt;
         }
 

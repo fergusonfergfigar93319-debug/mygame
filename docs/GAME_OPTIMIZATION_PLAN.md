@@ -91,11 +91,64 @@
 - 营地成长扩展为四项升级，新增“磁针调校”，让极光磁针持续时间可通过局外鱼干资源提升。
 - 当前工程已通过 `./gradlew.bat :app:compileDebugKotlin`。
 
+## 已执行：Boss 战与跑酷体验优化（Unity 版本）
+
+已完整实施市面流行跑酷游戏 Boss 战设计参考，具体内容如下：
+
+### 第一阶段：Boss 战打磨
+
+- **阶段化节奏**：Boss 战现在遵循 `Intro -> Learn -> Pressure -> Vulnerable -> Defeat` 的节奏，每 4 招后强制进入破绽期，避免完全随机带来的不可预测性。
+- **改进 HUD**：显示当前轮次、距离下次破绽还有几招、当前阶段已持续时间，让玩家能预判战斗节奏。
+- **死亡复盘**：新增 `GetDeathAnalysisHint()` 方法，根据被什么招式击中给出具体的改进建议（如"震地脉冲需要滑铲，不是跳跃"）。
+- **镜头特效**：Boss 危险攻击时轻微震动，击败时定格 0.25 秒 + 震动 0.5 秒，增强打击感。
+
+### 第二阶段：6 个 Boss 明确身份
+
+为每个 Boss 定义了特色定位：
+
+| Boss | 定位 | 主机制 | 推荐反制 | 专属奖励 |
+|------|------|--------|----------|----------|
+| 冰霜雪王 | 均衡型 | 慢节奏重击，破绽期长 | 观察预警，把握跳跃时机 | 雪王之冠 |
+| 雪松哨兵 | 地面型 | 路障/木桩主题 | 多用滑铲 | 哨兵之角 |
+| 极光长蛇 | 机动型 | 招式预警短但有颜色轨迹 | 善用磁吸道具有规划路线 | 极光鳞片 |
+| 雾堤守卫 | 诡诈型 | 真假预警，雾区遮挡 | 相信 HUD 提示而非视觉假象 | 雾核 |
+| 珊瑚海怪 | 防御型 | 多点投射物，护盾反弹 | 拾取护盾在破绽期撞击 | 珊瑚碎片 |
+| 雷云苍鹰 | 空战型 | 高机动俯冲和冲锋 | 拾取滑翔羽毛善用空中移动 | 苍鹰之羽 |
+
+### 第三阶段：场景联动与刷新条件
+
+- **Boss 刷新规则**：新增 `BossSpawnContext` 和 `BossSpawnCondition`，Boss 出现由当前场景 + 玩家进度 + 难度共同决定。
+  - 冰霜雪王：首个教学 Boss，无条件出现
+  - 雪松哨兵：雪松废墟场景，400m 后出现
+  - 极光长蛇：极光磁场场景，600m 后且击败过 1 只 Boss
+  - 雾堤守卫：雾堤场景，800m 后且击败过雪松哨兵
+  - 珊瑚海怪：海洋珊瑚礁场景，500m 后
+  - 雷云苍鹰：天空飞翔场景，1000m 后且击败过 3 只 Boss
+- **主题切换约束**：Boss 活跃时不切图，切图后重算下一只可刷 Boss。
+- **HUD 预告**：主面板显示当前场景可能遭遇的 Boss（如"\u2620 雪松哨兵"）。
+
+### 第四阶段：前奏与奖励片段
+
+- **Boss 前奏段**：在 Boss 出现前 100m 生成特殊片段：
+  - 放置推荐反制道具
+  - 教学金币线展示正确动作路线
+  - 降低普通障碍密度
+- **Boss 奖励段**：击败后生成鱼干大串、短暂安全冲刺道具、主题特色道具。
+
+### 关键实现文件
+
+- `Assets/Scripts/Runtime/PenguinRun/Systems/BossDefinitions.cs` - Boss 定义与刷新条件
+- `Assets/Scripts/Runtime/PenguinRun/Systems/BossSystem.cs` - Boss 战斗逻辑与复盘
+- `Assets/Scripts/Runtime/PenguinRun/Systems/BossEncounter.cs` - Boss 阶段节奏控制
+- `Assets/Scripts/Runtime/PenguinRun/Systems/RunnerHud.cs` - HUD 显示
+- `Assets/Scripts/Runtime/PenguinRun/Systems/SegmentSpawner.cs` - 前奏与奖励片段
+- `Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs` - 镜头特效
+- `Assets/Scripts/Runtime/Game/Save/PlayerSave.cs` - 击败记录
+
 ## 下一批建议
 
-下一批建议优先处理“道具教学 + Boss 阶段反馈 + 文件拆分”：
+下一批建议优先处理"道具教学 + 文件拆分"：
 
 - 为鱼干、围巾、团团支援、长跳靴增加首次获得轻提示。
-- 为 Boss 护盾破裂、狂暴、低血量增加 HUD 文案或短弹层。
-- 抽出 `StoryRunState` / `StoryCollisionSystem` / `StoryPickupSystem`，先减少 `GuguGagaGame.kt` 的主循环压力。
-- 给排行榜页增加“我的最好一局”视觉高亮，把每日挑战目标进一步做实。
+- 抽出 `StoryRunState` / `StoryCollisionSystem` / `StoryPickupSystem`，先减少主循环压力。
+- 给排行榜页增加"我的最好一局"视觉高亮，把每日挑战目标进一步做实。

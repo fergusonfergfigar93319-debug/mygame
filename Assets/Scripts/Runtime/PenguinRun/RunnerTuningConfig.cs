@@ -78,12 +78,12 @@ namespace PenguinRun
         public float CameraBehindDistance = 12.2f;
  
         [Tooltip("相机相对动态路面的高度。")]
-        public float CameraHeightAboveSurface = 6.1f;
+        public float CameraHeightAboveSurface = 6.8f;
  
         [Tooltip("LookAt 瞄准点在角色前方的距离。")]
-        public float CameraAimAhead = 18.5f;
+        public float CameraAimAhead = 21f;
  
-        public float CameraAimHeightAboveSurface = 1.25f;
+        public float CameraAimHeightAboveSurface = 0.3f;
         public float CameraFieldOfView = 76f;
  
         [Range(0.72f, 1f)]

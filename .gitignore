@@ -29,6 +29,7 @@ Recordings/
 
 # 本地出包与大型制品（可按需保留 Build/ 下的脚本而忽略 apk）
 /[Bb]uild/
+/Builds/
 *.apk
 *.aab
 
@@ -60,3 +61,6 @@ CrashReports/
 # Unity 崩溃/恢复产生的临时场景（勿提交）
 Assets/_Recovery/
 Assets/_Recovery.meta
+
+# Cursor 本地工作区配置
+.cursor/

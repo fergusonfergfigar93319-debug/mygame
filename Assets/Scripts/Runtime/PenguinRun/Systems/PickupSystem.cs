@@ -145,6 +145,37 @@ namespace PenguinRun
                     world.AddExtraLife();
                     feedbackText = $"\u2665 +1 心 ({world.Lives}/{world.MaxLives})";
                     break;
+
+                // ── 新道具 ────────────────────────────────────
+                case PowerUpKind.IceMirror:
+                    world.IceMirrorTimer = Mathf.Max(world.IceMirrorTimer, 5.0f);
+                    feedbackText = "冰镜反射";
+                    break;
+                case PowerUpKind.AuroraChain:
+                    world.AuroraChainTimer = Mathf.Max(world.AuroraChainTimer, 8.0f);
+                    feedbackText = "极光连锁";
+                    break;
+                case PowerUpKind.FogLantern:
+                    world.FogLanternTimer = Mathf.Max(world.FogLanternTimer, 6.0f);
+                    world.MagnetTimer = Mathf.Max(world.MagnetTimer, 6.0f);
+                    world.ExtendSlowMo(3.5f);
+                    feedbackText = "雾灯照路";
+                    break;
+                case PowerUpKind.TreantArmor:
+                    world.AddTreantArmorHits(2);
+                    feedbackText = $"树人护甲×{world.TreantArmorHits}";
+                    break;
+                case PowerUpKind.CoralBounce:
+                    world.SetCoralBounce();
+                    world.ShieldTimer = Mathf.Max(world.ShieldTimer, 3.5f);
+                    feedbackText = "珊瑚回弹";
+                    break;
+                case PowerUpKind.ThunderFeather:
+                    world.ThunderFeatherTimer = Mathf.Max(world.ThunderFeatherTimer, 4.5f);
+                    world.DashTimer = Mathf.Max(world.DashTimer, 4.5f);
+                    world.MagnetTimer = Mathf.Max(world.MagnetTimer, 4.5f);
+                    feedbackText = "雷羽激荡";
+                    break;
             }
         }
     }

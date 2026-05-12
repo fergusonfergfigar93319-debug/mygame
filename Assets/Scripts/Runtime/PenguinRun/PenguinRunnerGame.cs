@@ -28,12 +28,31 @@ namespace PenguinRun
         private float cameraYawVel;
         private RunnerHud hud;
         private bool exiting;
+        private RunnerMapTheme currentTheme;
+        private RunnerMapTheme pendingTheme;
+        private float nextThemeSwitchTime;
+        private bool themeTransitionActive;
+        private bool themeAppliedInTransition;
+        private float themeTransitionTimer;
+
+        // ── Boss 战镜头特效 ──────────────────────────────────
+        private float cameraShakeTimer = 0f;
+        private float cameraShakeIntensity = 0f;
+        private float defeatFreezeTimer = 0f;
+        private bool wasBossDefeated = false;
+
+        private const float ThemeSwitchIntervalSeconds = 52f;
+        private const float ThemeTransitionFadeOutSeconds = 0.45f;
+        private const float ThemeTransitionHoldSeconds = 0.22f;
+        private const float ThemeTransitionFadeInSeconds = 0.68f;
 
         private void Awake()
         {
             tuning = RunnerTuning.FromConfig(tuningConfig);
             ConfigureRuntimePerformance(true);
             config = RunnerSessionConfig.Snapshot();
+            currentTheme = config.MapTheme;
+            nextThemeSwitchTime = ThemeSwitchIntervalSeconds;
 
             // 应用难度预设：覆盖速度曲线参数
             var diff = config.DifficultyPreset;
@@ -44,7 +63,7 @@ namespace PenguinRun
             runnerAudio.Initialize(config.Daily, config.SfxEnabled, config.BgmEnabled, config.RunBgmTrack, config.AmbienceTrack, config.SfxStyle);
             hud = new RunnerHud();
             BuildScene();
-            ApplyMapThemeVisuals(config.MapTheme);
+            ApplyMapThemeVisuals(currentTheme);
             game = new RunnerGameController(tuning, config, runnerAudio, player.transform, character, transform, PulseHaptic, OnRunFinished);
             game.ResetRun(false);
         }
@@ -87,6 +106,15 @@ namespace PenguinRun
                 return;
             }
 
+            if (themeTransitionActive)
+            {
+                TickThemeTransition(Time.deltaTime);
+                var frozenDt = Mathf.Min(Time.deltaTime, 0.05f);
+                UpdateCamera(frozenDt);
+                UpdateLaneGuides(frozenDt);
+                return;
+            }
+
             var dt = Mathf.Min(Time.deltaTime, 0.05f);
             var effectiveSpeed = game.TickRunningSimulation(Time.deltaTime);
             UpdateCamera(dt);
@@ -96,6 +124,48 @@ namespace PenguinRun
                 AnimateScenery(dt, effectiveSpeed);
                 game.TickRunningWorld(dt, effectiveSpeed);
             }
+
+            // 检测 Boss 被击败，触发特效
+            CheckBossDefeatEffects();
+
+            TryStartThemeTransition();
+        }
+
+        /// <summary>检测 Boss 被击败状态并触发镜头特效</summary>
+        private void CheckBossDefeatEffects()
+        {
+            var bossSystem = game.Boss;
+            if (bossSystem == null || bossSystem.CurrentBoss == null) return;
+
+            var boss = bossSystem.CurrentBoss;
+            var isDefeated = boss.HitsRemaining <= 0 && boss.Phase == BossPhase.Retreating;
+
+            if (isDefeated && !wasBossDefeated)
+            {
+                // Boss 首次被击败
+                defeatFreezeTimer = 0.25f; // 定格0.25秒
+                cameraShakeTimer = 0.5f;   // 震动0.5秒
+                cameraShakeIntensity = 0.15f;
+                wasBossDefeated = true;
+            }
+            else if (!isDefeated)
+            {
+                wasBossDefeated = false;
+            }
+
+            // Boss 危险攻击时轻微震动
+            if (boss.Phase == BossPhase.Active && boss.IsPatternDangerous)
+            {
+                cameraShakeTimer = 0.1f;
+                cameraShakeIntensity = 0.05f;
+            }
+        }
+
+        /// <summary>触发相机震动（供外部调用）</summary>
+        public void TriggerCameraShake(float duration, float intensity)
+        {
+            cameraShakeTimer = duration;
+            cameraShakeIntensity = intensity;
         }
 
         public void FinishFromAndroidButton(string _)
@@ -158,8 +228,37 @@ namespace PenguinRun
             }
         }
 
+        private static void EnsureLandscape()
+        {
+#if UNITY_ANDROID || UNITY_IOS
+            if (Application.isMobilePlatform)
+            {
+                Screen.autorotateToPortrait = false;
+                Screen.autorotateToPortraitUpsideDown = false;
+                Screen.autorotateToLandscapeLeft = true;
+                Screen.autorotateToLandscapeRight = true;
+                if (Screen.orientation == ScreenOrientation.Portrait ||
+                    Screen.orientation == ScreenOrientation.PortraitUpsideDown)
+                {
+                    Screen.orientation = ScreenOrientation.LandscapeLeft;
+                }
+                else if (Screen.orientation == ScreenOrientation.AutoRotation ||
+                         Screen.orientation == ScreenOrientation.LandscapeLeft ||
+                         Screen.orientation == ScreenOrientation.LandscapeRight)
+                {
+                    // 已是横屏或自动旋转，保留玩家当前握姿
+                }
+                else
+                {
+                    Screen.orientation = ScreenOrientation.LandscapeLeft;
+                }
+            }
+#endif
+        }
+
         private void BuildScene()
         {
+            EnsureLandscape();
             runnerCamera = Camera.main;
             if (runnerCamera == null)
             {
@@ -291,8 +390,8 @@ namespace PenguinRun
                 trackMarkers.Add(marker);
             }
 
-            RunnerVisuals.CreatePrimitive("Moon", PrimitiveType.Sphere, new Vector3(8.6f, 13f, 58f), Vector3.one * 3.2f, new Color(0.9f, 0.95f, 0.96f));
-            RunnerVisuals.CreatePrimitive("Moon Glow", PrimitiveType.Sphere, new Vector3(8.6f, 13f, 58f), Vector3.one * 4.3f, new Color(0.74f, 0.92f, 1f, 0.14f), true);
+            sceneryProps.Add(RunnerVisuals.CreatePrimitive("Moon", PrimitiveType.Sphere, new Vector3(8.6f, 13f, 58f), Vector3.one * 3.2f, new Color(0.9f, 0.95f, 0.96f)));
+            sceneryProps.Add(RunnerVisuals.CreatePrimitive("Moon Glow", PrimitiveType.Sphere, new Vector3(8.6f, 13f, 58f), Vector3.one * 4.3f, new Color(0.74f, 0.92f, 1f, 0.14f), true));
             for (var i = 0; i < 5; i++)
             {
                 var aurora = RunnerVisuals.CreatePrimitive(
@@ -999,7 +1098,8 @@ namespace PenguinRun
             var bossBack = bossFight ? (bossDanger ? 2.8f : 1.9f) : 0f;
             var dynamicHeight = Mathf.Lerp(0.15f, 0.55f, speed01);
             var bossHeight = bossFight ? (bossDanger ? 1.1f : 0.65f) : 0f;
-            var dynamicAimAhead = bossFight ? (bossDanger ? 3.4f : 2.2f) : 0.6f;
+            var dynamicAimAhead = bossFight ? (bossDanger ? 3.4f : 2.2f)
+                : Mathf.Lerp(0.8f, 2.0f, speed01);
 
             // 横向跟随权重：boss 战时减少贴身跟随，确保前方读图更稳定。
             var lateralCam = bossFight ? 0.14f : 0.2f;
@@ -1021,6 +1121,23 @@ namespace PenguinRun
                 px.x * lateralAim + curveX * 0.4f,
                 surface + cam.aimHeightAboveSurface + jumpBoost * 0.25f,
                 px.z + cam.aimAhead + dynamicAimAhead);
+
+            // Boss 战镜头震动效果
+            if (cameraShakeTimer > 0f)
+            {
+                cameraShakeTimer -= dt;
+                var shakeX = (Random.value - 0.5f) * cameraShakeIntensity;
+                var shakeY = (Random.value - 0.5f) * cameraShakeIntensity;
+                targetCam += new Vector3(shakeX, shakeY, 0f);
+            }
+
+            // Boss 被击败时的定格效果
+            if (defeatFreezeTimer > 0f)
+            {
+                defeatFreezeTimer -= dt;
+                // 定格期间减缓相机跟随
+                dt *= 0.1f;
+            }
 
             runnerCamera.transform.position = Vector3.SmoothDamp(runnerCamera.transform.position, targetCam, ref cameraVelocity, 0.18f, 52f, dt);
             var dashFovBoost = game.World.DashTimer > 0f ? 7f : 0f;
@@ -1097,11 +1214,145 @@ namespace PenguinRun
         private void OnGUI()
         {
             var world = game.World;
-            if (hud.Draw(config, world, game.Running, game.GameOver, world.Score, game.FeedbackText, game.FeedbackTimer, config.MapTheme,
+            if (hud.Draw(config, world, game.Running, game.GameOver, world.Score, game.FeedbackText, game.FeedbackTimer, currentTheme,
                     game.Boss, game.IsPaused))
             {
                 game.FinishRun();
             }
+
+            DrawThemeTransitionOverlay();
+        }
+
+        private void TryStartThemeTransition()
+        {
+            if (themeTransitionActive || game == null || !game.Running) return;
+            if (game.Boss != null && game.Boss.BossActive) return;
+            if (game.World.RunTime < nextThemeSwitchTime) return;
+
+            pendingTheme = GetNextTheme(currentTheme);
+            if (pendingTheme == currentTheme)
+            {
+                nextThemeSwitchTime += ThemeSwitchIntervalSeconds;
+                return;
+            }
+
+            themeTransitionActive = true;
+            themeAppliedInTransition = false;
+            themeTransitionTimer = 0f;
+            nextThemeSwitchTime += ThemeSwitchIntervalSeconds;
+            runnerAudio.PlayCheckpoint();
+        }
+
+        private void TickThemeTransition(float dt)
+        {
+            themeTransitionTimer += dt;
+            var applyAt = ThemeTransitionFadeOutSeconds + ThemeTransitionHoldSeconds * 0.5f;
+            if (!themeAppliedInTransition && themeTransitionTimer >= applyAt)
+            {
+                ApplyRuntimeThemeChange(pendingTheme);
+                themeAppliedInTransition = true;
+            }
+
+            var total = ThemeTransitionFadeOutSeconds + ThemeTransitionHoldSeconds + ThemeTransitionFadeInSeconds;
+            if (themeTransitionTimer >= total)
+            {
+                themeTransitionActive = false;
+                themeAppliedInTransition = false;
+                themeTransitionTimer = 0f;
+            }
+        }
+
+        private void ApplyRuntimeThemeChange(RunnerMapTheme nextTheme)
+        {
+            currentTheme = nextTheme;
+            config.MapTheme = nextTheme;
+            RunSession.NextRunTheme = nextTheme;
+            ApplyMapThemeVisuals(nextTheme);
+            RebuildThemeScenery(nextTheme);
+            game.Spawner.ApplyTheme(nextTheme, clearSpawnedEntities: true);
+            game.Spawner.SeedInitialObstacles(game.World.Distance);
+        }
+
+        private void RebuildThemeScenery(RunnerMapTheme theme)
+        {
+            ClearObjects(roadTiles);
+            ClearObjects(trackMarkers);
+            ClearObjects(sceneryProps);
+            BuildIceWorld(theme);
+        }
+
+        private static void ClearObjects(List<GameObject> objects)
+        {
+            for (var i = 0; i < objects.Count; i++)
+            {
+                if (objects[i] != null) Destroy(objects[i]);
+            }
+            objects.Clear();
+        }
+
+        private void DrawThemeTransitionOverlay()
+        {
+            if (!themeTransitionActive) return;
+
+            var total = ThemeTransitionFadeOutSeconds + ThemeTransitionHoldSeconds + ThemeTransitionFadeInSeconds;
+            var t = Mathf.Clamp(themeTransitionTimer, 0f, total);
+
+            float alpha;
+            if (t < ThemeTransitionFadeOutSeconds)
+            {
+                alpha = Mathf.SmoothStep(0f, 0.82f, t / ThemeTransitionFadeOutSeconds);
+            }
+            else if (t < ThemeTransitionFadeOutSeconds + ThemeTransitionHoldSeconds)
+            {
+                alpha = 0.82f;
+            }
+            else
+            {
+                var fadeInT = (t - ThemeTransitionFadeOutSeconds - ThemeTransitionHoldSeconds) / ThemeTransitionFadeInSeconds;
+                alpha = Mathf.SmoothStep(0.82f, 0f, fadeInT);
+            }
+
+            if (alpha <= 0f) return;
+
+            GUI.color = new Color(0.02f, 0.06f, 0.12f, alpha);
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            var labelAlpha = Mathf.Clamp01(alpha / 0.82f) * 0.92f;
+            var style = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 42,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(0.78f, 0.97f, 1f, labelAlpha) }
+            };
+            GUI.Label(new Rect(0f, Screen.height * 0.42f, Screen.width, 56f), $"场景切换 · {GetThemeDisplayName(pendingTheme)}", style);
+        }
+
+        private static RunnerMapTheme GetNextTheme(RunnerMapTheme theme)
+        {
+            return theme switch
+            {
+                RunnerMapTheme.IceLakeEcho => RunnerMapTheme.CedarRuins,
+                RunnerMapTheme.CedarRuins => RunnerMapTheme.AuroraField,
+                RunnerMapTheme.AuroraField => RunnerMapTheme.MistDike,
+                RunnerMapTheme.MistDike => RunnerMapTheme.OceanReef,
+                RunnerMapTheme.OceanReef => RunnerMapTheme.SkyFlight,
+                _ => RunnerMapTheme.IceLakeEcho,
+            };
+        }
+
+        private static string GetThemeDisplayName(RunnerMapTheme theme)
+        {
+            return theme switch
+            {
+                RunnerMapTheme.CedarRuins => "雪松废墟",
+                RunnerMapTheme.AuroraField => "极光磁场",
+                RunnerMapTheme.MistDike => "雾堤",
+                RunnerMapTheme.OceanReef => "海洋珊瑚礁",
+                RunnerMapTheme.SkyFlight => "天空飞翔",
+                _ => "冰湖回音谷",
+            };
         }
     }
 }

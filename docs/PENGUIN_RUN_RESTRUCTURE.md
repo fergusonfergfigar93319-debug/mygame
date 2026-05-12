@@ -46,3 +46,109 @@
 - 为每个片段标注输入需求，避免生成“不可解”的障碍组合。
 - 建立首局教学流程：先单跳，再下滑，再跳跃接下滑，最后进入自由随机段。
 - 继续强化障碍可读性：提前预警、颜色区分、失败回放提示和更短重开链路。
+
+## 已实施：Boss 系统重构
+
+参考 Subway Surfers 的 Boss Chase、Temple Run 的追逐压力和 Crash Bandicoot: On the Run 的阶段高潮设计，已完成：
+
+### 攻击判定时间优化
+
+核心原则：**预警时间长而明确，伤害窗口短而精准**。
+
+#### 判定时间结构
+```
+[攻击开始] -> [预警期] -> [危险窗口] -> [攻击结束]
+   |            |           |            |
+   |         0.4-1.0s     0.3-0.5s      总计1.5-2.5s
+   |                        |
+   |                    判定玩家受伤
+```
+
+#### 各难度参数
+| 难度 | 预警比例 | 预警圈显示 | 伤害窗口 | 破绽概率 |
+|------|----------|------------|----------|----------|
+| Easy | 65% | 0.88 | 0.35s | 72% |
+| Normal | 55% | 0.72 | 0.38s | 55% |
+| Hard | 48% | 0.65 | 0.35s | 42% |
+| Expert | 42% | 0.55 | 0.32s | 35% |
+
+#### Boss 特色判定调整
+| Boss | 预警乘数 | 伤害窗口 | 说明 |
+|------|----------|----------|------|
+| 冰霜雪王 | 1.15x | 0.40s | 新手友好，更长预警 |
+| 雪松哨兵 | 1.0x | 0.38s | 标准 |
+| 极光长蛇 | 0.88x | 0.35s | 配合颜色轨迹 |
+| 雾堤守卫 | 1.0x | 0.38s | 依靠真假预警机制 |
+| 珊瑚海怪 | 1.0x | 0.38s | 标准 |
+| 雷云苍鹰 | 0.82x | 0.32s | 高速，更短预警 |
+
+#### 招式差异化
+| 招式 | 伤害窗口 | 说明 |
+|------|----------|------|
+| SweepLow 横扫 | 0.35s | 短窗口，快速反应 |
+| DiveHigh 俯冲 | 0.42s | 稍长，给跳跃时机 |
+| ChargeAcross 冲锋 | 0.38s | 中等 |
+| RangedSalvo 齐射 | 0.32s | 分散投射物，短窗口 |
+| CenterBeam 光束 | 0.45s | 持续型，稍长 |
+| QuakePulse 震波 | 0.35s | 短窗口 |
+
+#### 新增调试接口
+- `GetAttackProgress01()` - 攻击进度 0-1
+- `GetDangerWindow()` - 危险窗口起止时间
+- `GetTelegraphTimeRemaining()` - 预警剩余时间
+
+
+### Boss 身份系统
+
+新增 `BossArchetype` 枚举定义 6 种定位：
+- `Balanced` - 均衡型（冰霜雪王）
+- `Grounded` - 地面型（雪松哨兵）
+- `Evasive` - 机动型（极光长蛇）
+- `Deceptive` - 诡诈型（雾堤守卫）
+- `Defensive` - 防御型（珊瑚海怪）
+- `Aerial` - 空战型（雷云苍鹰）
+
+每个 Boss 配置：
+- `SignatureMechanic` - 主机制描述
+- `RecommendedCounter` - 推荐反制动作
+- `SignatureReward` - 专属图鉴奖励
+- `PhaseIntensity` - 阶段节奏强度
+- `PreferredPowerUps` - 推荐道具权重
+
+### Boss 刷新条件系统
+
+新增 `BossSpawnContext` 和 `BossSpawnCondition`：
+- 按地图主题筛选（冰霜雪王在冰湖/雪松哨兵在废墟）
+- 按距离条件（雾堤守卫 800m 后才出现）
+- 按难度条件（雷云苍鹰需要 Hard 以上）
+- 按前置 Boss 击败条件（击败雪松哨兵后才出现雾堤守卫）
+- 按总击败数条件（击败 3 只 Boss 后才出现雷云苍鹰）
+
+### Boss 阶段节奏
+
+`BossEncounter` 新增阶段控制：
+- `patternsSinceLastVulnerable` - 距离上次破绽已发出的招式数
+- `MaxPatternsBeforeVulnerable` - 最多连续 4 招后强制破绽
+- `currentPhaseCycle` - 当前攻击-破绽循环计数
+
+### 镜头与反馈
+
+`PenguinRunnerGame` 新增：
+- `cameraShakeTimer/Intensity` - 震动时长和强度
+- `defeatFreezeTimer` - 击败定格时间
+- Boss 危险攻击时轻微震动（0.1s, 0.05 强度）
+- Boss 被击败时定格 0.25s + 震动 0.5s
+
+### 死亡复盘
+
+`BossSystem` 新增：
+- `lastHitPattern` - 最后击中玩家的招式
+- `hitCountInCurrentFight` - 本战受击次数
+- `GetDeathAnalysisHint()` - 根据被击败的招式返回具体建议
+
+### 前奏与奖励片段
+
+`SegmentSpawner` 新增：
+- `SpawnBossPrelude()` - Boss 前 100m 生成补给、教学金币线、特色道具
+- `SpawnBossReward()` - Boss 后生成鱼干大串、安全冲刺、主题道具
+- `SpawnTutorialCoinLine()` - 根据 Boss 类型展示不同动作路线（跳跃/滑铲）

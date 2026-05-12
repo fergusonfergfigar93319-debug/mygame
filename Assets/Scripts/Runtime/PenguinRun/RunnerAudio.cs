@@ -16,6 +16,7 @@ namespace PenguinRun
         private string runBgmTrack = PlayerSave.DefaultRunBgmTrack;
         private string ambienceTrack = PlayerSave.DefaultAmbienceTrack;
         private string sfxStyle = PlayerSave.DefaultSfxStyle;
+        private string baseRunClipName;
 
         public void Initialize(
             bool daily,
@@ -37,7 +38,8 @@ namespace PenguinRun
             bgmSource.loop = true;
             bgmSource.playOnAwake = false;
             bgmSource.volume = daily ? 0.32f : 0.36f;
-            bgmSource.clip = LoadClip(ResolveRunBgmClipName(daily));
+            baseRunClipName = ResolveRunBgmClipName(daily);
+            bgmSource.clip = LoadClip(baseRunClipName);
             if (bgmEnabled && bgmSource.clip != null)
             {
                 bgmSource.Play();
@@ -119,6 +121,43 @@ namespace PenguinRun
                 case PowerUpKind.TimeHourglass:
                     Play("score_star", 0.62f, 0.9f);
                     break;
+                case PowerUpKind.BubbleShield:
+                    Play("shield_bounce", 0.68f, 1.22f);
+                    break;
+                case PowerUpKind.SeahorseBoost:
+                    Play("dash_pickup", 0.72f, 1.15f);
+                    break;
+                case PowerUpKind.CloudWalk:
+                    Play("glide_feather", 0.70f, 1.08f);
+                    break;
+                case PowerUpKind.WindRider:
+                    Play("glide_feather", 0.74f, 0.92f);
+                    break;
+                case PowerUpKind.FishBomb:
+                    Play("ice_crack", 0.62f, 1.18f);
+                    break;
+                case PowerUpKind.SecondHeart:
+                    Play("score_star", 0.78f, 1.1f);
+                    break;
+                // ── 新道具音效（复用现有音频，音调区分） ──────────
+                case PowerUpKind.IceMirror:
+                    Play("ice_crack", 0.58f, 0.78f);   // 冰晶音调低沉
+                    break;
+                case PowerUpKind.AuroraChain:
+                    Play("magnet_pickup", 0.76f, 1.28f); // 磁吸升调
+                    break;
+                case PowerUpKind.FogLantern:
+                    Play("glide_feather", 0.65f, 0.82f); // 雾气低沉
+                    break;
+                case PowerUpKind.TreantArmor:
+                    Play("shield_bounce", 0.72f, 0.85f); // 厚重护甲
+                    break;
+                case PowerUpKind.CoralBounce:
+                    Play("shield_bounce", 0.68f, 1.32f); // 珊瑚弹跳高调
+                    break;
+                case PowerUpKind.ThunderFeather:
+                    Play("dash_pickup", 0.82f, 1.22f);   // 雷电冲刺
+                    break;
             }
         }
 
@@ -141,6 +180,33 @@ namespace PenguinRun
         public void PlayPerfectDodge() => Play("score_star", 0.65f, 1.25f);
 
         public void PlayPause() => Play("ui_select", 0.55f, 0.85f);
+
+        public void EnterBossMusic(BossDefinition boss)
+        {
+            if (bgmSource == null || boss == null) return;
+            var clipName = ResolveBossBgmClipName(boss);
+            var clip = LoadClip(clipName);
+            if (clip == null || bgmSource.clip == clip) return;
+
+            bgmSource.Stop();
+            bgmSource.clip = clip;
+            bgmSource.pitch = boss.Silhouette == BossSilhouette.StormEagle ? 1.08f : 1f;
+            bgmSource.volume = bgmEnabled ? 0.4f : 0f;
+            if (bgmEnabled) bgmSource.Play();
+        }
+
+        public void ExitBossMusic()
+        {
+            if (bgmSource == null || string.IsNullOrEmpty(baseRunClipName)) return;
+            var clip = LoadClip(baseRunClipName);
+            if (clip == null || bgmSource.clip == clip) return;
+
+            bgmSource.Stop();
+            bgmSource.clip = clip;
+            bgmSource.pitch = 1f;
+            bgmSource.volume = bgmEnabled ? 0.34f : 0f;
+            if (bgmEnabled) bgmSource.Play();
+        }
 
         private void Play(string clipName, float volume, float pitch = 1f)
         {
@@ -198,6 +264,28 @@ namespace PenguinRun
                 PlayerSave.RunBgmOpenWisdom => "bgm_open_wisdom",
                 PlayerSave.RunBgmOpenWinter => "bgm_open_winter",
                 PlayerSave.RunBgmOpenSwing => "bgm_open_swing",
+                _ => "bgm_endless",
+            };
+        }
+
+        private string ResolveBossBgmClipName(BossDefinition boss)
+        {
+            // 优先使用 BossDefinition 中的数据驱动字段；缺失时加载专属文件失败则回退到旧映射
+            if (!string.IsNullOrEmpty(boss.BgmClipName))
+            {
+                var dedicated = LoadClip(boss.BgmClipName);
+                if (dedicated != null) return boss.BgmClipName;
+            }
+
+            // 回退映射（确保旧资源/新资源都能工作）
+            return boss.Silhouette switch
+            {
+                BossSilhouette.SnowKing => "bgm_open_winter",
+                BossSilhouette.CedarSentinel => "bgm_open_swing",
+                BossSilhouette.AuroraSerpent => "bgm_open_wisdom",
+                BossSilhouette.MistGuardian => "bgm_story",
+                BossSilhouette.CoralKraken => "bgm_open_swing",
+                BossSilhouette.StormEagle => "bgm_endless",
                 _ => "bgm_endless",
             };
         }

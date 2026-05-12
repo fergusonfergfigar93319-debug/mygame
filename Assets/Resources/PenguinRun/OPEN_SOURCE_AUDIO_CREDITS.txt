@@ -1,38 +1,110 @@
-Open-source audio resources added for user-selectable soundtrack/SFX styles.
+Open-source audio credits for PenguinRun.
+Keep this file if you redistribute the project to preserve source/license traceability.
 
-1) Short Loops Background Music Pack (OpenGameArt)
-   Source:
-   - https://opengameart.org/content/short-loops-background-music-pack
-   Files used:
-   - bgm_open_wisdom.ogg   (from "A Brand New Wisdom.ogg")
-   - bgm_open_winter.ogg   (from "Winter Dust_0.ogg")
-   - bgm_open_swing.ogg    (from "Swinging Sweet_0.ogg")
-   License / usage notice:
-   - Pack author states free use in any projects.
-   - Credit appreciated.
+──────────────────────────────────────────────────────────────────────────────
+1. Short Loops Background Music Pack (OpenGameArt)
+   URL     : https://opengameart.org/content/short-loops-background-music-pack
+   License : Free use; credit appreciated.
+   Files used in project:
+     bgm_open_wisdom.ogg        from "A Brand New Wisdom.ogg"
+     bgm_open_winter.ogg        from "Winter Dust_0.ogg"
+     bgm_open_swing.ogg         from "Swinging Sweet_0.ogg"
+   Current Boss BGM mapping (fallback, used when dedicated file absent):
+     Snow King       → bgm_open_winter
+     Cedar Sentinel  → bgm_open_swing
+     Aurora Serpent  → bgm_open_wisdom
+     Mist Guardian   → bgm_story
+     Coral Kraken    → bgm_open_swing
+     Storm Eagle     → bgm_endless
 
-1.1) Additional ambient loops (OpenGameArt)
+──────────────────────────────────────────────────────────────────────────────
+2. Dedicated Boss BGM slots (place CC0/CC-BY ogg files here when available)
+   Each BossDefinition now has a `BgmClipName` field; RunnerAudio will load the
+   dedicated file first and fall back to the table above if absent.
+
+   Target filenames and recommended sources:
+
+   bgm_boss_snow_king.ogg
+     Suggested : "Winter Battle" / "Frozen Cathedral" style loops
+     Source    : https://opengameart.org/content/boss-battle-loop  (CC0)
+                 https://opengameart.org/content/winter-is-coming (CC-BY 3.0, attr required)
+     Status    : PLACEHOLDER – replace with actual file and fill attribution below
+     Attribution (CC-BY, fill when added):
+       Author  : <author name>
+       URL     : <asset page url>
+       License : <CC0 / CC-BY 3.0 / CC-BY 4.0>
+
+   bgm_boss_cedar_sentinel.ogg
+     Suggested : earthy / forest-battle drum loop
+     Source    : https://opengameart.org/content/forest-battle-music (CC0)
+     Status    : PLACEHOLDER
+     Attribution: <fill when added>
+
+   bgm_boss_aurora_serpent.ogg
+     Suggested : otherworldly / synth aurora loop
+     Source    : https://opengameart.org/content/cyberpunk-ost (CC-BY 3.0)
+     Status    : PLACEHOLDER
+     Attribution: <fill when added>
+
+   bgm_boss_mist_guardian.ogg
+     Suggested : slow atmospheric tension loop
+     Source    : https://opengameart.org/content/ambient-dark-medieval (CC0)
+     Status    : PLACEHOLDER
+     Attribution: <fill when added>
+
+   bgm_boss_coral_kraken.ogg
+     Suggested : underwater / heavy orchestral loop
+     Source    : https://opengameart.org/content/ocean-battle (CC0)
+     Status    : PLACEHOLDER
+     Attribution: <fill when added>
+
+   bgm_boss_storm_eagle.ogg
+     Suggested : fast-tempo electric/orchestral aerial combat loop
+     Source    : https://opengameart.org/content/epic-battle-music (CC-BY 3.0)
+     Status    : PLACEHOLDER
+     Attribution: <fill when added>
+
+   IMPORT CHECKLIST for each Boss BGM file:
+   [ ] Downloaded from confirmed CC0 or CC-BY source
+   [ ] Author, URL, and license recorded in this file above
+   [ ] File placed at Assets/Resources/PenguinRun/<clipName>.ogg
+   [ ] Import settings: Audio Clip / Streaming / Loop = true / Load in Background
+   [ ] Verified loop point sounds smooth in Unity Play Mode
+
+──────────────────────────────────────────────────────────────────────────────
+3. Ambient loops (OpenGameArt)
    Sources:
-   - https://opengameart.org/content/dark-cavern-ambient
-   - https://opengameart.org/content/scifi-city-ambient-loop
-   Files used:
-   - ambience_open_cavern.ogg (from dark_cavern_ambient_002.ogg)
-   - ambience_open_cyber.ogg  (from busy_cyberworld.ogg)
-   License / usage note:
-   - Both pages are published as free/open assets on OpenGameArt; keep source links in this file.
+     https://opengameart.org/content/dark-cavern-ambient
+     https://opengameart.org/content/scifi-city-ambient-loop
+   License : Free/open assets on OpenGameArt; keep source links in this file.
+   Files:
+     ambience_open_cavern.ogg   from dark_cavern_ambient_002.ogg
+     ambience_open_cyber.ogg    from busy_cyberworld.ogg
 
-2) 51 UI sound effects (buttons, switches and clicks) by Kenney.nl (OpenGameArt)
-   Source:
-   - https://opengameart.org/content/51-ui-sound-effects-buttons-switches-and-clicks
-   Files used:
-   - alt_ui_select.wav     (from click3.wav)
-   - alt_coin_pickup.wav   (from switch14.wav)
-   - alt_checkpoint.wav    (from switch31.wav)
-   - alt_dash_pickup.wav   (from switch16.wav)
-   - alt_shield_bounce.wav (from switch9.wav)
-   - alt_score_star.wav    (from rollover6.wav)
-   License / attribution note:
-   - Credit "Kenney.nl" is optional according to the asset page.
+──────────────────────────────────────────────────────────────────────────────
+4. 51 UI Sound Effects by Kenney.nl (OpenGameArt)
+   URL     : https://opengameart.org/content/51-ui-sound-effects-buttons-switches-and-clicks
+   License : Optional credit to "Kenney.nl".
+   Files:
+     alt_ui_select.wav          from click3.wav
+     alt_coin_pickup.wav        from switch14.wav
+     alt_checkpoint.wav         from switch31.wav
+     alt_dash_pickup.wav        from switch16.wav
+     alt_shield_bounce.wav      from switch9.wav
+     alt_score_star.wav         from rollover6.wav
 
-Note:
-- Keep this file if you redistribute the project to preserve source/license traceability.
+──────────────────────────────────────────────────────────────────────────────
+5. SFX for new power-ups (reuses existing clips, pitch-shifted in code)
+   IceMirror      → ice_crack.ogg  (pitch 0.78)
+   AuroraChain    → magnet_pickup.ogg (pitch 1.28)
+   FogLantern     → glide_feather.ogg (pitch 0.82)
+   TreantArmor    → shield_bounce.ogg (pitch 0.85)
+   CoralBounce    → shield_bounce.ogg (pitch 1.32)
+   ThunderFeather → dash_pickup.ogg   (pitch 1.22)
+   No new audio files needed for new power-ups in this content pack.
+
+──────────────────────────────────────────────────────────────────────────────
+LICENSE POLICY:
+  CC0  : No attribution required, but appreciated.
+  CC-BY: Attribution REQUIRED. Record author + URL + license in this file before committing.
+  Non-commercial / ND / SA: DO NOT USE without explicit approval.

@@ -234,8 +234,15 @@ namespace PenguinRun
                 RunnerMapTheme.SkyFlight => "天空飞翔",
                 _ => "冰湖回音谷",
             };
+
+            // 显示当前场景可能遭遇的 Boss（预告）
+            var bossPreview = GetBossPreviewForTheme(mapTheme);
+            var modeText = string.IsNullOrEmpty(bossPreview)
+                ? $"{mode} · {themeLabel}"
+                : $"{mode} · {themeLabel} · {bossPreview}";
+
             DrawChip(new Rect(ix, iy, panelW - 36f, 24f),
-                $"{mode} · {themeLabel}", new Color(ColorAccent.r, ColorAccent.g, ColorAccent.b, 0.18f), modeChipStyle);
+                modeText, new Color(ColorAccent.r, ColorAccent.g, ColorAccent.b, 0.18f), modeChipStyle);
             iy += 28f;
 
             // 增益条带（buff）
@@ -364,7 +371,7 @@ namespace PenguinRun
                 normal = { textColor = new Color(1f, 0.78f, 0.4f) },
                 alignment = TextAnchor.MiddleCenter,
             };
-            var rushPrefix = bossSystem.IsBossRushMode ? $"BOSS RUSH 第{bossSystem.CurrentBossRound}战 · " : "";
+            var rushPrefix = bossSystem.IsBossRushMode ? $"BOSS连战 第{bossSystem.CurrentBossRound}战 · " : "";
             GUI.Label(new Rect(x, y + 8f, w, 22f), $"\u26A0 {rushPrefix}{boss.Definition.DisplayName}", bossNameStyle);
 
             var barX = x + 28f;
@@ -385,23 +392,56 @@ namespace PenguinRun
             }
 
             var hpStyle = new GUIStyle(statValueStyle) { fontSize = 14, alignment = TextAnchor.MiddleCenter };
-            DrawTextShadow(new Rect(barX, barY, barW, barH), $"HP {boss.HitsRemaining}/{BossSystem.BossMaxHits}", hpStyle);
+            DrawTextShadow(new Rect(barX, barY, barW, barH), $"血量 {boss.HitsRemaining}/{BossSystem.BossMaxHits}", hpStyle);
 
-            var phaseLabel = boss.Phase switch
+            // 阶段化节奏提示：显示当前循环和破绽预警
+            string phaseLabel;
+            Color phaseColor;
+            switch (boss.Phase)
             {
-                BossPhase.Spawning => "BOSS 浮现中…",
-                BossPhase.Active => bossSystem.CurrentBossInAttackInterval
-                    ? $"BOSS 调整姿态中… 下一击 {bossSystem.CurrentBossAttackIntervalLeft:0.0}s"
-                    : "躲避攻击！",
-                BossPhase.Vulnerable => "\u2605 破绽！冲刺/护盾撞击",
-                BossPhase.Retreating => "击败！BOSS 退场中",
-                _ => "",
-            };
+                case BossPhase.Spawning:
+                    phaseLabel = "BOSS 浮现中…";
+                    phaseColor = ColorTextSecondary;
+                    break;
+                case BossPhase.Active:
+                    var untilVuln = bossSystem.CurrentBossPatternsUntilVulnerable;
+                    var cycle = bossSystem.CurrentBossPhaseCycle + 1;
+                    if (bossSystem.CurrentBossInAttackInterval)
+                    {
+                        var nextAttackIn = bossSystem.CurrentBossAttackIntervalLeft;
+                        // 改进：显示危险窗口倒计时
+                        phaseLabel = $"第{cycle}轮 · 危险窗口 {nextAttackIn:0.0}s";
+                    }
+                    else
+                    {
+                        // 根据距离破绽的招式数显示不同颜色预警
+                        phaseLabel = untilVuln <= 1
+                            ? $"第{cycle}轮 · \u26A0 破绽即将出现！"
+                            : $"第{cycle}轮 · 观察招式 ({untilVuln}招后破绽)";
+                    }
+                    phaseColor = untilVuln <= 1 ? new Color(1f, 0.7f, 0.4f) : ColorTextSecondary;
+                    break;
+                case BossPhase.Vulnerable:
+                    var vulnLeft = bossSystem.CurrentBossPhaseElapsed;
+                    var vulnDuration = 1.6f; // BossSystem.VulnerableSeconds
+                    var vulnRemaining = Mathf.Max(0, vulnDuration - vulnLeft);
+                    phaseLabel = $"\u2605 破绽窗口剩余 {vulnRemaining:0.0}s · 冲刺/护盾撞击";
+                    phaseColor = new Color(0.4f, 1f, 0.6f);
+                    break;
+                case BossPhase.Retreating:
+                    phaseLabel = "击败！BOSS 退场中";
+                    phaseColor = new Color(1f, 0.85f, 0.4f);
+                    break;
+                default:
+                    phaseLabel = "";
+                    phaseColor = ColorTextSecondary;
+                    break;
+            }
             var phaseStyle = new GUIStyle(bestLabelStyle)
             {
                 fontSize = 14,
                 alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = boss.Phase == BossPhase.Vulnerable ? new Color(0.5f, 1f, 0.65f) : ColorTextSecondary },
+                normal = { textColor = phaseColor },
             };
             GUI.Label(new Rect(x, y + 58f, w, 20f), phaseLabel, phaseStyle);
 
@@ -475,7 +515,7 @@ namespace PenguinRun
             var bossStyle = new GUIStyle(buffStyle) { alignment = TextAnchor.MiddleCenter, fontSize = 15 };
             bossStyle.normal.textColor = new Color(1f, 0.75f, 0.4f);
             GUI.Label(new Rect(x + 12f, y + 8f, slot, 38f),
-                $"\u2620 BOSS\n{world.BossesDefeated}", bossStyle);
+                $"首领击败\n{world.BossesDefeated}", bossStyle);
 
             var dodgeStyle = new GUIStyle(buffStyle) { alignment = TextAnchor.MiddleCenter, fontSize = 15 };
             dodgeStyle.normal.textColor = new Color(0.5f, 1f, 0.7f);
@@ -592,6 +632,32 @@ namespace PenguinRun
         {
             if (string.IsNullOrEmpty(s)) return string.Empty;
             return s.Length <= maxChars ? s : s[..maxChars] + "…";
+        }
+
+        /// <summary>获取当前主题下可能遭遇的 Boss 预览文本</summary>
+        private static string GetBossPreviewForTheme(RunnerMapTheme theme)
+        {
+            // 检查各 Boss 是否可能在当前主题出现
+            var possibleBosses = new List<string>();
+
+            if (BossDefinitions.WillSpawnInTheme("snow_king", theme))
+                possibleBosses.Add("冰霜雪王");
+            if (BossDefinitions.WillSpawnInTheme("cedar_sentinel", theme))
+                possibleBosses.Add("雪松哨兵");
+            if (BossDefinitions.WillSpawnInTheme("aurora_serpent", theme))
+                possibleBosses.Add("极光长蛇");
+            if (BossDefinitions.WillSpawnInTheme("mist_guardian", theme))
+                possibleBosses.Add("雾堤守卫");
+            if (BossDefinitions.WillSpawnInTheme("coral_kraken", theme))
+                possibleBosses.Add("珊瑚海怪");
+            if (BossDefinitions.WillSpawnInTheme("storm_eagle", theme))
+                possibleBosses.Add("雷云苍鹰");
+
+            if (possibleBosses.Count == 0) return string.Empty;
+            if (possibleBosses.Count == 1) return $"\u2620 {possibleBosses[0]}";
+
+            // 多只可能时，显示主要 Boss + "..."
+            return $"\u2620 {possibleBosses[0]}等";
         }
     }
 }

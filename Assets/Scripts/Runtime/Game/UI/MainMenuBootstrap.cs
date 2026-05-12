@@ -22,12 +22,19 @@ namespace PenguinRun.Game.UI
         private Text fishSnacksText;
         private GameObject missionBadge;
         private RectTransform mascotArea;
+        private RectTransform avatarMiniArea;
         private Text boosterPreviewText;
 
         private Transform panelLayer;
         private GameObject currentPanel;
         private string currentPanelName;
         private RectTransform dockWrap;
+
+        /// <summary>「开始游戏」：归入 MenuPrimaryCtaStrip，避免叠层顺序导致点击被吞。</summary>
+        private Transform startGameButton;
+
+        /// <summary>「今日挑战」：同上。</summary>
+        private Transform dailyChallengeButton;
 
         private class DockItem
         {
@@ -37,11 +44,42 @@ namespace PenguinRun.Game.UI
             public Text labelText;
             public Image labelBg;
             public Image activeLine;
+            public Color accentColor;
+            public bool wasSelected;
         }
         private readonly System.Collections.Generic.List<DockItem> dockItems = new();
 
+        private static void EnsureLandscape()
+        {
+#if UNITY_ANDROID || UNITY_IOS
+            if (Application.isMobilePlatform)
+            {
+                Screen.autorotateToPortrait = false;
+                Screen.autorotateToPortraitUpsideDown = false;
+                Screen.autorotateToLandscapeLeft = true;
+                Screen.autorotateToLandscapeRight = true;
+                if (Screen.orientation == ScreenOrientation.Portrait ||
+                    Screen.orientation == ScreenOrientation.PortraitUpsideDown)
+                {
+                    Screen.orientation = ScreenOrientation.LandscapeLeft;
+                }
+                else if (Screen.orientation == ScreenOrientation.AutoRotation ||
+                         Screen.orientation == ScreenOrientation.LandscapeLeft ||
+                         Screen.orientation == ScreenOrientation.LandscapeRight)
+                {
+                    // 已是横屏或自动旋转，保留玩家当前握姿
+                }
+                else
+                {
+                    Screen.orientation = ScreenOrientation.LandscapeLeft;
+                }
+            }
+#endif
+        }
+
         private void Awake()
         {
+            EnsureLandscape();
             EnsureEventSystem();
             BuildScene();
             var lobbyGo = new GameObject("MenuLobbyAudio");
@@ -88,10 +126,35 @@ namespace PenguinRun.Game.UI
             BuildTopBar();
             BuildHero();
             BuildBottomDock();
+            BuildPrimaryCtaForegroundStrip();
             // 全屏面板必须在顶栏/主菜单之上，否则任务头等控件会与首页重叠且无法正确覆盖
             panelLayer.SetAsLastSibling();
             snackbar = Snackbar.EnsureUnder(canvas);
             snackbar.transform.SetAsLastSibling();
+        }
+
+        /// <summary>将开始游戏 + 今日挑战挂到全屏前景根下并提到底坞之上，射线命中顺序稳定。</summary>
+        private void BuildPrimaryCtaForegroundStrip()
+        {
+            if (canvas == null) return;
+            if (startGameButton == null && dailyChallengeButton == null) return;
+
+            var stripGo = new GameObject("MenuPrimaryCtaStrip", typeof(RectTransform));
+            stripGo.transform.SetParent(canvas.transform, false);
+            var strt = (RectTransform)stripGo.transform;
+            strt.anchorMin = Vector2.zero;
+            strt.anchorMax = Vector2.one;
+            strt.sizeDelta = Vector2.zero;
+            strt.anchoredPosition = Vector2.zero;
+            strt.offsetMin = Vector2.zero;
+            strt.offsetMax = Vector2.zero;
+
+            if (startGameButton != null)
+                startGameButton.SetParent(stripGo.transform, worldPositionStays: true);
+            if (dailyChallengeButton != null)
+                dailyChallengeButton.SetParent(stripGo.transform, worldPositionStays: true);
+
+            stripGo.transform.SetAsLastSibling();
         }
 
         private void BuildBackground()
@@ -317,6 +380,198 @@ namespace PenguinRun.Game.UI
             public void OnPointerUp(PointerEventData eventData) => targetScale = Vector3.one;
         }
 
+        private class RunCycleTween : MonoBehaviour
+        {
+            public RectTransform leftFlipper;
+            public RectTransform rightFlipper;
+            public RectTransform leftFoot;
+            public RectTransform rightFoot;
+            public RectTransform bodyGroup;
+            public float speed = 8.5f;
+            public float limbSwing = 7f;
+            private Vector2 leftFootBase;
+            private Vector2 rightFootBase;
+
+            private void Start()
+            {
+                if (leftFoot != null) leftFootBase = leftFoot.anchoredPosition;
+                if (rightFoot != null) rightFootBase = rightFoot.anchoredPosition;
+            }
+
+            private void Update()
+            {
+                var wave = Mathf.Sin(Time.time * speed);
+                if (leftFlipper != null) leftFlipper.localRotation = Quaternion.Euler(0f, 0f, 10f + wave * limbSwing);
+                if (rightFlipper != null) rightFlipper.localRotation = Quaternion.Euler(0f, 0f, -12f - wave * limbSwing);
+                if (leftFoot != null)
+                {
+                    leftFoot.localRotation = Quaternion.Euler(0f, 0f, 8f + wave * 6f);
+                    leftFoot.anchoredPosition = leftFootBase + new Vector2(0f, Mathf.Max(0f, wave) * 7f);
+                }
+                if (rightFoot != null)
+                {
+                    rightFoot.localRotation = Quaternion.Euler(0f, 0f, -8f - wave * 6f);
+                    rightFoot.anchoredPosition = rightFootBase + new Vector2(0f, Mathf.Max(0f, -wave) * 7f);
+                }
+                if (bodyGroup != null)
+                    bodyGroup.localRotation = Quaternion.Euler(0f, 0f, -2.5f + wave * 0.8f);
+            }
+        }
+
+        private class RunwayScrollTween : MonoBehaviour
+        {
+            public float speed = 180f;
+            public float resetLeft = -680f;
+            public float resetRight = 680f;
+            private RectTransform rt;
+
+            private void Start() => rt = GetComponent<RectTransform>();
+
+            private void Update()
+            {
+                if (rt == null) return;
+                var p = rt.anchoredPosition;
+                p.x -= speed * Time.deltaTime;
+                if (p.x < resetLeft) p.x = resetRight + Random.Range(0f, 100f);
+                rt.anchoredPosition = p;
+            }
+        }
+
+        private class MarqueeTween : MonoBehaviour
+        {
+            public Text[] texts;
+            private void Update()
+            {
+                if (texts == null) return;
+                var active = Mathf.FloorToInt(Time.time * 4f) % texts.Length;
+                for (var i = 0; i < texts.Length; i++)
+                {
+                    if (texts[i] == null) continue;
+                    var c = texts[i].color;
+                    c.a = i == active ? 0.95f : 0.28f;
+                    texts[i].color = c;
+                }
+            }
+        }
+
+        private class BounceTween : MonoBehaviour
+        {
+            public float duration = 0.35f;
+            public float peakScale = 1.18f;
+            private float elapsed;
+
+            private void OnEnable() => elapsed = 0f;
+
+            private void Update()
+            {
+                elapsed += Time.deltaTime;
+                var t = Mathf.Clamp01(elapsed / duration);
+                var pulse = Mathf.Sin(t * Mathf.PI);
+                transform.localScale = Vector3.one * (1f + pulse * (peakScale - 1f));
+                if (t >= 1f)
+                {
+                    transform.localScale = Vector3.one;
+                    enabled = false;
+                }
+            }
+        }
+
+        private class SnowfallEmitter : MonoBehaviour
+        {
+            private readonly System.Collections.Generic.List<RectTransform> flakes = new();
+            private readonly System.Collections.Generic.List<float> phases = new();
+
+            private void Start()
+            {
+                for (var i = 0; i < 10; i++)
+                {
+                    var size = Random.Range(4f, 8f);
+                    var flake = UiBuilder.CreateRect("Snowflake", transform,
+                        new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                        new Vector2(size, size),
+                        new Vector2(Random.Range(-520f, 520f), Random.Range(-120f, 840f)),
+                        new Color(1f, 1f, 1f, Random.Range(0.2f, 0.48f)), circle: true);
+                    flake.GetComponent<Image>().raycastTarget = false;
+                    flakes.Add(flake);
+                    phases.Add(Random.Range(0f, Mathf.PI * 2f));
+                }
+            }
+
+            private void Update()
+            {
+                for (var i = 0; i < flakes.Count; i++)
+                {
+                    var flake = flakes[i];
+                    if (flake == null) continue;
+                    var phase = phases[i];
+                    var p = flake.anchoredPosition;
+                    p.x += Mathf.Sin(Time.time * 1.4f + phase) * 18f * Time.deltaTime;
+                    p.y -= (34f + i * 2.3f) * Time.deltaTime;
+                    if (p.y < -360f)
+                    {
+                        p.x = Random.Range(-520f, 520f);
+                        p.y = Random.Range(760f, 920f);
+                    }
+                    flake.anchoredPosition = p;
+                    var img = flake.GetComponent<Image>();
+                    var c = img.color;
+                    c.a = 0.18f + Mathf.Abs(Mathf.Sin(Time.time * 1.8f + phase)) * 0.28f;
+                    img.color = c;
+                }
+            }
+        }
+
+        private class SpeedLineEmitter : MonoBehaviour
+        {
+            private float nextSpawn;
+
+            private void Update()
+            {
+                if (Time.time < nextSpawn) return;
+                nextSpawn = Time.time + Random.Range(0.55f, 0.9f);
+                var line = UiBuilder.CreateRect("SpeedLine", transform,
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                    new Vector2(Random.Range(46f, 92f), Random.Range(2f, 4f)),
+                    new Vector2(Random.Range(120f, 240f), Random.Range(-30f, 130f)),
+                    new Color(0.7f, 1f, 1f, 0.38f), rounded: true);
+                line.GetComponent<Image>().raycastTarget = false;
+                var tween = line.gameObject.AddComponent<SpeedLineTween>();
+                tween.life = Random.Range(0.34f, 0.52f);
+                tween.travel = Random.Range(160f, 240f);
+            }
+        }
+
+        private class SpeedLineTween : MonoBehaviour
+        {
+            public float life = 0.45f;
+            public float travel = 260f;
+            private RectTransform rt;
+            private Image img;
+            private Vector2 start;
+            private float elapsed;
+
+            private void Start()
+            {
+                rt = GetComponent<RectTransform>();
+                img = GetComponent<Image>();
+                start = rt.anchoredPosition;
+            }
+
+            private void Update()
+            {
+                elapsed += Time.deltaTime;
+                var t = Mathf.Clamp01(elapsed / life);
+                if (rt != null) rt.anchoredPosition = start + new Vector2(-travel * t, 0f);
+                if (img != null)
+                {
+                    var c = img.color;
+                    c.a = Mathf.Sin(t * Mathf.PI) * 0.38f;
+                    img.color = c;
+                }
+                if (t >= 1f) Destroy(gameObject);
+            }
+        }
+
         private void BuildTopBar()
         {
             // 左侧玩家信息面板（自适应宽度，防止文字溢出）
@@ -333,13 +588,13 @@ namespace PenguinRun.Game.UI
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
                 new Vector2(72f, 72f), new Vector2(44f, 0f),
                 new Color(0.12f, 0.45f, 0.75f, 0.95f), circle: true);
-            UiBuilder.AddOutline(avatarBg.gameObject, new Color(1f, 1f, 1f, 0.45f), new Vector2(1.5f, -1.5f));
+            UiBuilder.AddOutline(avatarBg.gameObject, new Color(1f, 0.82f, 0.35f, 0.75f), new Vector2(1.5f, -1.5f));
 
-            UiBuilder.CreateRect("AvatarInner", avatarBg,
+            avatarMiniArea = UiBuilder.CreateRect("AvatarInner", avatarBg,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(60f, 60f), Vector2.zero,
                 new Color(0.06f, 0.2f, 0.38f, 0.98f), circle: true);
-            UiBuilder.CreateText("AvatarText", avatarBg, "企", 26, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(1f, 1f, 1f, 1f));
+            DrawMiniPenguinAvatar(avatarMiniArea);
 
             // Player name（留足边距防止溢出）
             nicknameText = UiBuilder.CreateText("Nickname", playerProfile, "", 28, FontStyle.Bold, TextAnchor.LowerLeft, new Color(1f, 1f, 1f, 0.95f));
@@ -380,6 +635,87 @@ namespace PenguinRun.Game.UI
             frt.offsetMax = new Vector2(-12f, 0f);
         }
 
+        private void BuildMountainSilhouettes()
+        {
+            var back = UiBuilder.CreateRect("MountainLayerBack", canvas.transform,
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(1320f, 300f), new Vector2(0f, 410f));
+            back.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0f);
+            var backDrift = back.gameObject.AddComponent<DriftTween>();
+            backDrift.amplitude = 10f;
+            backDrift.speed = 0.18f;
+
+            CreateMountain(back, "PeakA", new Vector2(-430f, 0f), new Vector2(300f, 250f), new Color(0.035f, 0.075f, 0.15f, 0.58f));
+            CreateMountain(back, "PeakB", new Vector2(-80f, 0f), new Vector2(360f, 280f), new Color(0.04f, 0.085f, 0.17f, 0.52f));
+            CreateMountain(back, "PeakC", new Vector2(310f, 0f), new Vector2(320f, 250f), new Color(0.035f, 0.075f, 0.15f, 0.52f));
+
+            var front = UiBuilder.CreateRect("MountainLayerFront", canvas.transform,
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(1320f, 230f), new Vector2(0f, 370f));
+            front.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0f);
+            var frontDrift = front.gameObject.AddComponent<DriftTween>();
+            frontDrift.amplitude = 16f;
+            frontDrift.speed = 0.24f;
+
+            CreateMountain(front, "FrontPeakA", new Vector2(-330f, 0f), new Vector2(260f, 180f), new Color(0.06f, 0.12f, 0.22f, 0.46f));
+            CreateMountain(front, "FrontPeakB", new Vector2(180f, 0f), new Vector2(360f, 210f), new Color(0.07f, 0.13f, 0.24f, 0.42f));
+        }
+
+        private static void CreateMountain(Transform parent, string name, Vector2 pos, Vector2 size, Color color)
+        {
+            var peak = UiBuilder.CreateTriangle(name, parent,
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                size, pos + new Vector2(0f, size.y * 0.5f), color);
+            peak.GetComponent<Image>().raycastTarget = false;
+
+            var snow = UiBuilder.CreateTriangle(name + "Snowcap", parent,
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                size * 0.28f, pos + new Vector2(0f, size.y * 0.86f),
+                new Color(0.8f, 0.95f, 1f, 0.34f));
+            snow.GetComponent<Image>().raycastTarget = false;
+        }
+
+        private void BuildIceRunway()
+        {
+            var ground = UiBuilder.CreateRect("IceRunway", canvas.transform,
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(1180f, 160f), new Vector2(0f, 286f),
+                new Color(0.42f, 0.78f, 1f, 0.16f), rounded: true);
+            ground.GetComponent<Image>().raycastTarget = false;
+            UiBuilder.AddOutline(ground.gameObject, new Color(0.76f, 1f, 1f, 0.14f), new Vector2(1f, -1f));
+
+            var brightBand = UiBuilder.CreateRect("IceRunwayShine", ground,
+                new Vector2(0f, 0.66f), new Vector2(1f, 0.84f),
+                Vector2.zero, Vector2.zero,
+                new Color(0.85f, 1f, 1f, 0.1f), rounded: true);
+            brightBand.GetComponent<Image>().raycastTarget = false;
+
+            for (var i = 0; i < 12; i++)
+            {
+                var line = UiBuilder.CreateRect("IceMotionLine", ground,
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                    new Vector2(Random.Range(50f, 110f), Random.Range(2f, 4f)),
+                    new Vector2(-540f + i * 98f, Random.Range(-38f, 38f)),
+                    new Color(0.92f, 1f, 1f, Random.Range(0.12f, 0.24f)), rounded: true);
+                line.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-5f, 5f));
+                line.GetComponent<Image>().raycastTarget = false;
+                var scroll = line.gameObject.AddComponent<RunwayScrollTween>();
+                scroll.speed = Random.Range(70f, 130f);
+                scroll.resetLeft = -620f;
+                scroll.resetRight = 620f;
+            }
+
+            for (var i = 0; i < 9; i++)
+            {
+                var chip = UiBuilder.CreateTriangle("IceChip", ground,
+                    new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                    new Vector2(24f, 18f), new Vector2(-520f + i * 130f, -6f),
+                    new Color(0.8f, 1f, 1f, 0.14f));
+                chip.localRotation = Quaternion.Euler(0f, 0f, i % 2 == 0 ? 180f : 0f);
+                chip.GetComponent<Image>().raycastTarget = false;
+            }
+        }
+
         private void BuildHero()
         {
             // Title — separated to avoid rich text shadow artifacts
@@ -387,12 +723,13 @@ namespace PenguinRun.Game.UI
             var title = UiBuilder.CreateText(
                 "MainTitle", canvas.transform,
                 titleStr,
-                86, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(1f, 1f, 1f, 1f));
+                92, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(1f, 1f, 1f, 1f));
             var trt = (RectTransform)title.transform;
             trt.anchorMin = new Vector2(0.5f, 1f);
             trt.anchorMax = new Vector2(0.5f, 1f);
             trt.sizeDelta = new Vector2(840f, 170f);
-            trt.anchoredPosition = new Vector2(0f, -130f);
+            trt.anchoredPosition = new Vector2(0f, -118f);
+            trt.localRotation = Quaternion.Euler(0f, 0f, -0.8f);
 
             UiBuilder.AddOutline(title.gameObject, new Color(0.1f, 0.4f, 0.85f, 0.55f), new Vector2(2f, -2f));
             UiBuilder.AddShadow(title.gameObject, new Color(0f, 0.05f, 0.15f, 0.7f), new Vector2(0f, -8f));
@@ -429,48 +766,83 @@ namespace PenguinRun.Game.UI
             srt.anchoredPosition = new Vector2(0f, -278f);
             UiBuilder.AddShadow(subTitle.gameObject, new Color(0f, 0.05f, 0.15f, 0.6f), new Vector2(0f, -3f));
 
-            // Enhanced mascot environment (moved up slightly)
-            var mascotGround = UiBuilder.CreateRect(
-                "MascotGround", canvas.transform,
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(320f, 48f), new Vector2(0f, -70f),
-                new Color(0.03f, 0.12f, 0.22f, 0.4f), rounded: true);
-            mascotGround.GetComponent<Image>().raycastTarget = false;
+            var arrowRoot = new GameObject("TitleArrowMarquee", typeof(RectTransform));
+            arrowRoot.transform.SetParent(canvas.transform, false);
+            var art = (RectTransform)arrowRoot.transform;
+            art.anchorMin = new Vector2(0.5f, 1f);
+            art.anchorMax = new Vector2(0.5f, 1f);
+            art.sizeDelta = new Vector2(160f, 30f);
+            art.anchoredPosition = new Vector2(0f, -328f);
+            var arrows = new Text[3];
+            for (var i = 0; i < arrows.Length; i++)
+            {
+                arrows[i] = UiBuilder.CreateText("Arrow" + i, arrowRoot.transform, "»", 24, FontStyle.Bold,
+                    TextAnchor.MiddleCenter, new Color(0.45f, 1f, 1f, 0.3f));
+                var rt = (RectTransform)arrows[i].transform;
+                rt.anchorMin = new Vector2(0f, 0f);
+                rt.anchorMax = new Vector2(0f, 1f);
+                rt.sizeDelta = new Vector2(44f, 0f);
+                rt.anchoredPosition = new Vector2(44f + i * 34f, 0f);
+            }
+            arrowRoot.AddComponent<MarqueeTween>().texts = arrows;
+
+            BuildMountainSilhouettes();
+            BuildIceRunway();
+
+            var speedLayer = new GameObject("SpeedLineLayer", typeof(RectTransform));
+            speedLayer.transform.SetParent(canvas.transform, false);
+            var spRt = (RectTransform)speedLayer.transform;
+            spRt.anchorMin = Vector2.zero;
+            spRt.anchorMax = Vector2.one;
+            spRt.sizeDelta = Vector2.zero;
+            speedLayer.AddComponent<SpeedLineEmitter>();
 
             var mascotGlow = UiBuilder.CreateRect(
                 "MascotGlow", canvas.transform,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(480f, 480f), new Vector2(0f, 78f),
-                new Color(0.3f, 0.7f, 1f, 0.15f), glow: true);
+                new Vector2(560f, 520f), new Vector2(0f, 52f),
+                new Color(0.3f, 0.7f, 1f, 0.12f), glow: true);
             mascotGlow.GetComponent<Image>().raycastTarget = false;
 
             var mascotRing = UiBuilder.CreateRect(
                 "MascotRing", canvas.transform,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(400f, 400f), new Vector2(0f, 78f),
-                new Color(0.5f, 0.85f, 1f, 0.18f), glow: true);
+                new Vector2(430f, 410f), new Vector2(0f, 52f),
+                new Color(0.5f, 0.85f, 1f, 0.11f), glow: true);
             mascotRing.GetComponent<Image>().raycastTarget = false;
 
             // Mascot (Center) — 由 UpdateMascotCosmetic 在装扮切换时重绘
             mascotArea = UiBuilder.CreateRect("MascotArea", canvas.transform,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(360f, 360f), new Vector2(0f, 80f));
+                new Vector2(410f, 430f), new Vector2(0f, 44f));
             DrawPenguinMascot(mascotArea);
-            mascotArea.gameObject.AddComponent<FloatTween>();
+            SetRaycastTargets(mascotArea, false);
+            var mascotFloat = mascotArea.gameObject.AddComponent<FloatTween>();
+            mascotFloat.amplitude = 5f;
+            mascotFloat.speed = 1.2f;
+
+            var snowLayer = new GameObject("SnowfallLayer", typeof(RectTransform));
+            snowLayer.transform.SetParent(canvas.transform, false);
+            var snowRt = (RectTransform)snowLayer.transform;
+            snowRt.anchorMin = Vector2.zero;
+            snowRt.anchorMax = Vector2.one;
+            snowRt.sizeDelta = Vector2.zero;
+            snowLayer.AddComponent<SnowfallEmitter>();
 
             // 主操作按钮（CTA）— 位置上调避免与底栏重叠
             // 外层光晕
             var ctaGlow = UiBuilder.CreateRect("CtaGlow", canvas.transform,
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(820f, 320f), new Vector2(0f, 360f),
-                new Color(1f, 0.7f, 0.2f, 0.22f), glow: true);
+                new Vector2(760f, 300f), new Vector2(0f, 342f),
+                new Color(1f, 0.7f, 0.2f, 0.16f), glow: true);
             ctaGlow.GetComponent<Image>().raycastTarget = false;
-            ctaGlow.gameObject.AddComponent<PulseTween>();
+            var ctaPulse = ctaGlow.gameObject.AddComponent<PulseTween>();
+            ctaPulse.speed = 8.5f;
 
             // 「下一局加成」预览
             var boosterChip = UiBuilder.CreateRect("BoosterPreview", canvas.transform,
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(460f, 44f), new Vector2(0f, 480f),
+                new Vector2(460f, 44f), new Vector2(0f, 454f),
                 new Color(0f, 0.85f, 0.95f, 0.18f), rounded: true);
             UiBuilder.AddOutline(boosterChip.gameObject, new Color(0f, 0.85f, 0.95f, 0.55f), new Vector2(1f, -1f));
             boosterChip.GetComponent<Image>().raycastTarget = false;
@@ -496,11 +868,12 @@ namespace PenguinRun.Game.UI
                 "StartEndless", canvas.transform,
                 "开始游戏\n<size=20><color=#3a2509>点击开始 · 极夜快跑</color></size>",
                 new Color(1f, 0.84f, 0.32f), new Color(0.1f, 0.05f, 0.01f), 48, rounded: true);
+            startGameButton = startBtn.transform;
             var sbtnRt = (RectTransform)startBtn.transform;
             sbtnRt.anchorMin = new Vector2(0.5f, 0f);
             sbtnRt.anchorMax = new Vector2(0.5f, 0f);
             sbtnRt.sizeDelta = new Vector2(560f, 148f);
-            sbtnRt.anchoredPosition = new Vector2(0f, 360f);
+            sbtnRt.anchoredPosition = new Vector2(0f, 356f);
             startBtn.onClick.AddListener(StartEndless);
             var startLabel = startBtn.GetComponentInChildren<Text>();
             startLabel.supportRichText = true;
@@ -515,26 +888,44 @@ namespace PenguinRun.Game.UI
 
             UiBuilder.AddOutline(startBtn.gameObject, new Color(0.4f, 0.25f, 0.05f, 0.7f), new Vector2(2.5f, -2.5f));
             UiBuilder.AddShadow(startBtn.gameObject, new Color(0f, 0f, 0f, 0.55f), new Vector2(0, -8f));
-            startBtn.gameObject.AddComponent<PulseTween>();
+            var startPulse = startBtn.gameObject.AddComponent<PulseTween>();
+            startPulse.speed = 8.5f;
+            startPulse.amplitude = 0.012f;
             startBtn.gameObject.AddComponent<ClickScaleTween>();
+
+            var startBase = UiBuilder.CreateRect("StartButtonBase", startBtn.transform,
+                new Vector2(0f, 0f), new Vector2(1f, 0f),
+                new Vector2(0f, 16f), new Vector2(0f, -6f),
+                new Color(0.55f, 0.32f, 0f, 0.92f), rounded: true);
+            startBase.GetComponent<Image>().raycastTarget = false;
+            startBase.offsetMin = new Vector2(18f, startBase.offsetMin.y);
+            startBase.offsetMax = new Vector2(-18f, startBase.offsetMax.y);
+            startBase.SetAsFirstSibling();
 
             // 顶部高光条
             var shine = UiBuilder.CreateRect(
                 "StartShine", startBtn.transform,
                 new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(0f, 8f), new Vector2(0f, -8f),
-                new Color(1f, 1f, 1f, 0.45f), rounded: true);
+                new Color(1f, 1f, 1f, 0.48f), rounded: true);
             shine.GetComponent<Image>().raycastTarget = false;
             shine.offsetMin = new Vector2(24f, shine.offsetMin.y);
             shine.offsetMax = new Vector2(-24f, shine.offsetMax.y);
             shine.SetAsFirstSibling();
 
+            var playArrow = UiBuilder.CreateTriangle("StartArrow", startBtn.transform,
+                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(28f, 28f), new Vector2(42f, 4f),
+                new Color(0.12f, 0.07f, 0.01f, 0.9f));
+            playArrow.localRotation = Quaternion.Euler(0f, 0f, -90f);
+            playArrow.GetComponent<Image>().raycastTarget = false;
+
             // 底部阴影条
             var btnBottomShade = UiBuilder.CreateRect(
                 "StartBottomShade", startBtn.transform,
                 new Vector2(0f, 0f), new Vector2(1f, 0f),
-                new Vector2(0f, 10f), new Vector2(0f, 8f),
-                new Color(0.6f, 0.4f, 0.05f, 0.4f), rounded: true);
+                new Vector2(0f, 8f), new Vector2(0f, 7f),
+                new Color(0.6f, 0.4f, 0.05f, 0.32f), rounded: true);
             btnBottomShade.GetComponent<Image>().raycastTarget = false;
             btnBottomShade.offsetMin = new Vector2(24f, btnBottomShade.offsetMin.y);
             btnBottomShade.offsetMax = new Vector2(-24f, btnBottomShade.offsetMax.y);
@@ -546,11 +937,12 @@ namespace PenguinRun.Game.UI
                 string.Empty,
                 new Color(0.12f, 0.32f, 0.5f, 0.95f),
                 Color.white, 24, rounded: true);
+            dailyChallengeButton = dailyBtn.transform;
             var drt = (RectTransform)dailyBtn.transform;
             drt.anchorMin = new Vector2(0.5f, 0f);
             drt.anchorMax = new Vector2(0.5f, 0f);
-            drt.sizeDelta = new Vector2(340f, 72f);
-            drt.anchoredPosition = new Vector2(0f, 210f);
+            drt.sizeDelta = new Vector2(380f, 76f);
+            drt.anchoredPosition = new Vector2(0f, 204f);
 
             // 主按钮自带的 Label 不再需要（用复合内容替代）
             var dailyDefaultLabel = dailyBtn.GetComponentInChildren<Text>();
@@ -567,6 +959,7 @@ namespace PenguinRun.Game.UI
                 Debug.Log("[MainMenu] 今日挑战按钮被点击");
                 StartDaily();
             });
+            dailyBtn.transition = Selectable.Transition.None;
 
             UiBuilder.AddShadow(dailyBtn.gameObject, new Color(0f, 0f, 0f, 0.45f), new Vector2(0, -5f));
             UiBuilder.AddOutline(dailyBtn.gameObject, new Color(0f, 0.85f, 0.95f, 0.5f), new Vector2(1.5f, -1.5f));
@@ -575,9 +968,16 @@ namespace PenguinRun.Game.UI
             // 左侧图标徽章
             var dailyIcon = UiBuilder.CreateRect("DailyIcon", dailyBtn.transform,
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
-                new Vector2(48f, 48f), new Vector2(36f, 0f),
+                new Vector2(46f, 46f), new Vector2(34f, 0f),
                 new Color(0f, 0.85f, 0.95f, 0.95f), circle: true);
+            dailyIcon.GetComponent<Image>().raycastTarget = false;
             UiBuilder.AddOutline(dailyIcon.gameObject, new Color(0.7f, 1f, 1f, 0.6f), new Vector2(1f, -1f));
+            var dailyIconGlow = UiBuilder.CreateRect("DailyIconGlow", dailyBtn.transform,
+                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(68f, 68f), new Vector2(34f, 0f),
+                new Color(0f, 0.85f, 0.95f, 0.12f), glow: true);
+            dailyIconGlow.GetComponent<Image>().raycastTarget = false;
+            dailyIconGlow.SetAsFirstSibling();
             UiBuilder.CreateText("DailyIconText", dailyIcon.transform, "\u2600", 26, FontStyle.Bold,
                 TextAnchor.MiddleCenter, new Color(0.04f, 0.1f, 0.18f, 1f));
 
@@ -587,7 +987,7 @@ namespace PenguinRun.Game.UI
             var dtRt = (RectTransform)dailyTitle.transform;
             dtRt.anchorMin = new Vector2(0f, 0.5f);
             dtRt.anchorMax = new Vector2(1f, 1f);
-            dtRt.offsetMin = new Vector2(78f, 0f);
+            dtRt.offsetMin = new Vector2(76f, 0f);
             dtRt.offsetMax = new Vector2(-20f, -4f);
 
             // 副标
@@ -597,7 +997,7 @@ namespace PenguinRun.Game.UI
             var dsRt = (RectTransform)dailySub.transform;
             dsRt.anchorMin = new Vector2(0f, 0f);
             dsRt.anchorMax = new Vector2(1f, 0.5f);
-            dsRt.offsetMin = new Vector2(78f, 4f);
+            dsRt.offsetMin = new Vector2(76f, 4f);
             dsRt.offsetMax = new Vector2(-20f, 0f);
 
             // 顶部高光（细条，使用纯色精灵避免 9-slice 异常）
@@ -655,15 +1055,15 @@ namespace PenguinRun.Game.UI
             hlg.childForceExpandHeight = true;
 
             // 5 个 Tab 入口
-            CreateDockButton(layoutGo.transform, "\u2726", "营地", OpenCampShop, true, "CampShop");
-            missionBadge = CreateDockButton(layoutGo.transform, "\u2630", "任务", OpenMissions, true, "Missions");
-            CreateDockButton(layoutGo.transform, "\u2605", "排行", OpenLeaderboard, false, "Leaderboard");
-            CreateDockButton(layoutGo.transform, "\u25A1", "图鉴", OpenCodex, false, "Codex");
-            CreateDockButton(layoutGo.transform, "\u2699", "设置", OpenSettings, false, "Settings");
+            CreateDockButton(layoutGo.transform, "\u2726", "营地", OpenCampShop, true, "CampShop", UiBuilder.Warning);
+            missionBadge = CreateDockButton(layoutGo.transform, "\u2630", "任务", OpenMissions, true, "Missions", UiBuilder.AccentCyan);
+            CreateDockButton(layoutGo.transform, "\u2605", "排行", OpenLeaderboard, false, "Leaderboard", UiBuilder.WarmGold);
+            CreateDockButton(layoutGo.transform, "\u25A1", "图鉴", OpenCodex, false, "Codex", new Color(0.7f, 0.55f, 0.95f, 1f));
+            CreateDockButton(layoutGo.transform, "\u2699", "设置", OpenSettings, false, "Settings", new Color(0.65f, 0.72f, 0.85f, 1f));
         }
 
         /// <summary>底栏导航 Tab：图标 + 文字标签，选中时顶部亮条 + 文字变白变大。</summary>
-        private GameObject CreateDockButton(Transform parent, string glyph, string label, System.Action onClick, bool withBadge, string panelName)
+        private GameObject CreateDockButton(Transform parent, string glyph, string label, System.Action onClick, bool withBadge, string panelName, Color accent)
         {
             // 整个 Tab 区域（充满 HLayoutGroup 分配的宽度）
             var itemGo = new GameObject("Tab_" + label, typeof(RectTransform), typeof(CanvasRenderer),
@@ -678,8 +1078,8 @@ namespace PenguinRun.Game.UI
             var itemBtn = itemGo.GetComponent<Button>();
             var bColors = itemBtn.colors;
             bColors.normalColor = new Color(0f, 0f, 0f, 0f);
-            bColors.highlightedColor = new Color(0f, 0.85f, 0.95f, 0.06f);
-            bColors.pressedColor = new Color(0f, 0.85f, 0.95f, 0.12f);
+            bColors.highlightedColor = new Color(accent.r, accent.g, accent.b, 0.08f);
+            bColors.pressedColor = new Color(accent.r, accent.g, accent.b, 0.16f);
             bColors.selectedColor = new Color(0f, 0f, 0f, 0f);
             itemBtn.colors = bColors;
             itemBtn.targetGraphic = itemImg;
@@ -691,7 +1091,7 @@ namespace PenguinRun.Game.UI
             var activeLine = UiBuilder.CreateRect("ActiveLine", itemGo.transform,
                 new Vector2(0.15f, 1f), new Vector2(0.85f, 1f),
                 new Vector2(0f, 3f), new Vector2(0f, -1f),
-                new Color(0f, 0.85f, 0.95f, 0.9f), rounded: true);
+                new Color(accent.r, accent.g, accent.b, 0.92f), rounded: true);
             activeLine.GetComponent<Image>().raycastTarget = false;
             activeLine.gameObject.SetActive(false);
 
@@ -702,6 +1102,8 @@ namespace PenguinRun.Game.UI
                 new Color(0.12f, 0.24f, 0.42f, 0.85f), circle: true);
             iconCircle.pivot = new Vector2(0.5f, 1f);
             var iconBgImg = iconCircle.GetComponent<Image>();
+            var bounce = iconCircle.gameObject.AddComponent<BounceTween>();
+            bounce.enabled = false;
 
             var iconText = UiBuilder.CreateText("Icon", iconCircle, glyph, 26, FontStyle.Bold,
                 TextAnchor.MiddleCenter, new Color(0.55f, 0.88f, 1f, 1f));
@@ -728,6 +1130,8 @@ namespace PenguinRun.Game.UI
                 labelText = labelText,
                 labelBg = null,
                 activeLine = activeLine.GetComponent<Image>(),
+                accentColor = accent,
+                wasSelected = false,
             });
 
             if (!withBadge) return null;
@@ -758,55 +1162,65 @@ namespace PenguinRun.Game.UI
             var hatCrown = hatPalette.Crown;
             var hatBand = hatPalette.Band;
 
+            var bodyColor = new Color(0.09f, 0.16f, 0.3f);
+            var bellyColor = new Color(0.96f, 0.99f, 1f);
+            var beakColor = new Color(1f, 0.58f, 0.22f);
+
             // Shadow under the penguin
             UiBuilder.CreateRect("MascotShadow", parent,
-                new Vector2(0.38f, 0.06f), new Vector2(0.62f, 0.12f),
+                new Vector2(0.25f, 0.05f), new Vector2(0.74f, 0.13f),
                 Vector2.zero, new Vector2(0f, -2f),
-                new Color(0f, 0f, 0f, 0.3f), rounded: true);
+                new Color(0f, 0f, 0f, 0.34f), rounded: true);
 
-            // Wings (flippers) - slightly darker blue-gray
-            UiBuilder.CreateRect("FlipL", parent,
-                new Vector2(0.15f, 0.35f), new Vector2(0.28f, 0.58f),
-                Vector2.zero, new Vector2(-2f, 0f),
-                new Color(0.1f, 0.18f, 0.32f), rounded: true);
-            UiBuilder.CreateRect("FlipR", parent,
-                new Vector2(0.72f, 0.35f), new Vector2(0.85f, 0.58f),
-                Vector2.zero, new Vector2(2f, 0f),
-                new Color(0.1f, 0.18f, 0.32f), rounded: true);
+            var leftFlipper = UiBuilder.CreateRect("FlipL", parent,
+                new Vector2(0.16f, 0.43f), new Vector2(0.31f, 0.63f),
+                Vector2.zero, new Vector2(-4f, 2f),
+                bodyColor, rounded: true);
+            leftFlipper.localRotation = Quaternion.Euler(0f, 0f, 10f);
+            var rightFlipper = UiBuilder.CreateRect("FlipR", parent,
+                new Vector2(0.68f, 0.39f), new Vector2(0.84f, 0.58f),
+                Vector2.zero, new Vector2(4f, -2f),
+                bodyColor, rounded: true);
+            rightFlipper.localRotation = Quaternion.Euler(0f, 0f, -12f);
+
+            var bodyGroup = UiBuilder.CreateRect("RunnerBodyGroup", parent,
+                new Vector2(0f, 0f), new Vector2(1f, 1f),
+                Vector2.zero, Vector2.zero);
+            bodyGroup.localRotation = Quaternion.Euler(0f, 0f, -2.5f);
 
             // Body - main dark blue-gray
-            var body = UiBuilder.CreateRect("MascotBody", parent,
-                new Vector2(0.3f, 0.18f), new Vector2(0.7f, 0.66f),
+            var body = UiBuilder.CreateRect("MascotBody", bodyGroup,
+                new Vector2(0.29f, 0.16f), new Vector2(0.72f, 0.64f),
                 Vector2.zero, Vector2.zero,
-                new Color(0.12f, 0.2f, 0.35f), rounded: true);
-            
+                bodyColor, rounded: true);
+
             // Belly - white/cream colored
             UiBuilder.CreateRect("MascotBelly", body,
                 new Vector2(0.22f, 0.1f), new Vector2(0.78f, 0.7f),
                 Vector2.zero, Vector2.zero,
-                new Color(0.95f, 0.98f, 1f), rounded: true);
+                bellyColor, rounded: true);
 
             // Scarf - 取自所选围巾色
-            UiBuilder.CreateRect("MascotScarf", parent,
-                new Vector2(0.25f, 0.52f), new Vector2(0.75f, 0.62f),
+            UiBuilder.CreateRect("MascotScarf", bodyGroup,
+                new Vector2(0.25f, 0.52f), new Vector2(0.78f, 0.62f),
                 Vector2.zero, Vector2.zero,
                 scarfMain, rounded: true);
 
             // Head - same color as body
-            var head = UiBuilder.CreateRect("MascotHead", parent,
+            var head = UiBuilder.CreateRect("MascotHead", bodyGroup,
                 new Vector2(0.28f, 0.58f), new Vector2(0.72f, 0.9f),
-                Vector2.zero, Vector2.zero,
-                new Color(0.12f, 0.2f, 0.35f), rounded: true);
-            
+                Vector2.zero, new Vector2(3f, 0f),
+                bodyColor, rounded: true);
+
             // Face area (white)
             UiBuilder.CreateRect("MascotFace", head,
                 new Vector2(0.18f, 0.14f), new Vector2(0.82f, 0.7f),
                 Vector2.zero, Vector2.zero,
-                new Color(0.95f, 0.98f, 1f), rounded: true);
-            
+                bellyColor, rounded: true);
+
             // Cheeks - soft pink
             UiBuilder.CreateRect("MascotCheekL", head,
-                new Vector2(0.22f, 0.28f), new Vector2(0.34f, 0.4f),
+                new Vector2(0.23f, 0.27f), new Vector2(0.35f, 0.39f),
                 Vector2.zero, Vector2.zero,
                 new Color(1f, 0.65f, 0.7f, 0.5f), circle: true);
             UiBuilder.CreateRect("MascotCheekR", head,
@@ -816,65 +1230,123 @@ namespace PenguinRun.Game.UI
 
             // Eyes - white sclera
             UiBuilder.CreateRect("EyeWhiteL", head,
-                new Vector2(0.32f, 0.44f), new Vector2(0.43f, 0.56f),
+                new Vector2(0.32f, 0.48f), new Vector2(0.43f, 0.6f),
                 Vector2.zero, Vector2.zero,
                 Color.white, circle: true);
             UiBuilder.CreateRect("EyeWhiteR", head,
-                new Vector2(0.57f, 0.44f), new Vector2(0.68f, 0.56f),
+                new Vector2(0.57f, 0.48f), new Vector2(0.68f, 0.6f),
                 Vector2.zero, Vector2.zero,
                 Color.white, circle: true);
-            
+
             // Pupils - dark blue
             UiBuilder.CreateRect("EyeL", head,
-                new Vector2(0.35f, 0.47f), new Vector2(0.41f, 0.54f),
+                new Vector2(0.36f, 0.51f), new Vector2(0.42f, 0.58f),
                 Vector2.zero, Vector2.zero,
                 new Color(0.12f, 0.42f, 0.88f), circle: true);
             UiBuilder.CreateRect("EyeR", head,
-                new Vector2(0.59f, 0.47f), new Vector2(0.65f, 0.54f),
+                new Vector2(0.6f, 0.51f), new Vector2(0.66f, 0.58f),
                 Vector2.zero, Vector2.zero,
                 new Color(0.12f, 0.42f, 0.88f), circle: true);
-            
+
             // Eye highlights
             UiBuilder.CreateRect("EyeSparkL", head,
-                new Vector2(0.37f, 0.5f), new Vector2(0.4f, 0.54f),
+                new Vector2(0.38f, 0.54f), new Vector2(0.41f, 0.58f),
                 Vector2.zero, Vector2.zero,
                 new Color(1f, 1f, 1f, 0.9f), circle: true);
             UiBuilder.CreateRect("EyeSparkR", head,
-                new Vector2(0.61f, 0.5f), new Vector2(0.64f, 0.54f),
+                new Vector2(0.62f, 0.54f), new Vector2(0.65f, 0.58f),
                 Vector2.zero, Vector2.zero,
                 new Color(1f, 1f, 1f, 0.9f), circle: true);
 
             // Beak - orange
             UiBuilder.CreateRect("Beak", head,
-                new Vector2(0.45f, 0.2f), new Vector2(0.55f, 0.32f),
+                new Vector2(0.45f, 0.2f), new Vector2(0.56f, 0.33f),
                 Vector2.zero, Vector2.zero,
-                new Color(1f, 0.6f, 0.25f), rounded: true);
+                beakColor, rounded: true);
+            var beakPoint = UiBuilder.CreateTriangle("BeakSmile", head,
+                new Vector2(0.5f, 0.18f), new Vector2(0.5f, 0.18f),
+                new Vector2(22f, 16f), Vector2.zero,
+                new Color(0.75f, 0.26f, 0.08f, 0.86f));
+            beakPoint.localRotation = Quaternion.Euler(0f, 0f, 180f);
+            beakPoint.GetComponent<Image>().raycastTarget = false;
 
             // Scarf knot
-            UiBuilder.CreateRect("MascotScarfKnot", parent,
-                new Vector2(0.58f, 0.42f), new Vector2(0.7f, 0.54f),
-                Vector2.zero, new Vector2(2f, 0f),
+            var knot = UiBuilder.CreateRect("MascotScarfKnot", bodyGroup,
+                new Vector2(0.58f, 0.41f), new Vector2(0.72f, 0.54f),
+                Vector2.zero, new Vector2(4f, 0f),
                 scarfKnot, rounded: true);
+            knot.localRotation = Quaternion.Euler(0f, 0f, -8f);
 
             // Hat - 取自所选帽子色
-            UiBuilder.CreateRect("MascotHat", parent,
-                new Vector2(0.28f, 0.85f), new Vector2(0.72f, 0.96f),
+            UiBuilder.CreateRect("MascotHat", bodyGroup,
+                new Vector2(0.26f, 0.85f), new Vector2(0.75f, 0.96f),
                 Vector2.zero, Vector2.zero,
                 hatCrown, rounded: true);
-            UiBuilder.CreateRect("MascotHatBand", parent,
-                new Vector2(0.3f, 0.82f), new Vector2(0.7f, 0.88f),
+            UiBuilder.CreateRect("MascotHatBand", bodyGroup,
+                new Vector2(0.28f, 0.82f), new Vector2(0.72f, 0.88f),
                 Vector2.zero, Vector2.zero,
                 hatBand, rounded: true);
 
             // Feet - orange
-            UiBuilder.CreateRect("FootL", parent,
-                new Vector2(0.38f, 0.08f), new Vector2(0.47f, 0.14f),
+            var leftFoot = UiBuilder.CreateRect("FootL", parent,
+                new Vector2(0.36f, 0.08f), new Vector2(0.49f, 0.15f),
+                Vector2.zero, new Vector2(-5f, 5f),
+                beakColor, rounded: true);
+            leftFoot.localRotation = Quaternion.Euler(0f, 0f, 8f);
+            var rightFoot = UiBuilder.CreateRect("FootR", parent,
+                new Vector2(0.52f, 0.06f), new Vector2(0.66f, 0.13f),
+                Vector2.zero, new Vector2(7f, -1f),
+                beakColor, rounded: true);
+            rightFoot.localRotation = Quaternion.Euler(0f, 0f, -8f);
+
+            var run = parent.gameObject.AddComponent<RunCycleTween>();
+            run.leftFlipper = leftFlipper;
+            run.rightFlipper = rightFlipper;
+            run.leftFoot = leftFoot;
+            run.rightFoot = rightFoot;
+            run.bodyGroup = bodyGroup;
+        }
+
+        private static void DrawMiniPenguinAvatar(RectTransform parent)
+        {
+            for (var i = parent.childCount - 1; i >= 0; i--)
+                UnityEngine.Object.Destroy(parent.GetChild(i).gameObject);
+
+            var scarfPalette = CosmeticPalette.FindScarf(PlayerSave.SelectedScarfId);
+            var hatPalette = CosmeticPalette.FindHat(PlayerSave.SelectedHatId);
+            var head = UiBuilder.CreateRect("MiniHead", parent,
+                new Vector2(0.17f, 0.18f), new Vector2(0.83f, 0.78f),
+                Vector2.zero, Vector2.zero,
+                new Color(0.09f, 0.16f, 0.3f), rounded: true);
+            UiBuilder.CreateRect("MiniFace", head,
+                new Vector2(0.2f, 0.15f), new Vector2(0.8f, 0.68f),
+                Vector2.zero, Vector2.zero,
+                new Color(0.96f, 0.99f, 1f), rounded: true);
+            UiBuilder.CreateRect("MiniEyeL", head,
+                new Vector2(0.33f, 0.42f), new Vector2(0.42f, 0.52f),
+                Vector2.zero, Vector2.zero,
+                new Color(0.1f, 0.35f, 0.8f), circle: true);
+            UiBuilder.CreateRect("MiniEyeR", head,
+                new Vector2(0.58f, 0.42f), new Vector2(0.67f, 0.52f),
+                Vector2.zero, Vector2.zero,
+                new Color(0.1f, 0.35f, 0.8f), circle: true);
+            UiBuilder.CreateRect("MiniBeak", head,
+                new Vector2(0.45f, 0.24f), new Vector2(0.56f, 0.35f),
                 Vector2.zero, Vector2.zero,
                 new Color(1f, 0.58f, 0.22f), rounded: true);
-            UiBuilder.CreateRect("FootR", parent,
-                new Vector2(0.53f, 0.08f), new Vector2(0.62f, 0.14f),
+            UiBuilder.CreateRect("MiniScarf", parent,
+                new Vector2(0.18f, 0.28f), new Vector2(0.84f, 0.38f),
                 Vector2.zero, Vector2.zero,
-                new Color(1f, 0.58f, 0.22f), rounded: true);
+                scarfPalette.Primary, rounded: true);
+            UiBuilder.CreateRect("MiniHat", parent,
+                new Vector2(0.19f, 0.73f), new Vector2(0.81f, 0.92f),
+                Vector2.zero, Vector2.zero,
+                hatPalette.Crown, rounded: true);
+            UiBuilder.CreateRect("MiniHatBand", parent,
+                new Vector2(0.21f, 0.68f), new Vector2(0.79f, 0.76f),
+                Vector2.zero, Vector2.zero,
+                hatPalette.Band, rounded: true);
+            SetRaycastTargets(parent, false);
         }
 
         private void RefreshHeader()
@@ -912,11 +1384,30 @@ namespace PenguinRun.Game.UI
         private void UpdateMascotCosmetic()
         {
             if (mascotArea == null) return;
+            var runTweens = mascotArea.GetComponents<RunCycleTween>();
+            foreach (var tween in runTweens)
+            {
+                if (tween != null) Destroy(tween);
+            }
             for (var i = mascotArea.childCount - 1; i >= 0; i--)
             {
                 Destroy(mascotArea.GetChild(i).gameObject);
             }
             DrawPenguinMascot(mascotArea);
+            SetRaycastTargets(mascotArea, false);
+            if (avatarMiniArea != null) DrawMiniPenguinAvatar(avatarMiniArea);
+        }
+
+        /// <summary>装饰 UI 不应拦截点击；统一关闭整棵子树的 raycast。</summary>
+        private static void SetRaycastTargets(Transform root, bool enabled)
+        {
+            if (root == null) return;
+            var graphics = root.GetComponentsInChildren<Graphic>(true);
+            foreach (var g in graphics)
+            {
+                if (g != null)
+                    g.raycastTarget = enabled;
+            }
         }
 
         // ── 难度选择 ─────────────────────────────────────────────────────────────
@@ -1204,25 +1695,38 @@ namespace PenguinRun.Game.UI
 
                 // 圆形图标背景
                 if (item.iconBg != null)
+                {
                     item.iconBg.color = isSelected
-                        ? new Color(0f, 0.85f, 0.95f, 1f)
-                        : new Color(0.12f, 0.24f, 0.42f, 0.85f);
+                        ? new Color(item.accentColor.r, item.accentColor.g, item.accentColor.b, 0.3f)
+                        : new Color(item.accentColor.r, item.accentColor.g, item.accentColor.b, 0.18f);
+
+                    if (isSelected && !item.wasSelected)
+                    {
+                        var bounce = item.iconBg.GetComponent<BounceTween>();
+                        if (bounce != null)
+                        {
+                            bounce.enabled = true;
+                        }
+                    }
+                }
 
                 // 图标符号颜色
                 if (item.iconText != null)
                     item.iconText.color = isSelected
-                        ? new Color(0.04f, 0.08f, 0.14f, 1f)
-                        : new Color(0.55f, 0.88f, 1f, 1f);
+                        ? item.accentColor
+                        : Color.Lerp(item.accentColor, Color.white, 0.45f);
 
                 // 文字标签颜色 + 粗细
                 if (item.labelText != null)
                 {
                     item.labelText.color = isSelected
-                        ? new Color(0f, 0.9f, 1f, 1f)
+                        ? item.accentColor
                         : new Color(0.6f, 0.72f, 0.85f, 0.8f);
                     item.labelText.fontStyle = isSelected ? FontStyle.Bold : FontStyle.Normal;
                     item.labelText.fontSize = isSelected ? 20 : 19;
                 }
+
+                item.wasSelected = isSelected;
             }
         }
 

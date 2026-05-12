@@ -37,6 +37,13 @@ namespace PenguinRun.Game.UI
             img.color = new Color(0.04f, 0.09f, 0.16f, 0.96f);
             img.sprite = UiBuilder.RoundedSprite;
             img.type = Image.Type.Sliced;
+            // 提示条不需要拦截主界面点击；淡出时 alpha=0 仍会吞射线，必须关 raycast / blocksRaycasts
+            img.raycastTarget = false;
+
+            var group = go.GetComponent<CanvasGroup>();
+            group.blocksRaycasts = false;
+            group.interactable = false;
+
             UiBuilder.AddOutline(go, UiBuilder.BorderAccent, new Vector2(1.5f, -1.5f));
             UiBuilder.AddShadow(go, new Color(0f, 0f, 0f, 0.55f), new Vector2(0f, -6f));
 
@@ -55,6 +62,7 @@ namespace PenguinRun.Game.UI
                 new Vector2(40f, 40f), new Vector2(40f, 0f),
                 new Color(UiBuilder.AccentCyan.r, UiBuilder.AccentCyan.g, UiBuilder.AccentCyan.b, 0.22f),
                 circle: true);
+            iconBadge.GetComponent<Image>().raycastTarget = false;
             UiBuilder.AddOutline(iconBadge.gameObject, UiBuilder.AccentCyan, new Vector2(1f, -1f));
             UiBuilder.CreateText("IconText", iconBadge.transform, "\u2139", 22, FontStyle.Bold,
                 TextAnchor.MiddleCenter, UiBuilder.AccentCyan);
@@ -73,7 +81,7 @@ namespace PenguinRun.Game.UI
             trt.offsetMax = new Vector2(-30f, 0f);
 
             instance = go.AddComponent<Snackbar>();
-            instance.group = go.GetComponent<CanvasGroup>();
+            instance.group = group;
             instance.group.alpha = 0f;
             instance.label = text;
             instance.rectTransform = rt;

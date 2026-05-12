@@ -257,6 +257,24 @@ namespace PenguinRun
                 {
                     world.AddBossReward(fishBonus, scoreBonus);
                     world.SetBossSpeedResult(speedTier, speedFish, speedScore);
+
+                    // 生成 Boss 战后奖励段
+                    var lastDef = bossSystem.LastDefeatedBoss;
+                    if (lastDef != null)
+                    {
+                        spawner.SpawnBossReward(world.Distance, lastDef);
+                    }
+                }
+            }
+
+            // Boss 即将出现前，生成前奏片段
+            if (bossSystem.IsBossApproaching(world.Distance, 100f) && !bossSystem.HasSpawnedPrelude)
+            {
+                bossSystem.MarkPreludeSpawned();
+                var nextDef = bossSystem.NextBossDefinition;
+                if (nextDef != null)
+                {
+                    spawner.SpawnBossPrelude(world.Distance, nextDef);
                 }
             }
 

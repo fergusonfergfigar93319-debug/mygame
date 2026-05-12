@@ -4,7 +4,7 @@ namespace PenguinRun
 {
     internal sealed class SegmentWaveDirector
     {
-        private readonly RunnerSegmentDefinition[] pool;
+        private RunnerSegmentDefinition[] pool;
         private RunnerSegmentDefinition current;
         private int wavesLeftInSegment;
 
@@ -18,6 +18,15 @@ namespace PenguinRun
         {
             PickNewSegment();
         }
+
+        public void SetTheme(RunnerMapTheme theme)
+        {
+            pool = RunnerSegmentCatalog.GetPool(theme);
+            PickNewSegment();
+        }
+
+        /// <summary>返回当前片段的调色板，供生成器在波次消费前查询（如开局种子障碍）。</summary>
+        public SegmentObstaclePalette CurrentPalette => current.Palette;
 
         public SegmentSpawnModifiers ConsumeWave()
         {

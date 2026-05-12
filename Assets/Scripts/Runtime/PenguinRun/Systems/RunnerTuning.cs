@@ -50,9 +50,9 @@ namespace PenguinRun
     public sealed class RunnerCameraTuning
     {
         public float behindDistance = 10.5f;
-        public float heightAboveSurface = 5.5f;
-        public float aimAhead = 15f;
-        public float aimHeightAboveSurface = 1.0f;
+        public float heightAboveSurface = 6.5f;
+        public float aimAhead = 19f;
+        public float aimHeightAboveSurface = 0.25f;
         public float fieldOfView = 72f;
         public float playerVisualScale = 0.86f;
     }

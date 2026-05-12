@@ -33,6 +33,20 @@ namespace PenguinRun
         public float DoubleFishTimer { get; private set; }
         public float SlowMoTimer { get; private set; }
 
+        // ── 新道具状态 ────────────────────────────────────────
+        /// <summary>冰镜反射：激活时碰撞障碍被弹开而非受伤（类似临时护盾但无声）。</summary>
+        public float IceMirrorTimer { get; set; }
+        /// <summary>极光连锁：激活时金币连击计时器不归零，combo 持续累积。</summary>
+        public float AuroraChainTimer { get; set; }
+        /// <summary>雾灯：激活时同时享有延长磁吸和慢动作。</summary>
+        public float FogLanternTimer { get; set; }
+        /// <summary>树人护甲：可吸收的连续伤害次数（&gt;0 时视为护盾叠层）。</summary>
+        public int TreantArmorHits { get; private set; }
+        /// <summary>珊瑚回弹：是否就绪（下次受击时弹出+短暂冲刺）。</summary>
+        public bool CoralBounceReady { get; private set; }
+        /// <summary>雷羽：激活时冲刺+磁吸同时生效，冲刺期间可摧毁小障碍。</summary>
+        public float ThunderFeatherTimer { get; set; }
+
         /// <summary>当前剩余生命（心）。归零时本局结束。</summary>
         public int Lives { get; private set; }
 
@@ -80,6 +94,12 @@ namespace PenguinRun
             GlideTimer = 0f;
             DoubleFishTimer = 0f;
             SlowMoTimer = 0f;
+            IceMirrorTimer = 0f;
+            AuroraChainTimer = 0f;
+            FogLanternTimer = 0f;
+            TreantArmorHits = 0;
+            CoralBounceReady = false;
+            ThunderFeatherTimer = 0f;
             Lives = MaxLives;
             HitInvulnerabilityTimer = 0f;
             LastFishScoreMultiplier = 1f;
@@ -92,6 +112,26 @@ namespace PenguinRun
             LastBossSpeedFishBonus = 0;
             LastBossSpeedScoreBonus = 0;
             Paused = false;
+        }
+
+        public void AddTreantArmorHits(int hits) => TreantArmorHits = Mathf.Min(3, TreantArmorHits + hits);
+
+        public bool TryConsumeTreantArmor()
+        {
+            if (TreantArmorHits <= 0) return false;
+            TreantArmorHits -= 1;
+            return true;
+        }
+
+        public void SetCoralBounce() => CoralBounceReady = true;
+
+        public bool TryConsumeCoralBounce()
+        {
+            if (!CoralBounceReady) return false;
+            CoralBounceReady = false;
+            DashTimer = Mathf.Max(DashTimer, 1.2f);
+            SetHitInvulnerability(1.8f);
+            return true;
         }
 
         public void AddPerfectDodge()
@@ -145,7 +185,11 @@ namespace PenguinRun
             GlideTimer = Mathf.Max(0f, GlideTimer - dt);
             DoubleFishTimer = Mathf.Max(0f, DoubleFishTimer - dt);
             SlowMoTimer = Mathf.Max(0f, SlowMoTimer - dt);
-            comboTimer = Mathf.Max(0f, comboTimer - dt);
+            IceMirrorTimer = Mathf.Max(0f, IceMirrorTimer - dt);
+            AuroraChainTimer = Mathf.Max(0f, AuroraChainTimer - dt);
+            FogLanternTimer = Mathf.Max(0f, FogLanternTimer - dt);
+            ThunderFeatherTimer = Mathf.Max(0f, ThunderFeatherTimer - dt);
+            comboTimer = Mathf.Max(0f, AuroraChainTimer > 0f ? comboTimer + dt * 0.5f : comboTimer - dt);
             HitInvulnerabilityTimer = Mathf.Max(0f, HitInvulnerabilityTimer - dt);
             if (comboTimer <= 0f)
             {

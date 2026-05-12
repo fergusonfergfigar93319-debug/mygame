@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using PenguinRun.Game;
 using UnityEngine;
 
@@ -434,6 +435,22 @@ namespace PenguinRun.Game.Save
         {
             if (string.IsNullOrEmpty(bossId)) return;
             AddCsvEntry(KeyDefeatedBossCsv, null, bossId);
+        }
+
+        /// <summary>获取所有已击败的 Boss ID 集合</summary>
+        public static HashSet<string> GetDefeatedBossIds()
+        {
+            var raw = PlayerPrefs.GetString(KeyDefeatedBossCsv, string.Empty);
+            var result = new HashSet<string>();
+            if (string.IsNullOrEmpty(raw)) return result;
+
+            foreach (var token in raw.Split(','))
+            {
+                var trimmed = token.Trim();
+                if (!string.IsNullOrEmpty(trimmed))
+                    result.Add(trimmed);
+            }
+            return result;
         }
 
         public static void SetCampLevel(string key, int value)
