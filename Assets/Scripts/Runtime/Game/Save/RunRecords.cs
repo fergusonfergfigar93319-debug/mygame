@@ -56,12 +56,6 @@ namespace PenguinRun.Game.Save
             SaveList(list);
         }
 
-        /// <summary>获取所有记录（已按时间倒序）。</summary>
-        public static IReadOnlyList<Record> GetAll()
-        {
-            return LoadList().records;
-        }
-
         /// <summary>获取最近 N 条记录。</summary>
         public static List<Record> GetRecent(int count)
         {
@@ -107,12 +101,6 @@ namespace PenguinRun.Game.Save
         {
             var list = LoadList().records;
             return list.OrderByDescending(r => r.score).FirstOrDefault();
-        }
-
-        /// <summary>清空所有记录。</summary>
-        public static void Clear()
-        {
-            PlayerPrefs.DeleteKey(KeyRecords);
         }
 
         private static RecordList LoadList()

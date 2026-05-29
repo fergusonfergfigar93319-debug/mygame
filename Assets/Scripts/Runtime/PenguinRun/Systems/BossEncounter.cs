@@ -53,11 +53,53 @@ namespace PenguinRun
         {
             foreach (var t in telegraphs)
             {
-                if (t.Go != null && t.Lifetime > 0)
+                if (t.Go != null && t.Lifetime > 0 && !t.IsDecoy)
                     return t.Lifetime;
             }
             return 0f;
         }
+
+        public bool UsesDeceptiveTelegraphs => Definition.Archetype == BossArchetype.Deceptive;
+
+        /// <summary>危险窗口剩余秒数（非危险窗为 0）。</summary>
+        public float DangerWindowTimeRemaining
+        {
+            get
+            {
+                if (!IsPatternDangerous) return 0f;
+                var elapsed = GetPatternElapsed();
+                return Mathf.Max(0f, patternDangerDelay + patternActiveWindow - elapsed);
+            }
+        }
+
+        /// <summary>当前招式前摇进度 0→1（至危险窗开始）。</summary>
+        public float WindupProgress01
+        {
+            get
+            {
+                if (patternTimer <= 0f || Pattern == BossPattern.None) return 0f;
+                return patternDangerDelay > 0.01f
+                    ? Mathf.Clamp01(GetPatternElapsed() / patternDangerDelay)
+                    : 0f;
+            }
+        }
+
+        /// <summary>危险窗口内进度 0→1。</summary>
+        public float DangerWindowProgress01
+        {
+            get
+            {
+                if (!IsPatternDangerous || patternActiveWindow <= 0.01f) return 0f;
+                var elapsed = GetPatternElapsed();
+                return Mathf.Clamp01((elapsed - patternDangerDelay) / patternActiveWindow);
+            }
+        }
+
+        /// <summary>当前招式视觉阶段（前摇/预警/击发/收招）。</summary>
+        public BossAttackPhase AttackPhase => patternVfxPlayer.Phase;
+
+        public float PatternStrikeCameraShakeAmp { get; private set; }
+        public float PatternStrikeCameraShakeDuration { get; private set; }
 
         // 模式时间控制
         private float patternTimer;
@@ -76,6 +118,8 @@ namespace PenguinRun
         private float dangerWindowRatio;
         private float telegraphLifetimeRatio;
         private float vulnerableChance;
+        private float minPatternDangerDelay = 0.55f;
+        private Vector3 patternWindupScale = Vector3.one;
         private float patternIntervalMin = 0.45f;
         private float patternIntervalMax = 0.9f;
         private float hitReactionTimer;
@@ -100,12 +144,35 @@ namespace PenguinRun
         private readonly List<Color> tintBaseColors = new();
         private readonly Transform leftArm;
         private readonly Transform rightArm;
+        private Transform head;
         private readonly Transform[] healthCrystals = new Transform[BossSystem.BossMaxHits];
         private readonly List<GameObject> projectileObjects = new();
         private readonly List<TelegraphMarker> telegraphs = new();
-        private readonly List<GameObject> attackFxObjects = new();
+        private readonly BossPatternVfxPlayer patternVfxPlayer = new();
+        private readonly BossBodyAnimator bodyAnimator = new();
         private static readonly Dictionary<string, Texture2D> textureCache = new();
-        private float attackFxTimer;
+        private int patternDiveLaneIdx;
+        private int patternSweepSafeLaneIdx = int.MinValue;
+        private System.Action<BossPattern, BossPatternVfxProfile> strikeCallback;
+        private float lastRunDistance;
+
+        internal float LastRunDistance => lastRunDistance;
+
+        internal float TelegraphSurfaceY(float worldZ) =>
+            TrackTerrain.SurfaceY(worldZ, lastRunDistance, baseGroundY);
+
+        internal float PatternDangerDelay => patternDangerDelay;
+        internal float PatternDuration => patternDuration;
+        internal float PatternTimer => patternTimer;
+        internal float LaneWidthInternal => laneWidth;
+        internal float BaseGroundYInternal => baseGroundY;
+        internal Transform BodyTransform => body;
+        internal Transform FxSceneParentInternal => FxSceneParent;
+        internal float GetPatternElapsed() =>
+            patternDuration - Mathf.Clamp(patternTimer, 0f, patternDuration);
+
+        public void SetStrikeCallback(System.Action<BossPattern, BossPatternVfxProfile> callback) =>
+            strikeCallback = callback;
 
         private struct TelegraphMarker
         {
@@ -115,21 +182,17 @@ namespace PenguinRun
             public Vector3 BaseScale;
             /// <summary>预警期配色；危险窗口切换为高亮红。</summary>
             public Color WarnColor;
+            /// <summary>雾堤假预警：不参与命中，危险窗前淡出。</summary>
+            public bool IsDecoy;
         }
 
         private Transform FxSceneParent =>
             Root != null && Root.transform.parent != null ? Root.transform.parent : Root.transform;
 
-        private void RegisterWorldFx(GameObject go)
-        {
-            var marker = go.AddComponent<BossWorldFxMarker>();
-            marker.BaseScale = go.transform.localScale;
-            attackFxObjects.Add(go);
-        }
-
         public BossEncounter(BossDefinition def, float baseGroundY, float laneWidth, float runDistance,
             float patternMinSeconds = 1.6f, float patternMaxSeconds = 2.4f,
-            float dangerWindowRatio = 0.55f, float telegraphLifetimeRatio = 0.6f, float vulnerableChance = 0.5f)
+            float dangerWindowRatio = 0.55f, float telegraphLifetimeRatio = 0.6f, float vulnerableChance = 0.5f,
+            float minDangerDelay = 0.55f)
         {
             Definition = def;
             this.baseGroundY = baseGroundY;
@@ -139,6 +202,7 @@ namespace PenguinRun
             this.dangerWindowRatio = Mathf.Clamp(dangerWindowRatio, 0.3f, 0.82f);
             this.telegraphLifetimeRatio = Mathf.Clamp(telegraphLifetimeRatio, 0.35f, 0.9f);
             this.vulnerableChance = Mathf.Clamp01(vulnerableChance);
+            minPatternDangerDelay = Mathf.Max(0.35f, minDangerDelay);
             ConfigurePatternIntervalByStyle();
             Phase = BossPhase.Spawning;
             spawnTimer = 1.4f;
@@ -149,6 +213,9 @@ namespace PenguinRun
             Root.transform.position = new Vector3(0f, startSurface, BossSystem.BossSpawnAheadZ);
 
             body = BuildSilhouette(def, out bodyRenderer, out leftArm, out rightArm);
+            head = body.Find("Head") ?? body.Find("EagleHead");
+            bodyAnimator.CaptureHeadBaseline(head);
+            patternVfxPlayer.SetStrikeCallback(OnPatternStrikeMoment);
             ApplyOpenTextures(def);
 
             // 缓存所有 tint 渲染器的初始颜色，作为 flash/破绽叠加的基准
@@ -194,7 +261,7 @@ namespace PenguinRun
             foreach (var t in telegraphs)
                 if (t.Go != null) Object.Destroy(t.Go);
             telegraphs.Clear();
-            ClearAttackFx();
+            patternVfxPlayer.End();
         }
 
         // ── 阶段节奏控制 ──────────────────────────────────────
@@ -207,16 +274,13 @@ namespace PenguinRun
         {
             if (Root == null) return;
 
+            lastRunDistance = runDistance;
             HitFlashTimer = Mathf.Max(0f, HitFlashTimer - dt);
             hitReactionTimer = Mathf.Max(0f, hitReactionTimer - dt);
             breakReactionTimer = Mathf.Max(0f, breakReactionTimer - dt);
             bobPhase += dt;
             elapsedInPhase += dt;
-            attackAnimPunch = Mathf.Max(0f, attackAnimPunch - dt * 2.6f);
-            if (Phase == BossPhase.Active && IsPatternDangerous)
-            {
-                attackAnimPunch = Mathf.Max(attackAnimPunch, 0.34f * Definition.AttackStrikePunch);
-            }
+            attackAnimPunch = ComputeAttackAnimPunch();
 
             // boss 跟随路面前进（保持在玩家前方），落地高度跟随地形
             var holdZ = Phase == BossPhase.Retreating ? BossSystem.BossActiveZ + 4f : BossSystem.BossActiveZ;
@@ -238,6 +302,18 @@ namespace PenguinRun
             }
             Root.transform.position = pos;
 
+            patternVfxPlayer.Tick(dt);
+
+            var vfxProfile = BossPatternVfxProfile.Get(Pattern);
+            var strike01 = IsPatternDangerous ? DangerWindowProgress01 : 0f;
+            var recovery01 = Pattern != BossPattern.None && !IsPatternDangerous && patternTimer > 0f
+                ? Mathf.Clamp01((GetPatternElapsed() - patternDangerDelay - patternActiveWindow) / Mathf.Max(0.2f, patternDuration - patternDangerDelay - patternActiveWindow))
+                : 0f;
+            var bodyAnimPos = Vector3.zero;
+            var bodyAnimRot = Vector3.zero;
+            bodyAnimator.Apply(body, head, Definition, Pattern, AttackPhase, vfxProfile,
+                WindupProgress01, strike01, recovery01, ref bodyAnimPos, ref bodyAnimRot);
+
             // 浮动 + 朝向玩家（每个 Boss 的前倾角度由 Definition.AttackWindupLean 决定）
             if (body != null)
             {
@@ -250,17 +326,16 @@ namespace PenguinRun
                     180f + Mathf.Sin(bobPhase * 1.4f) * 6f,
                     Mathf.Sin(bobPhase * 1.1f) * 4f + attackAnimPunch * 6f);
                 EvaluateReactionOffsets(out var reactionPos, out var reactionRot);
-                body.localPosition = basePos + reactionPos;
-                body.localRotation = Quaternion.Euler(baseRot + reactionRot);
-                // 专属缩放前摇后缓动恢复到 (1,1,1)
-                body.localScale = Vector3.Lerp(body.localScale, Vector3.one, dt * 4.5f);
+                body.localPosition = basePos + bodyAnimPos + reactionPos;
+                body.localRotation = Quaternion.Euler(baseRot + bodyAnimRot + reactionRot);
+                var targetScale = ComputeBodyTargetScale();
+                body.localScale = Vector3.Lerp(body.localScale, targetScale, dt * (IsPatternDangerous ? 14f : 6f));
             }
 
             UpdateAttackPose();
 
             UpdateTelegraphs(dt);
             UpdateProjectiles(dt);
-            UpdateAttackFx(dt);
             UpdateHealthCrystals();
             UpdateBodyTint(dt);
 
@@ -486,7 +561,7 @@ namespace PenguinRun
         private void StartNextPattern()
         {
             ClearTelegraphs();
-            ClearAttackFx();
+            patternVfxPlayer.End();
             Pattern = Definition.PatternPool[Random.Range(0, Definition.PatternPool.Length)];
             if (Definition.PatternPool.Length > 1 && Pattern == previousPattern)
             {
@@ -500,17 +575,18 @@ namespace PenguinRun
             previousPattern = Pattern;
             patternDuration = Random.Range(patternMinSeconds, patternMaxSeconds);
             patternTimer = patternDuration;
-            attackFxTimer = patternDuration;
             patternDangerDelay = ComputePatternDangerDelay(patternDuration);
             patternActiveWindow = ComputePatternActiveWindow(patternDuration);
+            patternDiveLaneIdx = 0;
+            patternSweepSafeLaneIdx = int.MinValue;
 
             switch (Pattern)
             {
                 case BossPattern.SweepLow:
                 {
                     var safeIdx = Random.Range(-1, 2);
+                    patternSweepSafeLaneIdx = safeIdx;
                     SafeLaneX = safeIdx * laneWidth;
-                    CreateSweepSlashFx(safeIdx);
                     for (var i = -1; i <= 1; i++)
                     {
                         if (i == safeIdx) continue;
@@ -521,26 +597,26 @@ namespace PenguinRun
                 case BossPattern.DiveHigh:
                 {
                     var laneIdx = Random.Range(-1, 2);
+                    patternDiveLaneIdx = laneIdx;
                     var bp = Root.transform.position;
                     bp.x = laneIdx * laneWidth;
                     Root.transform.position = bp;
-                    CreateDiveBurstFx(laneIdx);
                     CreateTelegraph(laneIdx * laneWidth, PatternTelegraphLifetime(), 1.6f, new Color(1f, 0.55f, 0.3f, 0.8f));
                     break;
                 }
                 case BossPattern.ChargeAcross:
                 {
-                    CreateChargeTrailFx();
-                    // 全场扫荡 → 三车道全部标记
+                    var safeIdx = Random.Range(-1, 2);
+                    SafeLaneX = safeIdx * laneWidth;
                     for (var i = -1; i <= 1; i++)
                     {
-                        CreateTelegraph(i * laneWidth, PatternTelegraphLifetime(), 1.4f, new Color(1f, 0.35f, 0.3f, 0.75f));
+                        if (i == safeIdx) continue;
+                        CreateTelegraph(i * laneWidth, PatternTelegraphLifetime(), 1.4f, new Color(1f, 0.35f, 0.3f, 0.88f));
                     }
                     break;
                 }
                 case BossPattern.RangedSalvo:
                 {
-                    CreateRangedGlyphFx();
                     SalvoLaneX.Clear();
                     var n = Random.Range(2, 4);
                     var lanes = new[] { -1, 0, 1 };
@@ -549,65 +625,109 @@ namespace PenguinRun
                     {
                         var lx = lanes[k] * laneWidth;
                         SalvoLaneX.Add(lx);
-                        SpawnProjectile(lx, patternDuration);
-                        CreateTelegraph(lx, PatternTelegraphLifetime(0.04f), 1.1f, new Color(1f, 0.7f, 0.3f, 0.7f));
+                        var impactTime = patternDangerDelay + patternActiveWindow * 0.5f;
+                        SpawnProjectile(lx, impactTime);
+                        CreateTelegraph(lx, PatternTelegraphLifetime(0.04f), 1.1f, new Color(1f, 0.7f, 0.3f, 0.88f));
                     }
-                    CreateSalvoGroundImpactMarkers();
                     break;
                 }
                 case BossPattern.CenterBeam:
-                {
-                    CreateCenterBeamFx();
-                    // 中央光束：中心车道危险
                     CreateTelegraph(0f, PatternTelegraphLifetime(), 1.45f, new Color(1f, 0.3f, 0.65f, 0.8f));
                     break;
-                }
                 case BossPattern.QuakePulse:
-                {
-                    CreateQuakePulseFx();
-                    // 震地脉冲：三车道全危险，但高度较低，鼓励滑铲
                     for (var i = -1; i <= 1; i++)
                     {
-                        CreateTelegraph(i * laneWidth, PatternTelegraphLifetime(), 1.55f, new Color(1f, 0.78f, 0.2f, 0.72f));
+                        CreateTelegraph(i * laneWidth, PatternTelegraphLifetime(), 2.35f, new Color(1f, 0.78f, 0.2f, 0.88f), flatRing: true);
                     }
                     break;
-                }
             }
-            // 专属起手动画：攻击冲刺幅度由 Boss 定义驱动
-            attackAnimPunch = 1.0f * Definition.AttackStrikePunch;
+
+            patternVfxPlayer.Begin(this, Pattern, patternDuration, patternDiveLaneIdx, patternSweepSafeLaneIdx);
+            SpawnDeceptiveDecoyTelegraphsIfNeeded();
             ApplySignatureWindup();
+        }
+
+        private void OnPatternStrikeMoment(BossPattern p, BossPatternVfxProfile prof)
+        {
+            PatternStrikeCameraShakeAmp = prof.CameraShakeAmp * Definition.VfxShakeMultiplier;
+            PatternStrikeCameraShakeDuration = prof.CameraShakeDuration;
+            strikeCallback?.Invoke(p, prof);
         }
 
         /// <summary>在招式起手瞬间激活每个 Boss 专属的视觉/缩放前摇。</summary>
         private void ApplySignatureWindup()
         {
             if (body == null) return;
-            switch (Definition.Silhouette)
+            patternWindupScale = Definition.Silhouette switch
             {
-                case BossSilhouette.SnowKing:
-                    // 冰霜雪王：整体向前猛冲 + 轻微放大（重压感）
-                    body.localScale = new Vector3(1.12f, 1.12f, 1.12f);
-                    break;
-                case BossSilhouette.CedarSentinel:
-                    // 雪松哨兵：横向压低（地面系）
-                    body.localScale = new Vector3(1.18f, 0.90f, 1.10f);
-                    break;
-                case BossSilhouette.AuroraSerpent:
-                    // 极光长蛇：整体快速旋转前摇，用弯曲替代缩放
-                    body.localScale = new Vector3(0.92f, 1.22f, 0.92f);
-                    break;
-                case BossSilhouette.MistGuardian:
-                    // 雾堤守卫：微弱膨胀（假预警同款感）
-                    body.localScale = new Vector3(1.05f, 1.08f, 1.05f);
-                    break;
-                case BossSilhouette.CoralKraken:
-                    // 珊瑚海怪：横向展开（触手展开感）
-                    body.localScale = new Vector3(1.22f, 0.95f, 1.05f);
-                    break;
-                case BossSilhouette.StormEagle:
-                    // 雷云苍鹰：急剧收缩后释放（俯冲前的收翼动作）
-                    body.localScale = new Vector3(0.82f, 1.18f, 0.82f);
-                    break;
+                BossSilhouette.SnowKing => new Vector3(1.12f, 1.12f, 1.12f),
+                BossSilhouette.CedarSentinel => new Vector3(1.18f, 0.90f, 1.10f),
+                BossSilhouette.AuroraSerpent => new Vector3(0.92f, 1.22f, 0.92f),
+                BossSilhouette.MistGuardian => new Vector3(1.05f, 1.08f, 1.05f),
+                BossSilhouette.CoralKraken => new Vector3(1.22f, 0.95f, 1.05f),
+                BossSilhouette.StormEagle => new Vector3(0.82f, 1.18f, 0.82f),
+                _ => Vector3.one * 1.06f,
+            };
+            body.localScale = patternWindupScale;
+        }
+
+        private float ComputeAttackAnimPunch()
+        {
+            if (Phase != BossPhase.Active || Pattern == BossPattern.None || patternTimer <= 0f)
+                return Mathf.Sin(bobPhase * 2.4f) * 0.08f * Definition.AttackStrikePunch;
+
+            var elapsed = GetPatternElapsed();
+            var windup01 = patternDangerDelay > 0.01f
+                ? Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / patternDangerDelay))
+                : 0f;
+            if (IsPatternDangerous)
+                return Definition.AttackStrikePunch * (0.55f + 0.45f * DangerWindowProgress01);
+            if (elapsed < patternDangerDelay)
+                return Definition.AttackStrikePunch * windup01 * 0.85f;
+            return Definition.AttackStrikePunch * 0.2f;
+        }
+
+        private Vector3 ComputeBodyTargetScale()
+        {
+            if (Phase != BossPhase.Active || Pattern == BossPattern.None || patternTimer <= 0f)
+                return Vector3.one;
+
+            if (IsPatternDangerous)
+            {
+                var strike = 1.06f + Definition.AttackStrikePunch * 0.05f;
+                return patternWindupScale * strike;
+            }
+
+            var elapsed = GetPatternElapsed();
+            if (elapsed < patternDangerDelay)
+                return patternWindupScale;
+            return Vector3.Lerp(patternWindupScale, Vector3.one, 0.35f);
+        }
+
+        private void SpawnDeceptiveDecoyTelegraphsIfNeeded()
+        {
+            if (Definition.Archetype != BossArchetype.Deceptive) return;
+            if (Pattern == BossPattern.Vulnerable) return;
+
+            var decoyCount = Random.Range(1, 3);
+            var lanes = new[] { -1, 0, 1 };
+            Shuffle(lanes);
+            for (var k = 0; k < decoyCount; k++)
+            {
+                var lx = lanes[k] * laneWidth;
+                var alreadyReal = false;
+                foreach (var t in telegraphs)
+                {
+                    if (t.IsDecoy || t.Go == null) continue;
+                    if (Mathf.Abs(t.Go.transform.position.x - lx) < 0.2f)
+                    {
+                        alreadyReal = true;
+                        break;
+                    }
+                }
+                if (alreadyReal) continue;
+                CreateTelegraph(lx, PatternTelegraphLifetime(0.08f), 1.25f,
+                    new Color(0.55f, 0.62f, 0.7f, 0.38f), isDecoy: true);
             }
         }
 
@@ -616,12 +736,10 @@ namespace PenguinRun
 
         private float PatternTelegraphLifetime(float bonus = 0f)
         {
-            // 预警圈应该持续到伤害窗口结束，给玩家完整信息
-            // 改进：延长预警时间，确保玩家能看到完整的攻击预警
-            var minTelegraphTime = 0.6f; // 最短预警时间（秒）
+            var minTelegraphTime = 0.6f;
             var byRatio = patternDuration * Mathf.Clamp01(telegraphLifetimeRatio + bonus);
-            var byDanger = patternDangerDelay + patternActiveWindow + 0.15f; // 持续到伤害窗口结束后再留一点缓冲
-            return Mathf.Max(minTelegraphTime, Mathf.Min(byRatio, byDanger));
+            var throughDanger = patternDangerDelay + patternActiveWindow + 0.25f;
+            return Mathf.Max(minTelegraphTime, throughDanger, byRatio * 0.95f);
         }
 
         private float ComputePatternDangerDelay(float duration)
@@ -644,8 +762,7 @@ namespace PenguinRun
             var adjustedRatio = Mathf.Clamp(dangerWindowRatio * 0.85f, 0.28f, 0.72f);
             var baseDelay = duration * (1f - adjustedRatio) * archetypeDelayMul;
 
-            // 确保最少有 0.4s 的反应时间
-            return Mathf.Clamp(baseDelay, 0.4f, duration * 0.75f);
+            return Mathf.Clamp(baseDelay, minPatternDangerDelay, duration * 0.75f);
         }
 
         private float ComputePatternActiveWindow(float duration)
@@ -803,10 +920,12 @@ namespace PenguinRun
 
             var idleL = Mathf.Sin(bobPhase * 2.2f) * 22f - 18f;
             var idleR = -Mathf.Sin(bobPhase * 2.2f) * 22f + 18f;
-            var elapsed = Mathf.Max(0f, patternDuration - Mathf.Clamp(patternTimer, 0f, patternDuration));
+            var elapsed = GetPatternElapsed();
             var windupSpan = Mathf.Max(0.12f, patternDangerDelay);
             var windup = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / windupSpan));
-            var strike = IsPatternDangerous ? 1f : 0f;
+            var strike = AttackPhase == BossAttackPhase.Strike
+                ? 0.55f + DangerWindowProgress01 * 0.45f
+                : AttackPhase == BossAttackPhase.Recovery ? 0.25f : 0f;
             var dangerSnap = strike * (0.5f + Mathf.Sin(Time.time * 26f * styleTempo) * 0.5f);
 
             float attackL = 0f;
@@ -903,7 +1022,9 @@ namespace PenguinRun
             Pattern = BossPattern.None;
             SalvoLaneX.Clear();
             ClearTelegraphs();
-            ClearAttackFx();
+            patternVfxPlayer.End();
+            PatternStrikeCameraShakeAmp = 0f;
+            PatternStrikeCameraShakeDuration = 0f;
         }
 
         private void EnterVulnerable()
@@ -912,9 +1033,8 @@ namespace PenguinRun
             Pattern = BossPattern.Vulnerable;
             vulnerableTimer = BossSystem.VulnerableSeconds;
             breakReactionTimer = BreakReactionDuration;
-            ClearAttackFx();
-            // 显示绿色破绽提示（在 boss 自身位置）
-            CreateTelegraph(WorldX, BossSystem.VulnerableSeconds, 2.4f, new Color(0.4f, 1f, 0.55f, 0.85f));
+            patternVfxPlayer.End();
+            CreateTelegraph(WorldX, BossSystem.VulnerableSeconds, 2.4f, new Color(0.4f, 1f, 0.55f, 0.9f));
         }
 
         private void EvaluateReactionOffsets(out Vector3 positionOffset, out Vector3 rotationOffset)
@@ -1109,6 +1229,9 @@ namespace PenguinRun
             mainRenderer = torso.GetComponent<Renderer>();
             tintRenderers.Add(mainRenderer);
             AddPrimChild(root, "MistCore", PrimitiveType.Sphere, new Vector3(0f, 1.05f, -0.15f), Vector3.one * 0.65f, new Color(def.GlowColor.r, def.GlowColor.g, def.GlowColor.b, 0.55f), true);
+            var headGo = new GameObject("Head");
+            headGo.transform.SetParent(root, false);
+            headGo.transform.localPosition = new Vector3(0f, 1.05f, -0.15f);
             // 雾气环
             for (var i = 0; i < 4; i++)
             {
@@ -1140,6 +1263,10 @@ namespace PenguinRun
             mainRenderer = torso.GetComponent<Renderer>();
             tintRenderers.Add(mainRenderer);
             AddPrimChild(root, "CoralCrown", PrimitiveType.Cylinder, new Vector3(0f, 2.1f, 0f), new Vector3(1.7f, 0.16f, 1.7f), new Color(1f, 0.78f, 0.5f, 0.45f), true);
+
+            var headGo = new GameObject("Head");
+            headGo.transform.SetParent(root, false);
+            headGo.transform.localPosition = new Vector3(0f, 1.55f, -0.85f);
 
             // 大眼睛
             AddPrimChild(root, "BigEyeL", PrimitiveType.Sphere, new Vector3(-0.55f, 1.4f, -0.95f), Vector3.one * 0.42f, new Color(1f, 0.95f, 0.5f));
@@ -1190,7 +1317,7 @@ namespace PenguinRun
 
         // ── 投射物 / 危险区指示器 ─────────────────────────────
 
-        private void SpawnProjectile(float worldX, float lifetime)
+        private void SpawnProjectile(float worldX, float flightTime)
         {
             var bossPos = Root.transform.position;
             var go = AddPrim("Projectile", PrimitiveType.Sphere,
@@ -1200,27 +1327,32 @@ namespace PenguinRun
             go.transform.position = new Vector3(bossPos.x, bossPos.y + 1.6f, bossPos.z);
 
             var anim = go.AddComponent<BossProjectileAnim>();
-            anim.Init(go.transform, new Vector3(worldX, 0f, 0f), lifetime);
+            anim.Init(go.transform, worldX, flightTime, BossSystem.PlayerTelegraphZ,
+                TelegraphSurfaceY(BossSystem.PlayerTelegraphZ) + 0.1f);
+            anim.SetImpactCallback(lx => patternVfxPlayer.OnSalvoProjectileImpact(lx));
             projectileObjects.Add(go);
         }
 
-        private void CreateTelegraph(float worldX, float lifetime, float radius, Color color)
+        private void CreateTelegraph(float worldX, float lifetime, float radius, Color color,
+            bool isDecoy = false, bool flatRing = false)
         {
             var bossPos = Root.transform.position;
-            var go = AddPrim("Telegraph", PrimitiveType.Cylinder,
-                new Vector3(0f, 0.05f, 0f),
-                new Vector3(radius, 0.05f, radius),
+            var cylHeight = flatRing ? 0.14f : 0.16f;
+            var go = AddPrim(isDecoy ? "TelegraphDecoy" : "Telegraph", PrimitiveType.Cylinder,
+                new Vector3(0f, cylHeight * 0.5f, 0f),
+                new Vector3(radius, cylHeight, radius),
                 color, true);
             go.transform.SetParent(Root.transform.parent, false);
-            // 危险区显示在 boss 与玩家之间靠玩家一侧
-            go.transform.position = new Vector3(worldX, bossPos.y + 0.06f, bossPos.z * 0.4f);
+            var trackY = TelegraphSurfaceY(BossSystem.PlayerTelegraphZ) + 0.14f;
+            go.transform.position = new Vector3(worldX, trackY, BossSystem.PlayerTelegraphZ);
             telegraphs.Add(new TelegraphMarker
             {
                 Go = go,
                 Lifetime = lifetime,
                 MaxLifetime = lifetime,
-                BaseScale = new Vector3(radius, 0.05f, radius),
+                BaseScale = new Vector3(radius, cylHeight, radius),
                 WarnColor = color,
+                IsDecoy = isDecoy,
             });
         }
 
@@ -1257,15 +1389,33 @@ namespace PenguinRun
                     continue;
                 }
 
+                var telegraphPos = t.Go.transform.position;
+                telegraphPos.y = TelegraphSurfaceY(BossSystem.PlayerTelegraphZ) + 0.14f;
+                t.Go.transform.position = telegraphPos;
+
                 var rend = t.Go.GetComponent<Renderer>();
-                if (dangerPulse)
+                if (t.IsDecoy)
+                {
+                    var fadeStart = patternDangerDelay - 0.2f;
+                    var elapsed = GetPatternElapsed();
+                    var alphaMul = elapsed >= fadeStart ? Mathf.Clamp01(1f - (elapsed - fadeStart) / 0.25f) : 1f;
+                    var pulse = 1f + Mathf.Sin(Time.time * 18f) * 0.1f;
+                    t.Go.transform.localScale = t.BaseScale * pulse;
+                    if (rend != null)
+                    {
+                        var c = t.WarnColor;
+                        c.a *= alphaMul * 0.65f;
+                        RunnerVisuals.SetColor(rend.sharedMaterial, c);
+                    }
+                }
+                else if (dangerPulse)
                 {
                     var pulse = 1f + Mathf.Sin(Time.time * 44f) * 0.32f;
                     t.Go.transform.localScale = t.BaseScale * pulse;
                     if (rend != null)
                     {
-                        var red = new Color(1f, 0.08f, 0.08f, 0.85f);
-                        RunnerVisuals.SetColor(rend.material, red);
+                        var red = new Color(1f, 0.08f, 0.08f, 0.9f);
+                        RunnerVisuals.SetColor(rend.sharedMaterial, red);
                     }
                 }
                 else
@@ -1274,7 +1424,9 @@ namespace PenguinRun
                     t.Go.transform.localScale = t.BaseScale * pulse;
                     if (rend != null)
                     {
-                        RunnerVisuals.SetColor(rend.material, t.WarnColor);
+                        var warn = t.WarnColor;
+                        warn.a = Mathf.Max(warn.a, 0.78f);
+                        RunnerVisuals.SetColor(rend.sharedMaterial, warn);
                     }
                 }
 
@@ -1293,351 +1445,6 @@ namespace PenguinRun
             }
         }
 
-        private void CreateSweepSlashFx(int safeLaneIdx)
-        {
-            var color = new Color(Definition.GlowColor.r, Definition.GlowColor.g, Definition.GlowColor.b, 0.46f);
-            var slashL = AddPrim("SweepSlashL", PrimitiveType.Cube,
-                new Vector3(-0.85f, 0.72f, -0.55f),
-                new Vector3(0.2f, 0.08f, 1.2f),
-                color, true);
-            slashL.transform.SetParent(Root.transform, false);
-            attackFxObjects.Add(slashL);
-
-            var slashR = AddPrim("SweepSlashR", PrimitiveType.Cube,
-                new Vector3(0.85f, 0.72f, -0.55f),
-                new Vector3(0.2f, 0.08f, 1.2f),
-                color, true);
-            slashR.transform.SetParent(Root.transform, false);
-            attackFxObjects.Add(slashR);
-
-            var scene = FxSceneParent;
-            var bossPos = Root.transform.position;
-            var trackZ = bossPos.z - 7.5f;
-            var stripY = bossPos.y + 0.09f;
-            var warn = new Color(1f, 0.38f, 0.15f, 0.62f);
-            for (var lane = -1; lane <= 1; lane++)
-            {
-                if (lane == safeLaneIdx) continue;
-                var laneX = lane * laneWidth;
-                var strip = AddPrim("TrackFx_SweepStrip", PrimitiveType.Cube,
-                    Vector3.zero,
-                    new Vector3(laneWidth * 0.95f, 0.14f, 3.6f),
-                    warn, true);
-                strip.transform.SetParent(scene, false);
-                strip.transform.position = new Vector3(laneX, stripY, trackZ);
-                strip.transform.rotation = Quaternion.identity;
-                RegisterWorldFx(strip);
-            }
-        }
-
-        private void CreateDiveBurstFx(int laneIdx)
-        {
-            var bossPos = Root.transform.position;
-            var scene = FxSceneParent;
-            var laneX = laneIdx * laneWidth;
-            var targetZ = bossPos.z - 8f;
-            var gy = bossPos.y + 0.07f;
-
-            var inner = AddPrim("TrackFx_DiveInner", PrimitiveType.Cylinder,
-                Vector3.zero,
-                new Vector3(0.85f, 0.06f, 0.85f),
-                new Color(1f, 0.45f, 0.18f, 0.58f), true);
-            inner.transform.SetParent(scene, false);
-            inner.transform.position = new Vector3(laneX, gy, targetZ);
-            RegisterWorldFx(inner);
-
-            var outer = AddPrim("TrackFx_DiveOuter", PrimitiveType.Cylinder,
-                Vector3.zero,
-                new Vector3(1.35f, 0.045f, 1.35f),
-                new Color(1f, 0.22f, 0.08f, 0.45f), true);
-            outer.transform.SetParent(scene, false);
-            outer.transform.position = new Vector3(laneX, gy + 0.02f, targetZ);
-            RegisterWorldFx(outer);
-
-            var cone = AddPrim("DiveBurstCone", PrimitiveType.Capsule,
-                new Vector3(0f, 1.35f, -0.35f),
-                new Vector3(0.28f, 1.1f, 0.28f),
-                new Color(Definition.GlowColor.r, Definition.GlowColor.g, Definition.GlowColor.b, 0.42f), true);
-            cone.transform.SetParent(Root.transform, false);
-            cone.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            attackFxObjects.Add(cone);
-        }
-
-        private void CreateChargeTrailFx()
-        {
-            var bossPos = Root.transform.position;
-            var scene = FxSceneParent;
-            var barZ = bossPos.z - 6f;
-            var barY = bossPos.y + 0.08f;
-
-            var bar = AddPrim("TrackFx_ChargeWall", PrimitiveType.Cube,
-                Vector3.zero,
-                new Vector3(laneWidth * 3.35f, 0.16f, 1.65f),
-                new Color(Definition.GlowColor.r, Definition.GlowColor.g * 0.85f, Definition.GlowColor.b, 0.48f), true);
-            bar.transform.SetParent(scene, false);
-            bar.transform.position = new Vector3(0f, barY, barZ);
-            bar.transform.rotation = Quaternion.identity;
-            RegisterWorldFx(bar);
-
-            for (var i = 0; i < 4; i++)
-            {
-                var az = barZ + 0.35f + i * 0.42f;
-                var arrow = AddPrim($"TrackFx_ChargeArrow{i}", PrimitiveType.Cube,
-                    Vector3.zero,
-                    new Vector3(laneWidth * 2.4f - i * 0.35f, 0.1f, 0.22f),
-                    new Color(1f, 0.85f, 0.35f, 0.55f), true);
-                arrow.transform.SetParent(scene, false);
-                arrow.transform.position = new Vector3(0f, barY + 0.12f + i * 0.05f, az);
-                arrow.transform.rotation = Quaternion.identity;
-                RegisterWorldFx(arrow);
-            }
-
-            for (var i = 0; i < 3; i++)
-            {
-                var laneX = (i - 1) * laneWidth;
-                var trail = AddPrim($"ChargeTrailBoss{i}", PrimitiveType.Cylinder,
-                    new Vector3(laneX, 0.06f, -1.2f),
-                    new Vector3(0.55f, 0.035f, 0.55f),
-                    new Color(Definition.GlowColor.r, Definition.GlowColor.g, Definition.GlowColor.b, 0.36f), true);
-                trail.transform.SetParent(Root.transform, false);
-                attackFxObjects.Add(trail);
-            }
-        }
-
-        private void CreateCenterBeamFx()
-        {
-            var bossPos = Root.transform.position;
-            var scene = FxSceneParent;
-            var beamLen = 11f;
-            var midZ = bossPos.z - beamLen * 0.48f;
-
-            var beam = AddPrim("TrackFx_CenterBeam", PrimitiveType.Cylinder,
-                Vector3.zero,
-                new Vector3(0.42f, beamLen * 0.5f, 0.42f),
-                new Color(Definition.GlowColor.r, Mathf.Clamp01(Definition.GlowColor.g * 0.85f), 1f, 0.46f), true);
-            beam.transform.SetParent(scene, false);
-            beam.transform.position = new Vector3(0f, bossPos.y + 1.35f, midZ);
-            beam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            RegisterWorldFx(beam);
-
-            var strip = AddPrim("TrackFx_BeamLane", PrimitiveType.Cube,
-                Vector3.zero,
-                new Vector3(laneWidth * 0.92f, 0.12f, beamLen * 0.72f),
-                new Color(1f, 0.25f, 0.72f, 0.52f), true);
-            strip.transform.SetParent(scene, false);
-            strip.transform.position = new Vector3(0f, bossPos.y + 0.09f, bossPos.z - beamLen * 0.42f);
-            RegisterWorldFx(strip);
-
-            var core = AddPrim("BeamCoreFx", PrimitiveType.Sphere,
-                new Vector3(0f, 1.35f, -0.15f),
-                Vector3.one * 0.38f,
-                new Color(1f, 0.55f, 0.9f, 0.55f), true);
-            core.transform.SetParent(Root.transform, false);
-            attackFxObjects.Add(core);
-        }
-
-        private void CreateQuakePulseFx()
-        {
-            var bossPos = Root.transform.position;
-            var scene = FxSceneParent;
-            var qz = bossPos.z - 5.2f;
-            var qy = bossPos.y + 0.06f;
-            var quakeCol = new Color(1f, 0.72f, 0.22f, 0.5f);
-
-            for (var lane = -1; lane <= 1; lane++)
-            {
-                var laneX = lane * laneWidth;
-                var ring = AddPrim($"TrackFx_QuakeRing_{lane}", PrimitiveType.Cylinder,
-                    Vector3.zero,
-                    new Vector3(1.15f, 0.055f, 1.15f),
-                    quakeCol, true);
-                ring.transform.SetParent(scene, false);
-                ring.transform.position = new Vector3(laneX, qy, qz + lane * 0.12f);
-                RegisterWorldFx(ring);
-            }
-
-            var ringBossA = AddPrim("QuakeRingA", PrimitiveType.Cylinder,
-                new Vector3(0f, 0.06f, 0f),
-                new Vector3(1.6f, 0.035f, 1.6f),
-                new Color(1f, 0.8f, 0.28f, 0.42f), true);
-            ringBossA.transform.SetParent(Root.transform, false);
-            attackFxObjects.Add(ringBossA);
-        }
-
-        private void CreateSalvoGroundImpactMarkers()
-        {
-            var scene = FxSceneParent;
-            var bossPos = Root.transform.position;
-            var z = bossPos.z - 7f;
-            var y = bossPos.y + 0.055f;
-            var c = new Color(1f, 0.62f, 0.22f, 0.58f);
-            foreach (var lx in SalvoLaneX)
-            {
-                var dot = AddPrim("TrackFx_SalvoImpact", PrimitiveType.Cylinder,
-                    Vector3.zero,
-                    new Vector3(0.42f, 0.05f, 0.42f),
-                    c, true);
-                dot.transform.SetParent(scene, false);
-                dot.transform.position = new Vector3(lx, y, z);
-                RegisterWorldFx(dot);
-            }
-        }
-
-        private void CreateRangedGlyphFx()
-        {
-            var ring = AddPrim("SalvoGlyphRing", PrimitiveType.Cylinder,
-                new Vector3(0f, 0.3f, 0f),
-                new Vector3(1.5f, 0.03f, 1.5f),
-                new Color(1f, 0.72f, 0.35f, 0.45f), true);
-            ring.transform.SetParent(Root.transform, false);
-            attackFxObjects.Add(ring);
-
-            for (var i = 0; i < 3; i++)
-            {
-                var ang = i * 120f * Mathf.Deg2Rad;
-                var orb = AddPrim($"SalvoOrb{i}", PrimitiveType.Sphere,
-                    new Vector3(Mathf.Cos(ang) * 0.9f, 1.5f, Mathf.Sin(ang) * 0.9f),
-                    Vector3.one * 0.24f,
-                    new Color(1f, 0.78f, 0.4f, 0.72f), true);
-                orb.transform.SetParent(Root.transform, false);
-                attackFxObjects.Add(orb);
-            }
-        }
-
-        private void UpdateAttackFx(float dt)
-        {
-            if (attackFxObjects.Count == 0) return;
-            attackFxTimer = Mathf.Max(0f, attackFxTimer - dt);
-            var life01 = patternDuration > 0.01f ? Mathf.Clamp01(attackFxTimer / patternDuration) : 0f;
-
-            for (var i = attackFxObjects.Count - 1; i >= 0; i--)
-            {
-                var fx = attackFxObjects[i];
-                if (fx == null)
-                {
-                    attackFxObjects.RemoveAt(i);
-                    continue;
-                }
-
-                if (fx.name.StartsWith("TrackFx_", System.StringComparison.Ordinal))
-                {
-                    var wm = fx.GetComponent<BossWorldFxMarker>();
-                    if (wm != null)
-                    {
-                        var pulse = 1f + Mathf.Sin(Time.time * 30f + i * 0.61f) * 0.12f;
-                        fx.transform.localScale = wm.BaseScale * pulse;
-                    }
-                    switch (Pattern)
-                    {
-                        case BossPattern.DiveHigh when fx.name.Contains("DiveOuter"):
-                            fx.transform.Rotate(Vector3.up, 170f * dt, Space.World);
-                            break;
-                        case BossPattern.QuakePulse:
-                            fx.transform.Rotate(Vector3.up, 215f * dt, Space.World);
-                            break;
-                        case BossPattern.CenterBeam:
-                            fx.transform.Rotate(Vector3.up, 95f * dt, Space.World);
-                            break;
-                        case BossPattern.RangedSalvo:
-                            fx.transform.Rotate(Vector3.up, -260f * dt, Space.World);
-                            break;
-                    }
-                }
-                else
-                {
-                    switch (Pattern)
-                    {
-                        case BossPattern.SweepLow:
-                        {
-                            var slashSpeed = Definition.Silhouette == BossSilhouette.SnowKing ? 1.25f : 1f;
-                            var dir = fx.name.Contains("SlashL") ? 1f : -1f;
-                            var sweep = Mathf.Sin(Time.time * 24f * slashSpeed + dir) * 0.42f;
-                            fx.transform.localPosition = new Vector3(dir * (0.72f + sweep), 0.75f + Mathf.Sin(Time.time * 12f) * 0.05f, -0.65f);
-                            fx.transform.localRotation = Quaternion.Euler(0f, 0f, dir * (38f + sweep * 28f));
-                            break;
-                        }
-                        case BossPattern.DiveHigh:
-                        {
-                            if (fx.name.Contains("DiveBurstCone"))
-                            {
-                                var pitch = Mathf.Lerp(90f, 52f, 1f - life01);
-                                fx.transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
-                                fx.transform.localScale = new Vector3(0.28f, 1.05f + (1f - life01) * 0.75f, 0.28f);
-                            }
-                            break;
-                        }
-                        case BossPattern.ChargeAcross:
-                        {
-                            if (fx.name.Contains("ChargeTrailBoss"))
-                            {
-                                var pulse = 0.8f + Mathf.Sin(Time.time * 28f + i * 1.3f) * 0.2f;
-                                var expand = 1f + (1f - life01) * 1.25f;
-                                fx.transform.localScale = new Vector3(0.55f, 0.035f, 0.55f) * (pulse * expand);
-                                fx.transform.localPosition = new Vector3(fx.transform.localPosition.x, 0.06f, -1.4f + (1f - life01) * 0.65f);
-                            }
-                            break;
-                        }
-                        case BossPattern.CenterBeam:
-                        {
-                            var spinMul = Definition.Silhouette == BossSilhouette.StormEagle ? 1.55f : 1f;
-                            if (fx.name.Contains("BeamCoreFx"))
-                            {
-                                fx.transform.Rotate(Vector3.up, 220f * spinMul * dt, Space.Self);
-                                fx.transform.localScale = Vector3.one * (0.32f + Mathf.Sin(Time.time * 18f) * 0.09f);
-                            }
-                            break;
-                        }
-                        case BossPattern.QuakePulse:
-                        {
-                            var quakeMul = Definition.Silhouette == BossSilhouette.CedarSentinel ? 1.35f : 1f;
-                            if (fx.name.Contains("QuakeRingA"))
-                            {
-                                var expand = 1f + (1f - life01) * 1.7f;
-                                fx.transform.localScale = new Vector3(1.6f, 0.035f, 1.6f) * expand;
-                                fx.transform.Rotate(Vector3.up, 180f * quakeMul * dt, Space.Self);
-                            }
-                            break;
-                        }
-                        case BossPattern.RangedSalvo:
-                        {
-                            var orbitMul = Definition.Silhouette == BossSilhouette.AuroraSerpent ? 1.45f : 1f;
-                            if (fx.name.Contains("GlyphRing"))
-                            {
-                                fx.transform.Rotate(Vector3.up, 180f * orbitMul * dt, Space.Self);
-                                var pulse = 1f + Mathf.Sin(Time.time * 16f) * 0.1f;
-                                fx.transform.localScale = new Vector3(1.5f, 0.03f, 1.5f) * pulse;
-                            }
-                            else if (fx.name.Contains("SalvoOrb"))
-                            {
-                                var idx = i;
-                                var ang = Time.time * (2.6f * orbitMul) + idx * 2.1f;
-                                fx.transform.localPosition = new Vector3(Mathf.Cos(ang) * 0.9f, 1.45f + Mathf.Sin(Time.time * 5f + idx) * 0.08f, Mathf.Sin(ang) * 0.9f);
-                            }
-                            break;
-                        }
-                    }
-                }
-
-                var r = fx.GetComponent<Renderer>();
-                if (r != null)
-                {
-                    var c = RunnerVisuals.GetColor(r.material);
-                    c.a = Mathf.Clamp01(c.a) * Mathf.Lerp(0.25f, 1f, life01);
-                    RunnerVisuals.SetColor(r.material, c);
-                }
-            }
-        }
-
-        private void ClearAttackFx()
-        {
-            for (var i = attackFxObjects.Count - 1; i >= 0; i--)
-            {
-                if (attackFxObjects[i] != null) Object.Destroy(attackFxObjects[i]);
-            }
-            attackFxObjects.Clear();
-            attackFxTimer = 0f;
-        }
-
         private void UpdateHealthCrystals()
         {
             for (var i = 0; i < healthCrystals.Length; i++)
@@ -1650,8 +1457,9 @@ namespace PenguinRun
                     var c = alive
                         ? Definition.GlowColor
                         : new Color(0.25f, 0.28f, 0.32f, 0.55f);
-                    var current = RunnerVisuals.GetColor(renderer.material);
-                    RunnerVisuals.SetColor(renderer.material, Color.Lerp(current, c, 0.2f));
+                    var mat = renderer.sharedMaterial;
+                    var current = RunnerVisuals.GetColor(mat);
+                    RunnerVisuals.SetColor(mat, Color.Lerp(current, c, 0.2f));
                 }
                 if (alive)
                 {
@@ -1694,7 +1502,7 @@ namespace PenguinRun
                 {
                     target = baseColor;
                 }
-                RunnerVisuals.SetColor(rend.material, target);
+                RunnerVisuals.SetColor(rend.sharedMaterial, target);
             }
         }
 
@@ -1728,6 +1536,7 @@ namespace PenguinRun
     internal sealed class BossWorldFxMarker : MonoBehaviour
     {
         public Vector3 BaseScale = Vector3.one;
+        public float SurfaceYOffset = 0.09f;
     }
 
     /// <summary>
@@ -1736,34 +1545,61 @@ namespace PenguinRun
     internal sealed class BossProjectileAnim : MonoBehaviour
     {
         private Transform tr;
-        private Vector3 targetXZ;
-        private float life;
-        private float maxLife;
+        private float targetX;
+        private float groundY;
+        private float groundZ;
+        private float flightTime;
+        private float elapsed;
         private Vector3 startPos;
+        private Renderer rend;
+        private System.Action<float> onImpact;
+        private bool impactFired;
 
-        public void Init(Transform t, Vector3 target, float lifetime)
+        public void Init(Transform t, float worldX, float impactAfterSeconds, float trackZ, float trackSurfaceY)
         {
             tr = t;
-            targetXZ = target;
-            maxLife = Mathf.Max(0.4f, lifetime);
-            life = maxLife;
+            targetX = worldX;
+            groundZ = trackZ;
+            groundY = trackSurfaceY;
+            flightTime = Mathf.Max(0.35f, impactAfterSeconds);
+            elapsed = 0f;
             startPos = tr.position;
+            rend = tr.GetComponent<Renderer>();
+            impactFired = false;
         }
+
+        public void SetImpactCallback(System.Action<float> callback) => onImpact = callback;
 
         private void Update()
         {
             if (tr == null) return;
-            life -= Time.deltaTime;
-            var t = 1f - Mathf.Clamp01(life / maxLife);
-
-            // 抛物线：水平 lerp，垂直 sin 弧度
-            var pos = Vector3.Lerp(startPos, new Vector3(targetXZ.x, startPos.y - 1.5f, startPos.z * (1f - t) - 4f * t), t);
-            pos.y = startPos.y * (1f - t) + Mathf.Sin(t * Mathf.PI) * 1.5f;
-            tr.position = pos;
+            elapsed += Time.deltaTime;
+            var t = Mathf.Clamp01(elapsed / flightTime);
+            var end = new Vector3(targetX, groundY + 0.35f, groundZ);
+            var midY = Mathf.Max(startPos.y, end.y) + 2.2f;
+            var a = Vector3.Lerp(startPos, new Vector3(targetX, midY, (startPos.z + groundZ) * 0.5f), t);
+            var b = Vector3.Lerp(new Vector3(targetX, midY, (startPos.z + groundZ) * 0.5f), end, t);
+            tr.position = t < 0.5f ? a : b;
             tr.Rotate(Vector3.up, 240f * Time.deltaTime);
             tr.Rotate(Vector3.right, 180f * Time.deltaTime);
 
-            if (life <= 0f) Destroy(gameObject);
+            if (t >= 0.98f)
+            {
+                if (!impactFired)
+                {
+                    impactFired = true;
+                    onImpact?.Invoke(targetX);
+                }
+
+                if (rend != null)
+                {
+                    var pulse = 1f + Mathf.Sin(Time.time * 48f) * 0.25f;
+                    tr.localScale = Vector3.one * 0.55f * pulse;
+                }
+            }
+
+            if (elapsed >= flightTime + 0.15f)
+                Destroy(gameObject);
         }
     }
 }

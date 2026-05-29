@@ -177,6 +177,77 @@ namespace PenguinRun
 
         public void PlayBossDefeat() => Play("boss_defeat", 0.9f, 1f);
 
+        public void PlayBossWindup() => Play("boss_windup", 0.48f, 0.92f);
+
+        public void PlayBossPatternStrike(BossPattern pattern, string sfxId = null)
+        {
+            var clipName = sfxId;
+            if (string.IsNullOrEmpty(clipName))
+            {
+                clipName = pattern switch
+                {
+                    BossPattern.SweepLow => "shield_bounce",
+                    BossPattern.DiveHigh => "boss_land",
+                    BossPattern.ChargeAcross => "crash",
+                    BossPattern.RangedSalvo => "ice_crack",
+                    BossPattern.CenterBeam => "boss_shield_break",
+                    BossPattern.QuakePulse => "boss_windup",
+                    _ => "shield_bounce",
+                };
+            }
+
+            ResolveBossStrikePlayback(clipName, out var vol, out var pitch);
+
+            if (LoadClip(clipName) != null)
+            {
+                Play(clipName, vol, pitch);
+            }
+            else
+            {
+                Play("ice_crack", vol * 0.85f, pitch);
+            }
+
+            if (clipName == "boss_windup" && LoadClip("crash") != null)
+            {
+                Play("crash", vol * 0.6f, 0.88f);
+            }
+        }
+
+        private static void ResolveBossStrikePlayback(string clipName, out float vol, out float pitch)
+        {
+            switch (clipName)
+            {
+                case "shield_bounce":
+                    vol = 0.78f;
+                    pitch = 0.85f;
+                    break;
+                case "boss_land":
+                    vol = 0.78f;
+                    pitch = 1.10f;
+                    break;
+                case "crash":
+                    vol = 0.78f;
+                    pitch = 0.92f;
+                    break;
+                case "ice_crack":
+                    vol = 0.62f;
+                    pitch = 1.15f;
+                    break;
+                case "boss_shield_break":
+                    vol = 0.78f;
+                    pitch = 1.05f;
+                    break;
+                case "boss_windup":
+                    vol = 0.78f;
+                    pitch = 0.78f;
+                    break;
+                default:
+                    vol = 0.78f;
+                    pitch = 1f;
+                    break;
+            }
+        }
+
         public void PlayPerfectDodge() => Play("score_star", 0.65f, 1.25f);
 
         public void PlayPause() => Play("ui_select", 0.55f, 0.85f);

@@ -2,6 +2,9 @@ using System.Collections.Generic;
 using PenguinRun.Game;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+#if DOTWEEN
+using DG.Tweening;
+#endif
 
 namespace PenguinRun
 {
@@ -27,13 +30,17 @@ namespace PenguinRun
         private float cameraYawSmoothed;
         private float cameraYawVel;
         private RunnerHud hud;
+        private ParticleEffectPool particlePool;
+        private WorldEventScheduler worldEvents;
         private bool exiting;
+        private bool warnedGameMissing;
         private RunnerMapTheme currentTheme;
         private RunnerMapTheme pendingTheme;
         private float nextThemeSwitchTime;
         private bool themeTransitionActive;
         private bool themeAppliedInTransition;
         private float themeTransitionTimer;
+        private GUIStyle themeTransitionLabelStyle;
 
         // ── Boss 战镜头特效 ──────────────────────────────────
         private float cameraShakeTimer = 0f;
@@ -41,13 +48,81 @@ namespace PenguinRun
         private float defeatFreezeTimer = 0f;
         private bool wasBossDefeated = false;
 
+        // ── 屏幕闪屏特效 ───────────────────────────────────────
+        private float screenFlashTimer;
+        private float screenFlashDuration;
+        private Color screenFlashColor = Color.clear;
+        private Color screenFlashCurrent = Color.clear;
+        private bool bossSpawnFlashPending;
+        private float bossSpawnFlashIntensity;
+
+        // ── 开局倒计时 ──────────────────────────────────────────
+        private enum EntranceState { None, Countdown, GoText }
+        private EntranceState entranceState;
+        private float entranceTimer;
+        private int countdownNumber; // 3, 2, 1
+        private bool entranceComplete;
+
+        // ── 死亡序列 ────────────────────────────────────────────
+        private enum DeathState { None, Freeze, FadeRed, ShowResult, WaitingTap }
+        private DeathState deathState;
+        private float deathStateTimer;
+        private bool deathSequenceActive;
+        private GUIStyle deathScoreStyle;
+        private GUIStyle deathTitleStyle;
+
         private const float ThemeSwitchIntervalSeconds = 52f;
         private const float ThemeTransitionFadeOutSeconds = 0.45f;
         private const float ThemeTransitionHoldSeconds = 0.22f;
         private const float ThemeTransitionFadeInSeconds = 0.68f;
 
+        private const float RunnerHudReferenceHeight = 1080f;
+
+        // Playable view corridor — scenery must not block the lane sightline near camera/player.
+        private const float RoadHalfWidth = 5.1f;
+        private const float SceneryMinAbsX = 8.5f;
+        private const float ViewCorridorHalfWidth = 5.2f;
+        private const float ViewCorridorNearZBehindCamera = 0.5f;
+        private const float ViewCorridorNearZAheadPlayer = 26f;
+        private const float ViewCorridorMaxY = 10.5f;
+        private const float ViewCorridorFadedAlpha = 0.08f;
+
+        private readonly Dictionary<GameObject, Renderer[]> sceneryPropRenderers = new();
+        private readonly Dictionary<int, float> sceneryRendererBaseAlpha = new();
+        private readonly Dictionary<int, bool> sceneryRendererBaseEnabled = new();
+
+        /// <summary>IMGUI HUD：按屏幕高度对齐到 1080p 基准，供边缘触控阈值使用。</summary>
+        private static float RunnerHudLayoutScale => Mathf.Max(Screen.height / RunnerHudReferenceHeight, 1e-4f);
+
+        private static RunnerHudLayout ApplyRunnerHudGuiMatrix()
+        {
+            var safe = Screen.safeArea;
+            var s = RunnerHudLayoutScale;
+            var guiTop = Screen.height - safe.y - safe.height;
+            GUI.matrix = Matrix4x4.TRS(new Vector3(safe.x, guiTop, 0f), Quaternion.identity, new Vector3(s, s, 1f));
+            return new RunnerHudLayout(safe.width / s, safe.height / s);
+        }
+
+        private void ApplyRunnerCameraViewport169()
+        {
+            if (runnerCamera == null) return;
+
+            var windowW = Screen.width;
+            var windowH = Screen.height;
+            if (windowW <= 0 || windowH <= 0) return;
+
+            runnerCamera.pixelRect = new Rect(0f, 0f, windowW, windowH);
+        }
+
         private void Awake()
         {
+            // 确保场景过渡管理器存在（可能已在 MainMenu 创建）
+            if (SceneTransitionManager.Instance == null)
+            {
+                var tm = new GameObject("SceneTransitionManager");
+                tm.AddComponent<SceneTransitionManager>();
+            }
+
             tuning = RunnerTuning.FromConfig(tuningConfig);
             ConfigureRuntimePerformance(true);
             config = RunnerSessionConfig.Snapshot();
@@ -63,9 +138,12 @@ namespace PenguinRun
             runnerAudio.Initialize(config.Daily, config.SfxEnabled, config.BgmEnabled, config.RunBgmTrack, config.AmbienceTrack, config.SfxStyle);
             hud = new RunnerHud();
             BuildScene();
+            particlePool = new ParticleEffectPool(transform, tuning.movement.groundY);
+            worldEvents = new WorldEventScheduler();
             ApplyMapThemeVisuals(currentTheme);
-            game = new RunnerGameController(tuning, config, runnerAudio, player.transform, character, transform, PulseHaptic, OnRunFinished);
+            game = new RunnerGameController(tuning, config, runnerAudio, player.transform, character, transform, PulseHaptic, TriggerScreenFlash, OnRunFinished);
             game.ResetRun(false);
+            lastLives = game.World.Lives;
         }
 
         private void OnRunFinished(RunnerRunResult result)
@@ -74,9 +152,10 @@ namespace PenguinRun
             exiting = true;
             var applied = RunOutcomeRouter.Apply(
                 result.Score, result.DistanceMeters, result.Coins, result.SurvivalSeconds, config.Daily,
+                config.Difficulty,
                 result.LastBossSpeedTier, result.LastBossSpeedFishBonus, result.LastBossSpeedScoreBonus);
             RunSession.LastResult = applied;
-            SceneManager.LoadScene("MainMenu");
+            SceneTransitionManager.Instance.TransitionTo("MainMenu");
         }
 
         private void OnApplicationFocus(bool hasFocus)
@@ -91,6 +170,35 @@ namespace PenguinRun
 
         private void Update()
         {
+            if (game == null)
+            {
+                if (Application.isPlaying && !warnedGameMissing)
+                {
+                    warnedGameMissing = true;
+                    Debug.LogWarning(
+                        "PenguinRunnerGame: game controller is null — Awake probably threw before RunnerGameController was created. Check the first error in the Console (often inside BuildScene).");
+                }
+                return;
+            }
+
+            // ── 死亡序列：接管所有输入和模拟 ──────────────────────────
+            if (deathSequenceActive)
+            {
+                TickDeathSequence(Time.deltaTime);
+                return;
+            }
+
+            if (!entranceComplete && (Input.GetKeyDown(KeyCode.Escape) || IsReturnButtonTouch()))
+            {
+                // 倒计时中允许跳过
+                if (entranceState != EntranceState.None)
+                {
+                    entranceComplete = true;
+                    entranceState = EntranceState.None;
+                }
+                return;
+            }
+
             if (Input.GetKeyDown(KeyCode.Escape) || IsReturnButtonTouch())
             {
                 game.FinishRun();
@@ -99,10 +207,18 @@ namespace PenguinRun
 
             if (!game.Running)
             {
-                game.TickIdle(Time.deltaTime);
+                TickEntranceOrIdle(Time.deltaTime);
                 var idleDt = Mathf.Min(Time.deltaTime, 0.05f);
                 UpdateCamera(idleDt);
                 UpdateLaneGuides(idleDt);
+                particlePool.Tick(idleDt, game.World.Distance);
+                return;
+            }
+
+            // ── 检测游戏结束 → 启动死亡序列 ──────────────────────────
+            if (game.GameOver && !deathSequenceActive)
+            {
+                StartDeathSequence();
                 return;
             }
 
@@ -123,6 +239,23 @@ namespace PenguinRun
             {
                 AnimateScenery(dt, effectiveSpeed);
                 game.TickRunningWorld(dt, effectiveSpeed);
+                TickParticleEvents(dt);
+            }
+
+            // 驱动粒子池和世界事件
+            particlePool.Tick(dt, game.World.Distance);
+
+            if (worldEvents.Tick(game.World.Distance))
+            {
+                // 事件触发：显示提示
+                game.FeedbackText = worldEvents.EventDisplayName;
+                game.FeedbackTimer = 2f;
+            }
+
+            // 世界事件粒子
+            if (worldEvents.EventActive)
+            {
+                EmitWorldEventParticles(dt);
             }
 
             // 检测 Boss 被击败，触发特效
@@ -131,9 +264,315 @@ namespace PenguinRun
             TryStartThemeTransition();
         }
 
+        // ── 开局倒计时 / 空闲 ────────────────────────────────────
+        private void TickEntranceOrIdle(float rawDt)
+        {
+            var dt = Mathf.Min(rawDt, 0.05f);
+
+            if (!entranceComplete)
+            {
+                if (entranceState == EntranceState.None)
+                {
+                    entranceState = EntranceState.Countdown;
+                    entranceTimer = 0f;
+                    countdownNumber = 3;
+                }
+
+                entranceTimer += dt;
+                if (entranceState == EntranceState.Countdown)
+                {
+                    // 每 0.7s 倒数一个数字
+                    var step = Mathf.FloorToInt(entranceTimer / 0.7f);
+                    var num = 3 - step;
+                    if (num <= 0)
+                    {
+                        entranceState = EntranceState.GoText;
+                        entranceTimer = 0f;
+                        countdownNumber = 0;
+                    }
+                    else
+                    {
+                        countdownNumber = num;
+                    }
+                }
+                else if (entranceState == EntranceState.GoText)
+                {
+                    if (entranceTimer >= 0.6f)
+                    {
+                        entranceComplete = true;
+                        entranceState = EntranceState.None;
+                        game.ResetRun(true);
+                        game.FeedbackText = "出发！";
+                        game.FeedbackTimer = 0.8f;
+                    }
+                }
+            }
+
+            game.TickIdle(rawDt);
+        }
+
+        // ── 死亡序列 ──────────────────────────────────────────────
+        private void StartDeathSequence()
+        {
+            deathSequenceActive = true;
+            deathState = DeathState.Freeze;
+            deathStateTimer = 0f;
+            TriggerScreenFlash(new Color(0.85f, 0.15f, 0.08f, 0.5f), 0.5f);
+            TriggerCameraShake(0.35f, 0.08f);
+        }
+
+        private void TickDeathSequence(float rawDt)
+        {
+            var dt = Mathf.Min(rawDt, 0.05f);
+            deathStateTimer += dt;
+
+            switch (deathState)
+            {
+                case DeathState.Freeze:
+                    // 冻结 0.4s，角色倒地动画
+                    if (deathStateTimer >= 0.4f)
+                    {
+                        deathState = DeathState.FadeRed;
+                        deathStateTimer = 0f;
+                    }
+                    // 期间驱动角色动画（gameOver 状态）
+                    character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
+                    game.RunnerAudio.UpdateRunState(0f, false, false, false, false);
+                    UpdateCamera(dt);
+                    break;
+
+                case DeathState.FadeRed:
+                    // 红屏渐显 0.6s
+                    var redAlpha = Mathf.Clamp01(deathStateTimer / 0.6f) * 0.55f;
+                    screenFlashColor = new Color(0.75f, 0.08f, 0.02f, redAlpha);
+                    screenFlashCurrent = screenFlashColor;
+                    screenFlashTimer = 0.02f; // 持续渲染
+                    screenFlashDuration = 0.02f;
+
+                    character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
+                    UpdateCamera(dt);
+
+                    if (deathStateTimer >= 0.6f)
+                    {
+                        deathState = DeathState.ShowResult;
+                        deathStateTimer = 0f;
+                    }
+                    break;
+
+                case DeathState.ShowResult:
+                    // 显示结算 1.5s
+                    character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
+                    UpdateCamera(dt);
+
+                    if (deathStateTimer >= 1.5f)
+                    {
+                        deathState = DeathState.WaitingTap;
+                        deathStateTimer = 0f;
+                    }
+                    break;
+
+                case DeathState.WaitingTap:
+                    // 等待点击
+                    character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
+                    UpdateCamera(dt);
+
+                    if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
+                    {
+                        FinishDeathSequence();
+                    }
+                    break;
+            }
+        }
+
+        private void FinishDeathSequence()
+        {
+            deathSequenceActive = false;
+            deathState = DeathState.None;
+
+            if (!exiting)
+            {
+                game.FinishRun();
+            }
+        }
+
+        private void DrawDeathOverlay()
+        {
+            if (!deathSequenceActive) return;
+
+            if (deathState == DeathState.ShowResult || deathState == DeathState.WaitingTap)
+            {
+                // 结算摘要
+                var world = game.World;
+                var cx = Screen.width * 0.5f;
+                var cy = Screen.height * 0.38f;
+
+                if (deathTitleStyle == null)
+                {
+                    deathTitleStyle = new GUIStyle(GUI.skin.label)
+                    {
+                        fontSize = 56,
+                        fontStyle = FontStyle.Bold,
+                        alignment = TextAnchor.MiddleCenter,
+                        normal = { textColor = Color.white },
+                    };
+                    deathScoreStyle = new GUIStyle(GUI.skin.label)
+                    {
+                        fontSize = 36,
+                        alignment = TextAnchor.MiddleCenter,
+                        normal = { textColor = new Color(1f, 0.92f, 0.55f) },
+                    };
+                }
+
+                GUI.Label(new Rect(cx - 200f, cy, 400f, 70f), "游戏结束", deathTitleStyle);
+                GUI.Label(new Rect(cx - 200f, cy + 72f, 400f, 50f), $"得分 {world.Score}", deathScoreStyle);
+                GUI.Label(new Rect(cx - 200f, cy + 122f, 400f, 36f), $"距离 {Mathf.RoundToInt(world.Distance)}m · 鱼干 {world.Coins}", new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = 22,
+                    alignment = TextAnchor.MiddleCenter,
+                    normal = { textColor = new Color(0.8f, 0.9f, 1f) },
+                });
+
+                if (deathState == DeathState.WaitingTap)
+                {
+                    var pulse = Mathf.Sin(Time.time * 3f) * 0.3f + 0.7f;
+                    var tapColor = new Color(1f, 1f, 1f, pulse);
+                    var tapStyle = new GUIStyle(GUI.skin.label)
+                    {
+                        fontSize = 26,
+                        alignment = TextAnchor.MiddleCenter,
+                        normal = { textColor = tapColor },
+                    };
+                    GUI.Label(new Rect(cx - 200f, cy + 190f, 400f, 40f), "点击返回", tapStyle);
+                }
+            }
+
+            // 红屏覆盖
+            if (deathState == DeathState.FadeRed)
+            {
+                var alpha = Mathf.Clamp01(deathStateTimer / 0.6f) * 0.45f;
+                GUI.color = new Color(0.7f, 0.05f, 0.02f, alpha);
+                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+                GUI.color = Color.white;
+            }
+        }
+
+        // ── 粒子事件跟踪状态 ──────────────────────────────────────
+        private int lastCoinCount;
+        private int lastPerfectDodges;
+        private int lastLives;
+        private bool wasGroundedLastFrame = true;
+        private bool wasDodgingLastFrame;
+
+        private void TickParticleEvents(float dt)
+        {
+            var world = game.World;
+            var motor = game.Motor;
+            var playerPos = player.transform.position;
+
+            // 收集金币粒子
+            if (world.Coins > lastCoinCount)
+            {
+                var diff = world.Coins - lastCoinCount;
+                var burstCount = Mathf.Min(diff * 2, 8);
+                particlePool.Emit(playerPos, new Color(1f, 0.9f, 0.3f), burstCount, 1.5f, 0.4f, true);
+                lastCoinCount = world.Coins;
+            }
+            else if (world.Coins < lastCoinCount)
+            {
+                lastCoinCount = world.Coins;
+            }
+
+            // 受伤粒子
+            if (world.Lives < lastLives)
+            {
+                particlePool.EmitBurst(playerPos, new Color(1f, 0.2f, 0.1f), 12, 4f, 0.7f);
+                lastLives = world.Lives;
+            }
+            else if (world.Lives > lastLives)
+            {
+                // 生命恢复粒子
+                particlePool.EmitRing(playerPos, new Color(0.3f, 1f, 0.5f), 10, 1f, 2.5f, 0.5f);
+                lastLives = world.Lives;
+            }
+
+            // 完美闪避粒子
+            if (world.PerfectDodges > lastPerfectDodges)
+            {
+                particlePool.EmitBurst(playerPos, new Color(0.4f, 0.85f, 1f), 8, 3f, 0.6f);
+                lastPerfectDodges = world.PerfectDodges;
+            }
+
+            // 着陆粒子
+            if (motor.Grounded && !wasGroundedLastFrame)
+            {
+                var groundPos = new Vector3(playerPos.x, tuning.movement.groundY + 0.02f, playerPos.z);
+                particlePool.Emit(groundPos, new Color(0.8f, 0.95f, 1f), 5, 1.2f, 0.35f, false);
+            }
+            wasGroundedLastFrame = motor.Grounded;
+
+            // 滑铲火花
+            if (motor.SlideTimer > 0f && !wasDodgingLastFrame)
+            {
+                var slidePos = new Vector3(playerPos.x, tuning.movement.groundY + 0.02f, playerPos.z - 0.5f);
+                particlePool.Emit(slidePos, new Color(0.6f, 0.9f, 1f), 3, 0.8f, 0.3f, false);
+            }
+            wasDodgingLastFrame = motor.SlideTimer > 0f;
+        }
+
+        private float worldEventParticleCooldown;
+
+        private void EmitWorldEventParticles(float dt)
+        {
+            worldEventParticleCooldown -= dt;
+            if (worldEventParticleCooldown > 0f) return;
+
+            var eventType = worldEvents.ActiveEvent;
+            var playerPos = player.transform.position;
+            var spreadX = 6f;
+            var spreadZ = 12f;
+
+            switch (eventType)
+            {
+                case WorldEventScheduler.WorldEventType.MeteorShower:
+                    worldEventParticleCooldown = 0.15f;
+                    // 金色粒子从上方落下
+                    var meteorPos = new Vector3(
+                        playerPos.x + Random.Range(-spreadX, spreadX),
+                        playerPos.y + Random.Range(5f, 10f),
+                        playerPos.z + Random.Range(0f, spreadZ));
+                    particlePool.Emit(meteorPos, new Color(1f, 0.9f, 0.3f), 3, 0.5f, 0.8f, true);
+                    break;
+
+                case WorldEventScheduler.WorldEventType.Blizzard:
+                    worldEventParticleCooldown = 0.08f;
+                    // 白色雪花密集飘落
+                    var snowPos = new Vector3(
+                        playerPos.x + Random.Range(-spreadX, spreadX),
+                        playerPos.y + Random.Range(4f, 9f),
+                        playerPos.z + Random.Range(-4f, spreadZ));
+                    particlePool.Emit(snowPos, new Color(0.9f, 0.95f, 1f), 1, 0.3f, 1.5f, true);
+                    break;
+
+                case WorldEventScheduler.WorldEventType.AuroraBurst:
+                    worldEventParticleCooldown = 0.2f;
+                    // 彩色光点缓慢飘升
+                    var auroraPos = new Vector3(
+                        playerPos.x + Random.Range(-spreadX, spreadX),
+                        playerPos.y + 0.1f,
+                        playerPos.z + Random.Range(-2f, spreadZ));
+                    var auroraColor = Random.value < 0.5f
+                        ? new Color(0.3f, 1f, 0.8f)
+                        : new Color(0.5f, 0.5f, 1f);
+                    particlePool.Emit(auroraPos, auroraColor, 2, 1.5f, 1f, false);
+                    break;
+            }
+        }
+
         /// <summary>检测 Boss 被击败状态并触发镜头特效</summary>
         private void CheckBossDefeatEffects()
         {
+            if (game == null) return;
+
             var bossSystem = game.Boss;
             if (bossSystem == null || bossSystem.CurrentBoss == null) return;
 
@@ -142,34 +581,72 @@ namespace PenguinRun
 
             if (isDefeated && !wasBossDefeated)
             {
-                // Boss 首次被击败
-                defeatFreezeTimer = 0.25f; // 定格0.25秒
-                cameraShakeTimer = 0.5f;   // 震动0.5秒
+                // Boss 首次被击败：定格 + 震动 + 金色闪屏
+                defeatFreezeTimer = 0.25f;
+                cameraShakeTimer = 0.5f;
                 cameraShakeIntensity = 0.15f;
+                TriggerScreenFlash(new Color(1f, 0.85f, 0.2f, 0.45f), 0.55f);
                 wasBossDefeated = true;
+
+                // 金色粒子爆发
+                if (player != null)
+                    particlePool.EmitBurst(player.transform.position, new Color(1f, 0.85f, 0.2f), 30, 6f, 1.2f);
             }
             else if (!isDefeated)
             {
                 wasBossDefeated = false;
             }
 
-            // Boss 危险攻击时轻微震动
-            if (boss.Phase == BossPhase.Active && boss.IsPatternDangerous)
+            // Boss 击发/危险窗口：按招式配置的震屏幅度
+            if (boss.Phase == BossPhase.Active && (boss.IsPatternDangerous || boss.AttackPhase == BossAttackPhase.Strike))
             {
-                cameraShakeTimer = 0.1f;
-                cameraShakeIntensity = 0.05f;
+                var amp = boss.PatternStrikeCameraShakeAmp > 0.001f
+                    ? boss.PatternStrikeCameraShakeAmp
+                    : 0.085f;
+                var dur = boss.PatternStrikeCameraShakeDuration > 0.001f
+                    ? boss.PatternStrikeCameraShakeDuration
+                    : 0.12f;
+                if (boss.Pattern == BossPattern.QuakePulse || boss.Pattern == BossPattern.CenterBeam)
+                {
+                    amp *= 1.12f;
+                }
+
+                cameraShakeTimer = Mathf.Max(cameraShakeTimer, dur);
+                cameraShakeIntensity = Mathf.Max(cameraShakeIntensity, amp);
             }
         }
 
-        /// <summary>触发相机震动（供外部调用）</summary>
+        /// <summary>触发相机震动（供外部调用）。DOTween 可用时优先使用高性能补间。</summary>
         public void TriggerCameraShake(float duration, float intensity)
         {
+#if DOTWEEN
+            if (runnerCamera != null)
+                runnerCamera.transform.DOShakePosition(duration, intensity, 25, 90, false, true);
+#else
             cameraShakeTimer = duration;
             cameraShakeIntensity = intensity;
+#endif
+        }
+
+        /// <summary>触发全屏闪屏特效（Boss 攻击击发 / 玩家受伤 / Boss 击败）。</summary>
+        public void TriggerScreenFlash(Color color, float duration)
+        {
+            screenFlashColor = color;
+            screenFlashDuration = duration;
+            screenFlashTimer = duration;
+            screenFlashCurrent = color;
+        }
+
+        /// <summary>Boss 出场时触发屏幕边缘红光预警。</summary>
+        public void TriggerBossSpawnWarning(float intensity)
+        {
+            bossSpawnFlashPending = true;
+            bossSpawnFlashIntensity = intensity;
         }
 
         public void FinishFromAndroidButton(string _)
         {
+            if (game == null) return;
             game.FinishRun();
         }
 
@@ -185,6 +662,7 @@ namespace PenguinRun
 
         private void ApplyMapThemeVisuals(RunnerMapTheme theme)
         {
+            TrackTerrain.SetThemeProfile(theme);
             switch (theme)
             {
                 case RunnerMapTheme.CedarRuins:
@@ -283,6 +761,7 @@ namespace PenguinRun
             runnerCamera.farClipPlane = 260f; // 增加远裁剪面，让后方跑道显示更远
             runnerCamera.clearFlags = CameraClearFlags.SolidColor;
             runnerCamera.backgroundColor = new Color(0.54f, 0.77f, 0.95f);
+            ApplyRunnerCameraViewport169();
 
             RenderSettings.ambientLight = new Color(0.42f, 0.58f, 0.68f);
             RenderSettings.fog = true;
@@ -297,7 +776,8 @@ namespace PenguinRun
             light.transform.rotation = Quaternion.Euler(48f, -28f, 0f);
 
             player = new GameObject("Penguin Character");
-            character = PenguinCharacter.Create(player.transform);
+            // 使用程序化 Mesh 生成的可爱卡通企鹅，替代 Primitive 拼接版本
+            character = PenguinCharacter.CreateCute(player.transform);
             player.transform.localScale = Vector3.one * Mathf.Clamp(tuning.camera.playerVisualScale, 0.72f, 1f);
             SetPlayerRenderersVisible(player.transform, true);
 
@@ -408,8 +888,8 @@ namespace PenguinRun
             for (var i = 0; i < 8; i++)
             {
                 var z = 10f + i * 15f;
-                AddLampGroup(-6.4f, z);
-                AddLampGroup(6.4f, z + 7.5f);
+                AddLampGroup(-8.8f, z);
+                AddLampGroup(8.8f, z + 7.5f);
                 if (i % 2 == 1)
                 {
                     AddCheckpointGate(z + 4f);
@@ -419,15 +899,15 @@ namespace PenguinRun
                 AddBannerFlag(5.65f, z + 10.2f, i % 2 != 0);
                 AddCrystalCluster(-6.8f - Random.Range(0f, 1.1f), z + Random.Range(1f, 7f));
                 AddCrystalCluster(6.8f + Random.Range(0f, 1.1f), z + Random.Range(1f, 7f));
-                AddSnowBankGroup(-8.4f - Random.Range(0f, 2.4f), z + Random.Range(-3f, 3f));
-                AddSnowBankGroup(8.4f + Random.Range(0f, 2.4f), z + Random.Range(-3f, 3f));
+                AddSnowBankGroup(-9.6f - Random.Range(0f, 2f), z + Random.Range(-3f, 3f));
+                AddSnowBankGroup(9.6f + Random.Range(0f, 2f), z + Random.Range(-3f, 3f));
                 AddThemeSetPiece(theme, z, i);
             }
 
             for (var i = 0; i < 7; i++)
             {
-                AddMountainGroup(-14f - Random.Range(0f, 6f), 22f + i * 17f, Random.Range(2.2f, 4.8f));
-                AddMountainGroup(14f + Random.Range(0f, 6f), 30f + i * 17f, Random.Range(2.2f, 4.8f));
+                AddMountainGroup(-18f - Random.Range(0f, 4f), 36f + i * 20f, Random.Range(1.5f, 2.6f));
+                AddMountainGroup(18f + Random.Range(0f, 4f), 44f + i * 20f, Random.Range(1.5f, 2.6f));
             }
         }
 
@@ -510,14 +990,14 @@ namespace PenguinRun
             for (var i = 0; i < 12; i++)
             {
                 var z = i * 10f - 5f;
-                // 海草群
-                AddSeaweedCluster(-2.5f + Random.Range(-0.8f, 0.8f), z + Random.Range(-2f, 2f));
-                AddSeaweedCluster(2.5f + Random.Range(-0.8f, 0.8f), z + Random.Range(-2f, 2f));
+                // 海草群（远离三车道中心）
+                AddSeaweedCluster(-3.2f + Random.Range(-0.9f, 0.9f), z + Random.Range(-2f, 2f));
+                AddSeaweedCluster(3.2f + Random.Range(-0.9f, 0.9f), z + Random.Range(-2f, 2f));
                 // 贝壳点缀
                 if (Random.value < 0.4f)
-                    AddSeashell(-1.8f + Random.Range(-0.5f, 0.5f), z + Random.Range(-1f, 1f));
+                    AddSeashell(-3.5f + Random.Range(-0.6f, 0.6f), z + Random.Range(-1f, 1f));
                 if (Random.value < 0.4f)
-                    AddSeashell(1.8f + Random.Range(-0.5f, 0.5f), z + Random.Range(-1f, 1f));
+                    AddSeashell(3.5f + Random.Range(-0.6f, 0.6f), z + Random.Range(-1f, 1f));
             }
             // 上升的气泡群
             for (var i = 0; i < 8; i++)
@@ -530,17 +1010,16 @@ namespace PenguinRun
         private void BuildSkyDetails(Color edgeGlow)
         {
             // 天空主题：添加云朵、阳光射线、飞鸟等细节
-            for (var i = 0; i < 15; i++)
+            for (var i = 0; i < 12; i++)
             {
-                var z = i * 8f - 6f;
-                // 浮空云朵
-                AddFloatingCloud(Random.Range(-8f, 8f), z, Random.Range(1f, 3f));
+                var z = 22f + i * 11f;
+                AddFloatingCloud(RandomScenerySideX(), z, Random.Range(0.5f, 0.9f));
             }
-            // 阳光射线
-            for (var i = 0; i < 6; i++)
+            // 阳光射线（仅远场侧线天顶光）
+            for (var i = 0; i < 4; i++)
             {
-                var z = i * 20f + 15f;
-                AddSunlightBeam(Random.Range(-5f, 5f), z);
+                var z = i * 28f + 48f;
+                AddSunlightBeam(RandomScenerySideX(), z);
             }
             // 远处飞鸟剪影
             for (var i = 0; i < 10; i++)
@@ -603,28 +1082,30 @@ namespace PenguinRun
         private void AddFloatingCloud(float x, float z, float scale)
         {
             var group = new GameObject("Floating Cloud");
-            group.transform.position = new Vector3(x, 2f + Random.value * 2f, z);
-            // 云朵主体
-            AddChildPrimitive(group.transform, "Cloud Main", PrimitiveType.Sphere, Vector3.zero, new Vector3(1.2f, 0.6f, 0.8f) * scale, new Color(1f, 1f, 1f, 0.7f), true);
-            AddChildPrimitive(group.transform, "Cloud Puff L", PrimitiveType.Sphere, new Vector3(-0.5f, 0.1f, 0f) * scale, new Vector3(0.7f, 0.5f, 0.6f) * scale, new Color(1f, 1f, 1f, 0.6f), true);
-            AddChildPrimitive(group.transform, "Cloud Puff R", PrimitiveType.Sphere, new Vector3(0.5f, 0.15f, 0.1f) * scale, new Vector3(0.6f, 0.45f, 0.55f) * scale, new Color(1f, 1f, 1f, 0.65f), true);
-            sceneryProps.Add(group);
+            x = ClampScenerySideX(x);
+            var y = 7.5f + Random.value * 2.5f;
+            group.transform.position = new Vector3(x, y, z);
+            AddChildPrimitive(group.transform, "Cloud Main", PrimitiveType.Sphere, Vector3.zero, new Vector3(1.2f, 0.6f, 0.8f) * scale, new Color(1f, 1f, 1f, 0.45f), true);
+            AddChildPrimitive(group.transform, "Cloud Puff L", PrimitiveType.Sphere, new Vector3(-0.42f, 0.1f, 0f) * scale, new Vector3(0.55f, 0.4f, 0.5f) * scale, new Color(1f, 1f, 1f, 0.38f), true);
+            AddChildPrimitive(group.transform, "Cloud Puff R", PrimitiveType.Sphere, new Vector3(0.42f, 0.12f, 0.08f) * scale, new Vector3(0.5f, 0.38f, 0.48f) * scale, new Color(1f, 1f, 1f, 0.4f), true);
+            RegisterSceneryProp(group, x, z, snapToGround: false);
         }
 
         private void AddSunlightBeam(float x, float z)
         {
             var group = new GameObject("Sunlight Beam");
-            group.transform.position = new Vector3(x, 5f, z);
-            AddChildPrimitive(group.transform, "Beam", PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.8f, 5f, 0.8f), new Color(1f, 0.95f, 0.7f, 0.15f), true);
-            group.transform.localRotation = Quaternion.Euler(15f, Random.Range(0f, 360f), 0f);
-            sceneryProps.Add(group);
+            x = ClampScenerySideX(x);
+            group.transform.position = new Vector3(x, 7f + Random.value * 2f, z);
+            AddChildPrimitive(group.transform, "Beam", PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.35f, 2.8f, 0.35f), new Color(1f, 0.95f, 0.7f, 0.08f), true);
+            group.transform.localRotation = Quaternion.Euler(8f, Random.Range(0f, 360f), 0f);
+            RegisterSceneryProp(group, x, z, snapToGround: false);
         }
 
         private void AddBirdSilhouette(float x, float z, float y)
         {
             var bird = RunnerVisuals.CreatePrimitive("Bird", PrimitiveType.Cube, new Vector3(x, y, z), new Vector3(0.25f, 0.05f, 0.08f), new Color(0.3f, 0.35f, 0.45f));
             bird.transform.localRotation = Quaternion.Euler(0f, Random.Range(-30f, 30f), Random.Range(-10f, 10f));
-            sceneryProps.Add(bird);
+            RegisterSceneryProp(bird, x, z, snapToGround: false);
         }
 
         private void AddLampGroup(float x, float z)
@@ -632,12 +1113,12 @@ namespace PenguinRun
             var group = new GameObject("Warm Track Lamp");
             group.transform.position = new Vector3(x, 0f, z);
             var pole = RunnerVisuals.CreatePrimitive("Lamp Pole", PrimitiveType.Cylinder, group.transform.position + new Vector3(0f, 0.65f, 0f), new Vector3(0.08f, 0.65f, 0.08f), new Color(0.12f, 0.24f, 0.32f));
-            var lightBall = RunnerVisuals.CreatePrimitive("Lamp Glow", PrimitiveType.Sphere, group.transform.position + new Vector3(0f, 1.42f, 0f), Vector3.one * 0.34f, new Color(1f, 0.82f, 0.45f, 0.78f), true);
-            var lightHalo = RunnerVisuals.CreatePrimitive("Lamp Soft Halo", PrimitiveType.Sphere, group.transform.position + new Vector3(0f, 1.42f, 0f), Vector3.one * 0.72f, new Color(1f, 0.7f, 0.32f, 0.14f), true);
+            var lightBall = RunnerVisuals.CreatePrimitive("Lamp Glow", PrimitiveType.Sphere, group.transform.position + new Vector3(0f, 1.42f, 0f), Vector3.one * 0.28f, new Color(1f, 0.82f, 0.45f, 0.42f), true);
+            var lightHalo = RunnerVisuals.CreatePrimitive("Lamp Soft Halo", PrimitiveType.Sphere, group.transform.position + new Vector3(0f, 1.42f, 0f), Vector3.one * 0.34f, new Color(1f, 0.7f, 0.32f, 0.08f), true);
             pole.transform.SetParent(group.transform, true);
             lightBall.transform.SetParent(group.transform, true);
             lightHalo.transform.SetParent(group.transform, true);
-            sceneryProps.Add(group);
+            RegisterSceneryProp(group, x, z);
         }
 
         private void AddBannerFlag(float x, float z, bool leftSide)
@@ -721,7 +1202,7 @@ namespace PenguinRun
                     AddSkyArch(-8.0f, z + 3.0f, index);
                     AddSkyArch(8.0f, z + 9.5f, index + 1);
                     if (index % 3 == 0)
-                        AddRainbow(z + 12f);
+                        AddRainbow(z + 26f);
                     AddOpenNatureProp(index % 2 == 0 ? "tree_pineSmallA" : "tree_simple",
                         index % 2 == 0 ? -11.2f : 11.2f,
                         z + 5.8f,
@@ -785,7 +1266,7 @@ namespace PenguinRun
             group.transform.position = new Vector3(x, 0f, z);
             // 浮空云石平台
             AddChildPrimitive(group.transform, "Floating Stone", PrimitiveType.Cube, new Vector3(0f, 1.5f, 0f), new Vector3(1.4f, 0.45f, 1.2f), new Color(0.65f, 0.7f, 0.8f));
-            AddChildPrimitive(group.transform, "Stone Cloud Halo", PrimitiveType.Sphere, new Vector3(0f, 1.3f, 0f), new Vector3(2f, 0.5f, 1.6f), new Color(1f, 1f, 1f, 0.5f), true);
+            AddChildPrimitive(group.transform, "Stone Cloud Halo", PrimitiveType.Sphere, new Vector3(0f, 1.3f, 0f), new Vector3(1.2f, 0.35f, 1f), new Color(1f, 1f, 1f, 0.28f), true);
             // 拱门
             for (var i = 0; i < 5; i++)
             {
@@ -798,32 +1279,41 @@ namespace PenguinRun
             }
             // 顶部光球
             AddChildPrimitive(group.transform, "Arch Beacon", PrimitiveType.Sphere, new Vector3(0f, 2.7f, 0f), Vector3.one * 0.32f, new Color(1f, 0.95f, 0.55f, 0.85f), true);
-            sceneryProps.Add(group);
+            RegisterSceneryProp(group, x, z);
         }
 
         private void AddRainbow(float z)
         {
-            var group = new GameObject("Rainbow Arch");
-            group.transform.position = new Vector3(0f, 0f, z);
+            AddRainbowAccent(z, -10.8f);
+            AddRainbowAccent(z, 10.8f);
+        }
+
+        private void AddRainbowAccent(float z, float lateralOffset)
+        {
+            var trackX = TrackTerrain.WorldCurveX(z, 0f);
+            var worldX = trackX + lateralOffset;
+            var group = new GameObject("Rainbow Accent");
+            group.transform.position = new Vector3(worldX, 10.5f, z);
             var colors = new[]
             {
-                new Color(1f, 0.4f, 0.4f, 0.7f),
-                new Color(1f, 0.7f, 0.3f, 0.7f),
-                new Color(1f, 0.95f, 0.4f, 0.7f),
-                new Color(0.5f, 1f, 0.5f, 0.7f),
-                new Color(0.4f, 0.75f, 1f, 0.7f),
-                new Color(0.7f, 0.5f, 1f, 0.7f),
+                new Color(1f, 0.45f, 0.45f, 0.2f),
+                new Color(1f, 0.75f, 0.35f, 0.2f),
+                new Color(0.5f, 1f, 0.55f, 0.2f),
+                new Color(0.45f, 0.78f, 1f, 0.2f),
             };
             for (var i = 0; i < colors.Length; i++)
             {
-                var radius = 5.5f + i * 0.3f;
-                var stripe = AddChildPrimitive(group.transform, $"Rainbow Stripe {i}", PrimitiveType.Cube,
-                    new Vector3(0f, radius * 0.5f, 0f),
-                    new Vector3(radius * 2.4f, 0.2f, 0.1f), colors[i], true);
-                stripe.transform.localRotation = Quaternion.Euler(0f, 0f, 0f);
-                // 弯成弧形要靠多段拼接，这里简化用扁平条
+                AddChildPrimitive(
+                    group.transform,
+                    $"Rainbow Stripe {i}",
+                    PrimitiveType.Cube,
+                    new Vector3(0f, i * 0.22f, 0f),
+                    new Vector3(1.35f, 0.12f, 0.08f),
+                    colors[i],
+                    true);
             }
-            sceneryProps.Add(group);
+
+            RegisterSceneryProp(group, worldX, z, snapToGround: false);
         }
 
         private void AddCedarRuin(float x, float z, int index)
@@ -876,7 +1366,7 @@ namespace PenguinRun
             group.transform.position = new Vector3(0f, 0f, z);
             var left = AddChildPrimitive(group.transform, "Gate Left", PrimitiveType.Cube, new Vector3(-5.55f, 1.1f, 0f), new Vector3(0.18f, 2.2f, 0.22f), new Color(0.18f, 0.52f, 0.7f));
             var right = AddChildPrimitive(group.transform, "Gate Right", PrimitiveType.Cube, new Vector3(5.55f, 1.1f, 0f), new Vector3(0.18f, 2.2f, 0.22f), new Color(0.18f, 0.52f, 0.7f));
-            var top = AddChildPrimitive(group.transform, "Gate Top", PrimitiveType.Cube, new Vector3(0f, 2.24f, 0f), new Vector3(11.2f, 0.14f, 0.18f), new Color(0.42f, 1f, 0.86f, 0.44f), true);
+            var top = AddChildPrimitive(group.transform, "Gate Top", PrimitiveType.Cube, new Vector3(0f, 1.85f, 0f), new Vector3(11.2f, 0.14f, 0.18f), new Color(0.42f, 1f, 0.86f, 0.22f), true);
             left.transform.SetParent(group.transform, false);
             right.transform.SetParent(group.transform, false);
             top.transform.SetParent(group.transform, false);
@@ -1000,11 +1490,13 @@ namespace PenguinRun
             var shadow = RunnerVisuals.CreatePrimitive("Ridge Cool Shadow", PrimitiveType.Cube, group.transform.position + new Vector3(x < 0f ? 0.46f : -0.46f, height * 0.4f, -0.2f), new Vector3(height * 0.42f, height * 0.72f, height * 0.64f), new Color(0.1f, 0.25f, 0.46f, 0.35f), true);
             shadow.transform.rotation = ridge.transform.rotation;
             shadow.transform.SetParent(group.transform, true);
-            sceneryProps.Add(group);
+            RegisterSceneryProp(group, x, z);
         }
 
         private void AnimateScenery(float dt, float effectiveSpeed)
         {
+            if (game == null) return;
+
             var d = game.World.Distance;
             var gy = tuning.movement.groundY;
             var roadRecycleZ = GetBehindCameraCullZ(12f, -22f);
@@ -1045,6 +1537,9 @@ namespace PenguinRun
                 marker.transform.position = mp;
             }
 
+            var playerPos = player != null ? player.transform.position : Vector3.zero;
+            var camPos = runnerCamera != null ? runnerCamera.transform.position : playerPos;
+
             for (var i = 0; i < sceneryProps.Count; i++)
             {
                 var prop = sceneryProps[i];
@@ -1065,6 +1560,158 @@ namespace PenguinRun
                 {
                     prop.transform.position += Vector3.forward * 132f;
                 }
+
+                EnsureSceneryLateralOffset(prop, d);
+                AlignSceneryToTrack(prop, d, gy);
+
+                if (!ShouldSkipViewCorridorFade(prop))
+                {
+                    ApplyViewCorridorFade(prop, playerPos, camPos, d, dt);
+                }
+            }
+        }
+
+        private void RegisterSceneryProp(GameObject prop, float worldX, float worldZ, bool snapToGround = true)
+        {
+            var lateral = prop.GetComponent<SceneryLateralOffset>();
+            if (lateral == null)
+            {
+                lateral = prop.AddComponent<SceneryLateralOffset>();
+            }
+
+            lateral.LateralOffset = worldX - TrackTerrain.WorldCurveX(worldZ, 0f);
+            lateral.SnapToGround = snapToGround;
+            sceneryProps.Add(prop);
+            sceneryPropRenderers[prop] = prop.GetComponentsInChildren<Renderer>(false);
+        }
+
+        private void EnsureSceneryLateralOffset(GameObject prop, float runDistance)
+        {
+            if (prop.GetComponent<SceneryLateralOffset>() != null) return;
+            if (ShouldSkipViewCorridorFade(prop)) return;
+
+            var pos = prop.transform.position;
+            var lateral = prop.AddComponent<SceneryLateralOffset>();
+            lateral.LateralOffset = pos.x - TrackTerrain.WorldCurveX(pos.z, runDistance);
+            lateral.SnapToGround = IsGroundSceneryName(prop.name);
+        }
+
+        private static bool ShouldForceHideSceneryInCorridor(string name)
+        {
+            return name.Contains("Rainbow")
+                || name.Contains("Distant Ice Ridge")
+                || name.Contains("Sunlight Beam")
+                || name.Contains("Floating Cloud")
+                || name.Contains("Warm Track Lamp")
+                || name.Contains("Sky Arch");
+        }
+
+        private static bool IsGroundSceneryName(string name)
+        {
+            return !name.Contains("Cloud")
+                && !name.Contains("Beam")
+                && !name.Contains("Bird")
+                && !name.Contains("Rainbow")
+                && !name.Contains("Aurora Ribbon")
+                && name != "Moon"
+                && name != "Moon Glow";
+        }
+
+        private static void AlignSceneryToTrack(GameObject prop, float runDistance, float groundY)
+        {
+            var lateral = prop.GetComponent<SceneryLateralOffset>();
+            if (lateral == null) return;
+
+            var pos = prop.transform.position;
+            pos.x = TrackTerrain.WorldCurveX(pos.z, runDistance) + lateral.LateralOffset;
+            if (lateral.SnapToGround)
+            {
+                pos.y = TrackTerrain.SurfaceY(pos.z, runDistance, groundY);
+            }
+
+            prop.transform.position = pos;
+        }
+
+        private static float ClampScenerySideX(float x)
+        {
+            var sign = x < 0f ? -1f : 1f;
+            if (Mathf.Approximately(x, 0f)) sign = Random.value < 0.5f ? -1f : 1f;
+            return sign * Mathf.Max(Mathf.Abs(x), SceneryMinAbsX);
+        }
+
+        private static float RandomScenerySideX()
+        {
+            var side = Random.value < 0.5f ? -1f : 1f;
+            return side * Random.Range(SceneryMinAbsX, 11.5f);
+        }
+
+        private static bool ShouldSkipViewCorridorFade(GameObject prop)
+        {
+            if (prop == null) return true;
+            var n = prop.name;
+            return n.StartsWith("Aurora Ribbon", System.StringComparison.Ordinal)
+                || n == "Moon"
+                || n == "Moon Glow";
+        }
+
+        private static bool IsInViewCorridor(Vector3 worldPos, Vector3 playerPos, Vector3 camPos, float runDistance)
+        {
+            if (worldPos.y > ViewCorridorMaxY) return false;
+            var trackX = TrackTerrain.WorldCurveX(worldPos.z, runDistance);
+            if (Mathf.Abs(worldPos.x - trackX) >= ViewCorridorHalfWidth) return false;
+            var zMin = camPos.z + ViewCorridorNearZBehindCamera;
+            var zMax = playerPos.z + ViewCorridorNearZAheadPlayer;
+            return worldPos.z >= zMin && worldPos.z <= zMax;
+        }
+
+        private void ApplyViewCorridorFade(GameObject prop, Vector3 playerPos, Vector3 camPos, float runDistance, float dt)
+        {
+            if (!sceneryPropRenderers.TryGetValue(prop, out var renderers))
+            {
+                renderers = prop.GetComponentsInChildren<Renderer>(false);
+                if (renderers.Length == 0) return;
+                sceneryPropRenderers[prop] = renderers;
+            }
+
+            if (renderers.Length == 0) return;
+
+            var center = renderers[0].bounds.center;
+            for (var i = 1; i < renderers.Length; i++)
+            {
+                center = Vector3.Lerp(center, renderers[i].bounds.center, 0.5f);
+            }
+
+            var inCorridor = IsInViewCorridor(center, playerPos, camPos, runDistance);
+            var fadeRate = Mathf.Clamp01(dt * 12f);
+            var forceHide = inCorridor && ShouldForceHideSceneryInCorridor(prop.name);
+
+            foreach (var renderer in renderers)
+            {
+                var id = renderer.GetInstanceID();
+                if (!sceneryRendererBaseEnabled.TryGetValue(id, out var baseEnabled))
+                {
+                    baseEnabled = renderer.enabled;
+                    sceneryRendererBaseEnabled[id] = baseEnabled;
+                }
+
+                if (!sceneryRendererBaseAlpha.TryGetValue(id, out var baseAlpha))
+                {
+                    var shared = renderer.sharedMaterial;
+                    baseAlpha = shared != null ? RunnerVisuals.GetColor(shared).a : 1f;
+                    sceneryRendererBaseAlpha[id] = baseAlpha;
+                }
+
+                if (forceHide)
+                {
+                    renderer.enabled = false;
+                    continue;
+                }
+
+                renderer.enabled = baseEnabled;
+
+                var targetAlpha = inCorridor ? Mathf.Min(baseAlpha, ViewCorridorFadedAlpha) : baseAlpha;
+                var currentAlpha = RunnerVisuals.GetColor(renderer.sharedMaterial).a;
+                RunnerVisuals.SetRendererAlpha(renderer, Mathf.Lerp(currentAlpha, targetAlpha, fadeRate));
             }
         }
 
@@ -1076,6 +1723,10 @@ namespace PenguinRun
             if (runnerCamera == null) return fallbackZ;
             return runnerCamera.transform.position.z - extraBehindCamera;
         }
+
+        private float landingBounceTimer;
+        private float landingBounceOffset;
+        private float slideHeightSmooth;
 
         private void UpdateCamera(float dt)
         {
@@ -1092,7 +1743,7 @@ namespace PenguinRun
             var bossFight = game.Boss != null && game.Boss.BossActive;
             var bossDanger = bossFight && boss != null && boss.IsPatternDangerous;
 
-            // Boss 战时抬高并后拉镜头，减少玩家模型与 Boss 模型互相遮挡。
+            // ── 速度动态参数 ─────────────────────────────────────────
             var speed01 = game.World.Speed01();
             var dynamicBack = Mathf.Lerp(0.35f, 1.15f, speed01);
             var bossBack = bossFight ? (bossDanger ? 2.8f : 1.9f) : 0f;
@@ -1108,21 +1759,39 @@ namespace PenguinRun
             var px = player.transform.position;
 
             var airborne = Mathf.Clamp(game.Motor.PlayerY - surface, 0f, 2.4f);
-            // 跳跃时相机稍微抬起，让角色不会被地面裁掉
+            // 跳跃时相机稍微抬起
             var jumpBoost = airborne * 0.22f;
+
+            // ── 着陆弹跳 ──────────────────────────────────────────────
+            if (game.Motor.Grounded && !wasGroundedLastFrame)
+            {
+                landingBounceTimer = 0.14f;
+                landingBounceOffset = -0.22f;
+            }
+            if (landingBounceTimer > 0f)
+            {
+                landingBounceTimer -= dt;
+                landingBounceOffset *= 0.8f; // 指数衰减
+            }
+            else
+            {
+                landingBounceOffset = 0f;
+            }
+
+            // ── 滑铲镜头下沉 ───────────────────────────────────────────
+            var targetSlideHeight = game.Motor.SlideTimer > 0f ? -0.55f : 0f;
+            slideHeightSmooth = Mathf.Lerp(slideHeightSmooth, targetSlideHeight, 1f - Mathf.Exp(-dt * 8f));
 
             var targetCam = new Vector3(
                 px.x * lateralCam + curveX,
-                surface + cam.heightAboveSurface + dynamicHeight + bossHeight + jumpBoost,
+                surface + cam.heightAboveSurface + dynamicHeight + bossHeight + jumpBoost + landingBounceOffset + slideHeightSmooth,
                 px.z - (cam.behindDistance + dynamicBack + bossBack));
 
-            // 瞄准点稍微偏向玩家 X，确保角色在画面中偏下而非正中
             var aim = new Vector3(
                 px.x * lateralAim + curveX * 0.4f,
-                surface + cam.aimHeightAboveSurface + jumpBoost * 0.25f,
+                surface + cam.aimHeightAboveSurface + jumpBoost * 0.25f + landingBounceOffset * 0.3f,
                 px.z + cam.aimAhead + dynamicAimAhead);
 
-            // Boss 战镜头震动效果
             if (cameraShakeTimer > 0f)
             {
                 cameraShakeTimer -= dt;
@@ -1131,18 +1800,19 @@ namespace PenguinRun
                 targetCam += new Vector3(shakeX, shakeY, 0f);
             }
 
-            // Boss 被击败时的定格效果
             if (defeatFreezeTimer > 0f)
             {
                 defeatFreezeTimer -= dt;
-                // 定格期间减缓相机跟随
                 dt *= 0.1f;
             }
 
             runnerCamera.transform.position = Vector3.SmoothDamp(runnerCamera.transform.position, targetCam, ref cameraVelocity, 0.18f, 52f, dt);
+
+            // ── 速度动态 FOV：低速窄视野，高速宽视野 ───────────────────────
+            var speedFov = Mathf.Lerp(58f, 78f, speed01);
             var dashFovBoost = game.World.DashTimer > 0f ? 7f : 0f;
             var bossFovBoost = bossFight ? (bossDanger ? 4f : 2f) : 0f;
-            var targetFov = cam.fieldOfView + dashFovBoost + bossFovBoost;
+            var targetFov = speedFov + dashFovBoost + bossFovBoost;
             runnerCamera.fieldOfView = Mathf.Lerp(runnerCamera.fieldOfView, targetFov, 1f - Mathf.Exp(-dt * 10f));
 
             var dir = aim - runnerCamera.transform.position;
@@ -1151,7 +1821,6 @@ namespace PenguinRun
                 var look = Quaternion.LookRotation(dir.normalized, Vector3.up);
                 var e = look.eulerAngles;
                 e.y += cameraYawSmoothed;
-                // 转弯时相机微微侧倾，增强入弯体感
                 e.z = TrackTerrain.BankAngleDegrees(d);
                 var targetRot = Quaternion.Euler(e.x, e.y, e.z);
                 runnerCamera.transform.rotation = Quaternion.Slerp(
@@ -1174,12 +1843,14 @@ namespace PenguinRun
                 var p = guide.transform.position;
                 p.y = TrackTerrain.SurfaceY(p.z, d, gy) + 0.02f;
                 guide.transform.position = p;
-                var renderer = guide.GetComponent<Renderer>();
+                var rend = guide.GetComponent<Renderer>();
+                if (rend == null) continue;
+                var mat = rend.sharedMaterial;
                 var active = Mathf.Abs(guide.transform.position.x - activeX) < 0.1f;
                 RunnerVisuals.SetColor(
-                    renderer.material,
+                    mat,
                     Color.Lerp(
-                        RunnerVisuals.GetColor(renderer.material),
+                        RunnerVisuals.GetColor(mat),
                         active ? new Color(0.57f, 1f, 0.86f, 0.92f) : new Color(0.82f, 0.93f, 1f, 0.35f),
                         Mathf.Clamp01(dt * 8f)));
             }
@@ -1192,14 +1863,18 @@ namespace PenguinRun
                 return false;
             }
 
+            var s = RunnerHudLayoutScale;
+            var edgeH = 260f * s;
+            var edgeV = 180f * s;
+
             var pointer = Input.mousePosition;
             var yFromTop = Screen.height - pointer.y;
-            var nearHorizontalEdge = pointer.x <= 260f || pointer.x >= Screen.width - 260f;
+            var nearHorizontalEdge = pointer.x <= edgeH || pointer.x >= Screen.width - edgeH;
             var nearVerticalEdge =
-                pointer.y <= 180f ||
-                pointer.y >= Screen.height - 180f ||
-                yFromTop <= 180f ||
-                yFromTop >= Screen.height - 180f;
+                pointer.y <= edgeV ||
+                pointer.y >= Screen.height - edgeV ||
+                yFromTop <= edgeV ||
+                yFromTop >= Screen.height - edgeV;
             return nearHorizontalEdge && nearVerticalEdge;
         }
 
@@ -1213,14 +1888,108 @@ namespace PenguinRun
 
         private void OnGUI()
         {
-            var world = game.World;
-            if (hud.Draw(config, world, game.Running, game.GameOver, world.Score, game.FeedbackText, game.FeedbackTimer, currentTheme,
-                    game.Boss, game.IsPaused))
+            if (game == null || hud == null)
+                return;
+
+            // ── 倒计时覆盖层 ──────────────────────────────────────────
+            DrawEntranceOverlay();
+
+            // ── 死亡序列覆盖层 ────────────────────────────────────────
+            DrawDeathOverlay();
+
+            var prevMatrix = GUI.matrix;
+            try
             {
-                game.FinishRun();
+                var layout = ApplyRunnerHudGuiMatrix();
+                var world = game.World;
+                if (hud.Draw(layout, config, world, game.Running, game.GameOver, world.Score, game.FeedbackText, game.FeedbackTimer,
+                        currentTheme,
+                        game.Boss, game.IsPaused))
+                {
+                    game.FinishRun();
+                }
+            }
+            finally
+            {
+                GUI.matrix = prevMatrix;
             }
 
             DrawThemeTransitionOverlay();
+            DrawScreenFlashOverlay();
+        }
+
+        private void DrawEntranceOverlay()
+        {
+            if (entranceComplete || entranceState == EntranceState.None) return;
+
+            var cx = Screen.width * 0.5f;
+            var cy = Screen.height * 0.4f;
+
+            if (entranceState == EntranceState.Countdown)
+            {
+                // 3-2-1 大字动画
+                var step = Mathf.FloorToInt(entranceTimer / 0.7f);
+                var tInStep = (entranceTimer - step * 0.7f) / 0.7f; // 0..1
+                var scale = 1f + (1f - tInStep) * 0.5f; // 开始大，逐渐缩小
+                var alpha = 1f - tInStep * 0.6f; // 开始亮，逐渐淡
+
+                var numStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = Mathf.RoundToInt(120f * scale),
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter,
+                    normal = { textColor = new Color(1f, 1f, 1f, alpha) },
+                };
+                GUI.Label(new Rect(cx - 100f, cy - 80f, 200f, 160f), countdownNumber.ToString(), numStyle);
+            }
+            else if (entranceState == EntranceState.GoText)
+            {
+                var t = entranceTimer / 0.6f;
+                var scale = 1f + t * 0.3f;
+                var alpha = 1f - t;
+
+                var goStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = Mathf.RoundToInt(80f * scale),
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter,
+                    normal = { textColor = new Color(0.34f, 1f, 0.82f, alpha) },
+                };
+                GUI.Label(new Rect(cx - 200f, cy - 60f, 400f, 120f), "出发！", goStyle);
+            }
+        }
+
+        private void DrawScreenFlashOverlay()
+        {
+            if (screenFlashTimer <= 0f && !bossSpawnFlashPending) return;
+
+            if (screenFlashTimer > 0f)
+            {
+                screenFlashTimer -= Time.deltaTime;
+                var t = Mathf.Clamp01(screenFlashTimer / Mathf.Max(0.01f, screenFlashDuration));
+                var alpha = screenFlashColor.a * (1f - t) * (1f - t); // ease-out quad
+                screenFlashCurrent = new Color(screenFlashColor.r, screenFlashColor.g, screenFlashColor.b, alpha);
+            }
+
+            // Boss 出场预警：屏幕边缘红光脉冲
+            if (bossSpawnFlashPending)
+            {
+                var pulse = Mathf.Sin(Time.time * 6f) * 0.5f + 0.5f;
+                var warnAlpha = bossSpawnFlashIntensity * pulse * 0.22f;
+                var warnColor = new Color(0.8f, 0.15f, 0.08f, warnAlpha);
+
+                // 顶部和底部边缘条
+                var edgeH = Screen.height * 0.12f;
+                GUI.color = warnColor;
+                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, edgeH), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(0f, Screen.height - edgeH, Screen.width, edgeH), Texture2D.whiteTexture);
+            }
+
+            if (screenFlashTimer <= 0f && !bossSpawnFlashPending) return;
+
+            GUI.color = screenFlashCurrent;
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
         }
 
         private void TryStartThemeTransition()
@@ -1267,6 +2036,7 @@ namespace PenguinRun
             currentTheme = nextTheme;
             config.MapTheme = nextTheme;
             RunSession.NextRunTheme = nextTheme;
+            TrackTerrain.SetThemeProfile(nextTheme);
             ApplyMapThemeVisuals(nextTheme);
             RebuildThemeScenery(nextTheme);
             game.Spawner.ApplyTheme(nextTheme, clearSpawnedEntities: true);
@@ -1281,11 +2051,16 @@ namespace PenguinRun
             BuildIceWorld(theme);
         }
 
-        private static void ClearObjects(List<GameObject> objects)
+        private void ClearObjects(List<GameObject> objects)
         {
             for (var i = 0; i < objects.Count; i++)
             {
-                if (objects[i] != null) Destroy(objects[i]);
+                var obj = objects[i];
+                if (obj != null)
+                {
+                    sceneryPropRenderers.Remove(obj);
+                    Destroy(obj);
+                }
             }
             objects.Clear();
         }
@@ -1319,14 +2094,17 @@ namespace PenguinRun
             GUI.color = Color.white;
 
             var labelAlpha = Mathf.Clamp01(alpha / 0.82f) * 0.92f;
-            var style = new GUIStyle(GUI.skin.label)
+            if (themeTransitionLabelStyle == null)
             {
-                fontSize = 42,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(0.78f, 0.97f, 1f, labelAlpha) }
-            };
-            GUI.Label(new Rect(0f, Screen.height * 0.42f, Screen.width, 56f), $"场景切换 · {GetThemeDisplayName(pendingTheme)}", style);
+                themeTransitionLabelStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = 42,
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter,
+                };
+            }
+            themeTransitionLabelStyle.normal.textColor = new Color(0.78f, 0.97f, 1f, labelAlpha);
+            GUI.Label(new Rect(0f, Screen.height * 0.42f, Screen.width, 56f), $"场景切换 · {GetThemeDisplayName(pendingTheme)}", themeTransitionLabelStyle);
         }
 
         private static RunnerMapTheme GetNextTheme(RunnerMapTheme theme)

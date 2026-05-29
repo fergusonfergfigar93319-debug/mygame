@@ -27,7 +27,7 @@ namespace PenguinRun
         public float SpawnSpacingMax = 21f;
         public float SpawnLeadMin = 8f;
         public float SpawnLeadMax = 15f;
-        public float SpeedRampPerMeter = 0.018f;
+        public float SpeedRampPerMeter = 0.014f;
         public float DashSpeedMultiplier = 1.22f;
 
         [Header("Scoring")]

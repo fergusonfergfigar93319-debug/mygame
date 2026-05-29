@@ -1,3 +1,4 @@
+using PenguinRun.Game.Save;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -60,10 +61,7 @@ namespace PenguinRun.Game.UI
             btnColors.selectedColor = new Color(0.16f, 0.34f, 0.52f, 1f);
             backBtn.colors = btnColors;
 
-            backBtn.onClick.AddListener(() => {
-                Debug.Log($"[PanelHeader] 返回按钮被点击 - {title}");
-                onBack?.Invoke();
-            });
+            backBtn.onClick.AddListener(() => onBack?.Invoke());
 
             UiBuilder.AddOutline(backBtn.gameObject, UiBuilder.BorderAccent, new Vector2(1.5f, -1.5f));
             UiBuilder.AddShadow(backBtn.gameObject, new Color(0f, 0f, 0f, 0.4f), new Vector2(0f, -3f));
@@ -103,12 +101,24 @@ namespace PenguinRun.Game.UI
                 new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
                 new Vector2(186f, 62f), new Vector2(-110f, -10f),
                 "鱼", UiBuilder.WarmGold,
-                $"{Save.PlayerSave.TotalFishSnacks}");
+                $"{PlayerSave.TotalFishSnacks}");
 
             // 让胶囊有微弱发光以强调
             UiBuilder.AddShadow(currencyPill.gameObject, new Color(1f, 0.6f, 0.2f, 0.18f), new Vector2(0f, -2f));
 
             return bar;
+        }
+
+        /// <summary>同步顶部鱼干胶囊文案（领取任务奖励等场景下调用）。</summary>
+        public static void RefreshCurrency(RectTransform headerBar)
+        {
+            if (headerBar == null) return;
+            var pill = headerBar.Find("CurrencyPill");
+            if (pill == null) return;
+            var valueTf = pill.Find("Value");
+            var txt = valueTf != null ? valueTf.GetComponent<Text>() : null;
+            if (txt != null)
+                txt.text = $"{PlayerSave.TotalFishSnacks}";
         }
     }
 }

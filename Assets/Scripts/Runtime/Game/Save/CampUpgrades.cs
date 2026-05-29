@@ -32,6 +32,10 @@ namespace PenguinRun.Game.Save
     /// </summary>
     public static class CampUpgrades
     {
+        /// <summary>
+        /// 与跑酷 SegmentSpawner 中 PolarLevel 乘以 powerUpChancePerPolarLevel 的加法一致（默认每级绝对值 +2.5 点）。
+        /// </summary>
+        public const float PolarPowerUpChancePerLevel = 0.025f;
         public static readonly CampUpgradeKind[] AllKinds = (CampUpgradeKind[])Enum.GetValues(typeof(CampUpgradeKind));
 
         /// <summary>等级 0 → 1 / 1 → 2 / … / 4 → 5 的基础鱼干价格曲线。</summary>
@@ -121,6 +125,21 @@ namespace PenguinRun.Game.Save
             return Mathf.Max(5, Mathf.RoundToInt(raw / 5f) * 5);
         }
 
+        /// <summary>当前鱼干可立即购买的强化项数量（主菜单营地角标）。</summary>
+        public static int CountAffordableUpgrades()
+        {
+            var n = 0;
+            var fish = PlayerSave.TotalFishSnacks;
+            foreach (var k in AllKinds)
+            {
+                var lv = GetLevel(k);
+                var cost = GetUpgradeCost(k, lv);
+                if (cost.HasValue && fish >= cost.Value)
+                    n++;
+            }
+            return n;
+        }
+
         /// <summary>支付鱼干并升级一级；已满级或鱼干不足返回 false。</summary>
         public static bool TryPurchase(CampUpgradeKind kind)
         {
@@ -161,7 +180,7 @@ namespace PenguinRun.Game.Save
             {
                 CampUpgradeKind.Dash       => $"持续 {7f + level * 1f:0.0} 秒",
                 CampUpgradeKind.Tuan       => $"持续 {4.5f + level * 0.55f:0.00} 秒",
-                CampUpgradeKind.Polar      => $"幸运道具掉率 +{level * 2.5f:0.#}%",
+                CampUpgradeKind.Polar      => $"片段道具抽样 +{level * PolarPowerUpChancePerLevel * 100f:0.#}（每级 +{PolarPowerUpChancePerLevel * 100f:0.#}）",
                 CampUpgradeKind.Magnet     => $"持续 {10f + level * 1.5f:0.0} 秒",
                 CampUpgradeKind.FishGain   => $"结算鱼干 ×{1f + level * 0.06f:0.00}",
                 CampUpgradeKind.ScoreBonus => $"结算得分 ×{1f + level * 0.04f:0.00}",

@@ -42,6 +42,13 @@ namespace PenguinRun
 
         private void PickNewSegment()
         {
+            if (pool == null || pool.Length == 0)
+            {
+                current = RunnerSegmentCatalog.Fallback;
+                wavesLeftInSegment = current.WaveCount;
+                return;
+            }
+
             current = pool[Random.Range(0, pool.Length)];
             wavesLeftInSegment = current.WaveCount;
         }

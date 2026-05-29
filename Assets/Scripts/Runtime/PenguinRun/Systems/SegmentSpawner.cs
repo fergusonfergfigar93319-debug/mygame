@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using PenguinRun.Game;
+using PenguinRun.Game.Save;
 using UnityEngine;
 
 namespace PenguinRun
@@ -9,9 +10,9 @@ namespace PenguinRun
         // 所有物体的显示高度都基于 TrackTerrain.SurfaceY (地面表面) 计算
         private const float CoinHoverHeight = 0.45f;      // 金币悬浮在表面上方
         private const float PowerUpHoverHeight = 0.55f;   // 道具悬浮高度
-        private const float OpenObstacleVisualScaleBoost = 1.28f;
-        private const float OpenWideWallVisualScaleBoost = 1.2f;
-        private const float OpenEnemyVisualScaleBoost = 1.25f;
+        private const float OpenObstacleVisualScaleBoost = 1.42f;
+        private const float OpenWideWallVisualScaleBoost = 1.32f;
+        private const float OpenEnemyVisualScaleBoost = 1.38f;
 
         private sealed class RollingState
         {
@@ -49,6 +50,7 @@ namespace PenguinRun
         private readonly Dictionary<GameObject, float> obstacleYDelta = new();
         private readonly Dictionary<GameObject, float> coinYDelta = new();
         private readonly Dictionary<string, GameObject> modelPrefabCache = new();
+        private bool slideGateTutorialPending;
 
         public SegmentSpawner(
             RunnerWorldTuning worldTuning,
@@ -69,8 +71,10 @@ namespace PenguinRun
 
         public readonly List<GameObject> obstacles = new();
         public readonly Dictionary<GameObject, ObstacleColliderSpec> obstacleSpecs = new();
+        public readonly List<ObstacleBehavior> obstacleBehaviors = new();
         public readonly List<GameObject> coins = new();
         public readonly Dictionary<GameObject, PowerUpKind> powerUps = new();
+        public readonly List<GameObject> speedGates = new();
 
         public void Reset()
         {
@@ -130,6 +134,7 @@ namespace PenguinRun
 
             ApplyRollingMotion(dt, runDistance);
             TickEnemies(dt, runDistance);
+            TickObstacleBehaviors(dt, runDistance);
             SyncObstacleHeights(runDistance);
 
             for (var i = coins.Count - 1; i >= 0; i--)
@@ -173,6 +178,22 @@ namespace PenguinRun
                     powerUps.Remove(power);
                 }
             }
+
+            // 速度门移动
+            for (var i = speedGates.Count - 1; i >= 0; i--)
+            {
+                var gate = speedGates[i];
+                if (gate == null) { speedGates.RemoveAt(i); continue; }
+                gate.transform.Translate(Vector3.back * (effectiveSpeed * dt), Space.World);
+                var gz = gate.transform.position.z;
+                gate.transform.position = new Vector3(gate.transform.position.x,
+                    TrackTerrain.SurfaceY(gz, runDistance, baseGroundY), gz);
+                if (gz < worldTuning.despawnZ)
+                {
+                    Object.Destroy(gate);
+                    speedGates.RemoveAt(i);
+                }
+            }
         }
 
         private void SyncObstacleHeights(float runDistance)
@@ -206,6 +227,15 @@ namespace PenguinRun
         private void DestroyObstacle(GameObject obstacle, int index)
         {
             obstacleYDelta.Remove(obstacle);
+            // 清理关联行为
+            for (var b = obstacleBehaviors.Count - 1; b >= 0; b--)
+            {
+                if (obstacleBehaviors[b] != null && obstacleBehaviors[b].gameObject == obstacle)
+                {
+                    Object.Destroy(obstacleBehaviors[b]);
+                    obstacleBehaviors.RemoveAt(b);
+                }
+            }
             Object.Destroy(obstacle);
             obstacleSpecs.Remove(obstacle);
             obstacles.RemoveAt(index);
@@ -225,11 +255,26 @@ namespace PenguinRun
             }
         }
 
+        private void TickObstacleBehaviors(float dt, float runDistance)
+        {
+            for (var i = obstacleBehaviors.Count - 1; i >= 0; i--)
+            {
+                var behavior = obstacleBehaviors[i];
+                if (behavior == null)
+                {
+                    obstacleBehaviors.RemoveAt(i);
+                    continue;
+                }
+                behavior.Tick(dt, runDistance, 0f);
+            }
+        }
+
         private void ClearSpawnedEntities()
         {
             foreach (var obstacle in obstacles) Object.Destroy(obstacle);
             obstacles.Clear();
             obstacleSpecs.Clear();
+            obstacleBehaviors.Clear();
             rollingObstacles.Clear();
             enemyNpcs.Clear();
 
@@ -238,6 +283,9 @@ namespace PenguinRun
 
             foreach (var power in powerUps.Keys) Object.Destroy(power);
             powerUps.Clear();
+
+            foreach (var gate in speedGates) Object.Destroy(gate);
+            speedGates.Clear();
 
             obstacleYDelta.Clear();
             coinYDelta.Clear();
@@ -412,7 +460,7 @@ namespace PenguinRun
                 var zz = z + Random.Range(-1.6f, 1.6f) + (int)obstacleLane * 0.35f;
                 if (Random.value < Mathf.Clamp01(m.WideWallChance))
                 {
-                    SpawnWideSnowWall(zz, obstacleLane, m.Palette, runDistance);
+                    TrySpawnWideThreat(zz, obstacleLane, m.Palette, runDistance);
                 }
                 else
                 {
@@ -451,8 +499,7 @@ namespace PenguinRun
                 var dangerLane = (RunnerLane)Mathf.Clamp((int)safeLane + (i % 2 == 0 ? 1 : -1), -1, 1);
                 if (i % 3 == 2)
                 {
-                    // 每三波来一个宽墙增加压力
-                    SpawnWideSnowWall(blockZ, dangerLane, m.Palette, runDistance);
+                    TrySpawnWideThreat(blockZ, dangerLane, m.Palette, runDistance);
                 }
                 else
                 {
@@ -518,6 +565,12 @@ namespace PenguinRun
                 SpawnStandardObstacle(z + pickupCount * 5.5f + 2f, lanes[2], false, m.Palette, runDistance);
             }
 
+            // 道具展示段末尾放速度门让玩家爽一下
+            if (Random.value < 0.4f)
+            {
+                SpawnSpeedGate(z + pickupCount * 5.5f + 4f, (RunnerLane)Random.Range(-1, 2), runDistance, m.Palette);
+            }
+
             return true;
         }
 
@@ -564,6 +617,7 @@ namespace PenguinRun
                 SpawnCoin(z + 0.4f + i * 1.15f, lane, runDistance, arcY);
             }
 
+            SpawnFlyingObstacle(z + 7.2f, lane, m.Palette, runDistance);
             SpawnCoinLine(z + 7f, PickDifferentLane(lane), 3, runDistance);
             return true;
         }
@@ -571,16 +625,13 @@ namespace PenguinRun
         private bool SpawnSlideTunnel(float z, SegmentSpawnModifiers m, float runDistance)
         {
             var safeLane = (RunnerLane)Random.Range(-1, 2);
-            for (var i = 0; i < 3; i++)
-            {
-                SpawnStandardObstacle(z + i * 2.55f, safeLane, false, m.Palette, runDistance);
-            }
-
+            var gateCount = Random.Range(2, 4);
             for (var laneValue = -1; laneValue <= 1; laneValue++)
             {
                 var lane = (RunnerLane)laneValue;
                 if (lane == safeLane) continue;
-                SpawnWideSnowWall(z + 1.8f + Mathf.Abs(laneValue) * 0.45f, lane, m.Palette, runDistance);
+                SpawnSlideGateLine(z + 0.35f, lane, gateCount, m.Palette, runDistance);
+                SpawnWideSlideGate(z + gateCount * 2.4f + 1.1f, lane, m.Palette, runDistance);
             }
 
             SpawnCoinLine(z + 0.7f, safeLane, 4, runDistance);
@@ -603,6 +654,13 @@ namespace PenguinRun
                 SpawnPowerUp(z + count * 1.7f + 0.8f, runDistance, m.Palette);
             }
 
+            // 有时在奖励段末尾放一个速度门
+            if (Random.value < 0.25f)
+            {
+                var gateLane = (RunnerLane)Random.Range(-1, 2);
+                SpawnSpeedGate(z + count * 1.7f + 3f, gateLane, runDistance, m.Palette);
+            }
+
             return true;
         }
 
@@ -620,7 +678,7 @@ namespace PenguinRun
 
                 if (Random.value < 0.46f + Mathf.Clamp01(m.WideWallChance))
                 {
-                    SpawnWideSnowWall(z + Random.Range(-0.3f, 0.85f), lane, m.Palette, runDistance);
+                    TrySpawnWideThreat(z + Random.Range(-0.3f, 0.85f), lane, m.Palette, runDistance);
                 }
                 else
                 {
@@ -635,8 +693,28 @@ namespace PenguinRun
 
         private static bool LowRoll(SegmentSpawnModifiers m)
         {
-            var threshold = Mathf.Clamp(0.55f - m.LowObstacleBiasDelta, 0.15f, 0.92f);
+            var threshold = Mathf.Clamp(0.50f - m.LowObstacleBiasDelta, 0.15f, 0.92f);
             return Random.value > threshold;
+        }
+
+        private void TrySpawnWideThreat(float z, RunnerLane lane, SegmentObstaclePalette palette, float runDistance)
+        {
+            if (runDistance < 400f && Random.value < 0.25f)
+            {
+                SpawnWideSlideGate(z, lane, palette, runDistance);
+            }
+            else
+            {
+                SpawnWideSnowWall(z, lane, palette, runDistance);
+            }
+        }
+
+        private void SpawnSlideGateLine(float z, RunnerLane lane, int count, SegmentObstaclePalette palette, float runDistance)
+        {
+            for (var i = 0; i < count; i++)
+            {
+                SpawnStandardObstacle(z + i * 2.4f, lane, true, palette, runDistance);
+            }
         }
 
         private void TrySpawnThreatObstacle(float z, RunnerLane lane, SegmentSpawnModifiers m, float runDistance)
@@ -681,7 +759,7 @@ namespace PenguinRun
             }
             else if (roll < wideGate)
             {
-                SpawnWideSnowWall(z, lane, m.Palette, runDistance);
+                TrySpawnWideThreat(z, lane, m.Palette, runDistance);
             }
             else
             {
@@ -696,21 +774,27 @@ namespace PenguinRun
             var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
             root.transform.position = new Vector3(lane.ToX(laneWidth), surface + dy, z);
 
+            var baseTint = palette == SegmentObstaclePalette.SkyCloud
+                ? new Color(0.55f, 0.58f, 0.65f)
+                : new Color(0.42f, 0.38f, 0.48f);
+            TryAttachObstacleModel(root.transform, "cliff_block_stone", new Vector3(0f, -0.42f, 0f),
+                new Vector3(0.85f, 0.12f, 0.85f), baseTint);
+
             var bladeColor = palette == SegmentObstaclePalette.SkyCloud
                 ? new Color(1f, 0.92f, 0.25f, 0.92f)
                 : new Color(0.65f, 0.42f, 1f, 0.92f);
-            AddChildPrimitive(root.transform, "Blade Hub", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.42f, bladeColor, true);
+            AddChildPrimitive(root.transform, "Blade Hub", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.52f, bladeColor, true);
             for (var i = 0; i < 4; i++)
             {
                 var blade = AddChildPrimitive(root.transform, $"Blade {i}", PrimitiveType.Cube,
-                    Vector3.zero, new Vector3(1.25f, 0.08f, 0.22f), bladeColor, true);
+                    Vector3.zero, new Vector3(1.45f, 0.1f, 0.28f), bladeColor, true);
                 blade.transform.localRotation = Quaternion.Euler(0f, i * 45f, 0f);
             }
             AddChildPrimitive(root.transform, "Warning Ring", PrimitiveType.Cylinder,
-                new Vector3(0f, -0.55f, 0f), new Vector3(1.55f, 0.045f, 1.55f),
+                new Vector3(0f, -0.55f, 0f), new Vector3(1.78f, 0.05f, 1.78f),
                 new Color(1f, 0.28f, 0.08f, 0.55f), true);
 
-            RegisterObstacle(root, ObstacleColliderSpec.Enemy, dy);
+            RegisterObstacle(root, ObstacleColliderSpec.Enemy, dy, ObstacleKind.Rolling);
             rollingObstacles.Add(new RollingState
             {
                 Go = root,
@@ -741,15 +825,15 @@ namespace PenguinRun
                 var x = (i - 1) * 0.28f;
                 var shard = AddChildPrimitive(root.transform, $"Shard {i}", PrimitiveType.Cube,
                     new Vector3(x, 0.08f + i * 0.1f, 0f),
-                    new Vector3(0.24f, 1.05f - i * 0.15f, 0.24f),
+                    new Vector3(0.32f, 1.22f - i * 0.18f, 0.32f),
                     Color.Lerp(core, Color.white, i * 0.12f), true);
                 shard.transform.localRotation = Quaternion.Euler(0f, 25f + i * 35f, 12f - i * 10f);
             }
             AddChildPrimitive(root.transform, "Impact Flash", PrimitiveType.Cylinder,
-                new Vector3(0f, -0.62f, 0f), new Vector3(1.4f, 0.04f, 1.4f),
+                new Vector3(0f, -0.62f, 0f), new Vector3(1.58f, 0.05f, 1.58f),
                 new Color(1f, 0.42f, 0.15f, 0.48f), true);
 
-            RegisterObstacle(root, ObstacleColliderSpec.SmallJumpable, dy);
+            RegisterObstacle(root, ObstacleColliderSpec.SmallJumpable, dy, ObstacleKind.StandardHigh);
         }
 
         private static RunnerLane PickDifferentLane(RunnerLane lane)
@@ -763,11 +847,43 @@ namespace PenguinRun
             };
         }
 
-        private void RegisterObstacle(GameObject obstacle, in ObstacleColliderSpec spec, float yDeltaFromFlatGround)
+        public bool TryConsumeSlideGateTutorial(out string message)
+        {
+            message = "";
+            if (!slideGateTutorialPending || PlayerSave.RunnerSlideGateTutorialDone)
+            {
+                return false;
+            }
+
+            slideGateTutorialPending = false;
+            message = "下滑铲从横梁下穿过！";
+            PlayerSave.RunnerSlideGateTutorialDone = true;
+            return true;
+        }
+
+        private void RegisterObstacle(
+            GameObject obstacle,
+            in ObstacleColliderSpec spec,
+            float yDeltaFromFlatGround,
+            ObstacleKind kind = ObstacleKind.StandardHigh)
         {
             obstacles.Add(obstacle);
             obstacleSpecs[obstacle] = spec;
             obstacleYDelta[obstacle] = yDeltaFromFlatGround;
+
+            var marker = obstacle.GetComponent<ObstacleKindMarker>();
+            if (marker == null)
+            {
+                marker = obstacle.AddComponent<ObstacleKindMarker>();
+            }
+
+            marker.Kind = kind;
+
+            if ((kind == ObstacleKind.SlideGate || kind == ObstacleKind.WideSlideGate)
+                && !PlayerSave.RunnerSlideGateTutorialDone)
+            {
+                slideGateTutorialPending = true;
+            }
         }
 
         // ── 移动敌人 NPC ───────────────────────────────────────────────────────────
@@ -821,23 +937,26 @@ namespace PenguinRun
             var builtWithModel = TryBuildOpenModelEnemy(enemy.transform, true);
             if (!builtWithModel)
             {
-                // 主体 —— 深红色企鹅轮廓（以脚底为原点构建）
-                AddChildPrimitive(enemy.transform, "Enemy Body", PrimitiveType.Cube,
-                    new Vector3(0f, 0.59f, 0f), new Vector3(0.88f, 1.18f, 0.7f), new Color(0.62f, 0.08f, 0.12f));
-                AddChildPrimitive(enemy.transform, "Enemy Head", PrimitiveType.Cube,
-                    new Vector3(0f, 1.31f, 0f), new Vector3(0.7f, 0.6f, 0.66f), new Color(0.75f, 0.12f, 0.16f));
-                // 眼睛 —— 亮黄色
-                AddChildPrimitive(enemy.transform, "Eye L", PrimitiveType.Sphere,
-                    new Vector3(-0.16f, 1.37f, -0.34f), new Vector3(0.17f, 0.17f, 0.17f), new Color(1f, 0.88f, 0.15f));
-                AddChildPrimitive(enemy.transform, "Eye R", PrimitiveType.Sphere,
-                    new Vector3(0.16f, 1.37f, -0.34f), new Vector3(0.17f, 0.17f, 0.17f), new Color(1f, 0.88f, 0.15f));
+                builtWithModel = AttachProceduralMesh(
+                    enemy.transform,
+                    ObstacleMeshBuilder.BuildEnemyBody(),
+                    new Color(0.62f, 0.08f, 0.12f),
+                    "ProcEnemy",
+                    new Vector3(0f, 0.65f, 0f));
+                if (builtWithModel)
+                {
+                    AddChildPrimitive(enemy.transform, "Eye L", PrimitiveType.Sphere,
+                        new Vector3(-0.16f, 1.37f, -0.34f), new Vector3(0.17f, 0.17f, 0.17f), new Color(1f, 0.88f, 0.15f));
+                    AddChildPrimitive(enemy.transform, "Eye R", PrimitiveType.Sphere,
+                        new Vector3(0.16f, 1.37f, -0.34f), new Vector3(0.17f, 0.17f, 0.17f), new Color(1f, 0.88f, 0.15f));
+                }
             }
             // 危险光环（放在脚底）
             AddChildPrimitive(enemy.transform, "Danger Ring", PrimitiveType.Cylinder,
-                new Vector3(0f, 0.05f, 0f), new Vector3(1.55f, 0.055f, 1.55f),
+                new Vector3(0f, 0.05f, 0f), new Vector3(1.72f, 0.055f, 1.72f),
                 new Color(1f, 0.28f, 0.08f, 0.75f), true);
 
-            RegisterObstacle(enemy, ObstacleColliderSpec.Enemy, dy);
+            RegisterObstacle(enemy, ObstacleColliderSpec.PatrolEnemy, dy, ObstacleKind.Enemy);
             enemyNpcs.Add(new EnemyNpcState
             {
                 Go = enemy,
@@ -880,7 +999,7 @@ namespace PenguinRun
                 new Vector3(0f, 0.25f, -0.44f), new Vector3(0.44f, 0.07f, 0.1f),
                 new Color(1f, 0.45f, 0.18f, 0.9f), true);
 
-            RegisterObstacle(enemy, ObstacleColliderSpec.Enemy, dy);
+            RegisterObstacle(enemy, ObstacleColliderSpec.SwoopEnemy, dy, ObstacleKind.Enemy);
             enemyNpcs.Add(new EnemyNpcState
             {
                 Go = enemy,
@@ -905,25 +1024,57 @@ namespace PenguinRun
             var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
             obstacle.transform.position = new Vector3(obstacleLane.ToX(laneWidth), surface + dy, z);
 
-            // 优先使用开源低模素材构建障碍外观；若加载失败则回退到原始 primitive 版本
+            // 外观优先级：开源模型 > 程序化 Mesh > Primitive 回退
             var builtWithModel = TryBuildOpenModelObstacle(obstacle.transform, lowBarrier, palette);
+            if (!builtWithModel)
+                builtWithModel = TryBuildProceduralObstacle(obstacle.transform, lowBarrier, palette);
+
             if (lowBarrier)
             {
                 if (!builtWithModel)
-                {
                     BuildLowBarrier(obstacle.transform, palette);
-                }
-                RegisterObstacle(obstacle, ObstacleColliderSpec.LowSlideGate, dy);
+                RegisterObstacle(obstacle, ObstacleColliderSpec.LowSlideGate, dy, ObstacleKind.SlideGate);
             }
             else
             {
                 if (!builtWithModel)
-                {
                     BuildHighObstacle(obstacle.transform, palette);
-                }
-                // 小型 Track Obstacle 现在使用可跳跃规格（FeetClearanceAboveRoot = 0.72f）
-                RegisterObstacle(obstacle, ObstacleColliderSpec.SmallJumpable, dy);
+                RegisterObstacle(obstacle, ObstacleColliderSpec.SmallJumpable, dy, ObstacleKind.StandardHigh);
             }
+        }
+
+        /// <summary>尝试用程序化 Mesh 构建障碍外观。返回 false 表示无匹配形状，应回退到 Primitive。</summary>
+        private static bool TryBuildProceduralObstacle(Transform root, bool lowBarrier, SegmentObstaclePalette palette)
+        {
+            var mesh = lowBarrier
+                ? ObstacleMeshBuilder.BuildSlideGate()
+                : ObstacleMeshBuilder.BuildCrystalPillar();
+            return mesh != null && AttachProceduralMesh(root, mesh, GetObstaclePaletteTint(palette));
+        }
+
+        private static Color GetObstaclePaletteTint(SegmentObstaclePalette palette) => palette switch
+        {
+            SegmentObstaclePalette.OceanCoral => new Color(0.95f, 0.5f, 0.55f),
+            SegmentObstaclePalette.CedarWood => new Color(0.48f, 0.34f, 0.22f),
+            SegmentObstaclePalette.AuroraGlow => new Color(0.42f, 0.36f, 0.65f),
+            SegmentObstaclePalette.MistFog => new Color(0.62f, 0.7f, 0.78f),
+            SegmentObstaclePalette.SkyCloud => new Color(0.72f, 0.82f, 1f),
+            _ => new Color(0.22f, 0.52f, 0.72f),
+        };
+
+        private static bool AttachProceduralMesh(Transform root, Mesh mesh, Color tint, string objectName = "ProceduralMesh", Vector3 localPosition = default)
+        {
+            if (mesh == null) return false;
+
+            var go = new GameObject(objectName);
+            go.transform.SetParent(root, false);
+            go.transform.localPosition = localPosition;
+            go.transform.localRotation = Quaternion.identity;
+            var mf = go.AddComponent<MeshFilter>();
+            mf.sharedMesh = mesh;
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = RunnerVisuals.CreateMaterial(tint, false);
+            return true;
         }
 
         private bool TryBuildOpenModelObstacle(Transform root, bool lowBarrier, SegmentObstaclePalette palette)
@@ -939,26 +1090,26 @@ namespace PenguinRun
                 {
                     case SegmentObstaclePalette.OceanCoral:
                         modelName = "mushroom_redGroup";
-                        localScale = new Vector3(0.42f, 0.42f, 0.42f);
+                        localScale = new Vector3(0.54f, 0.54f, 0.54f);
                         localPos = new Vector3(0f, -0.12f, 0f);
                         tint = new Color(0.95f, 0.68f, 0.58f);
                         break;
                     case SegmentObstaclePalette.SkyCloud:
                         modelName = "stone_2";
-                        localScale = new Vector3(0.58f, 0.58f, 0.58f);
+                        localScale = new Vector3(0.7f, 0.7f, 0.7f);
                         localPos = new Vector3(0f, -0.05f, 0f);
                         tint = new Color(0.84f, 0.9f, 0.98f);
                         break;
                     case SegmentObstaclePalette.CedarWood:
                     case SegmentObstaclePalette.MistFog:
                         modelName = "stone_1";
-                        localScale = new Vector3(0.62f, 0.62f, 0.62f);
+                        localScale = new Vector3(0.74f, 0.74f, 0.74f);
                         localPos = new Vector3(0f, -0.06f, 0f);
                         tint = new Color(0.58f, 0.52f, 0.46f);
                         break;
                     default:
                         modelName = "stone_1";
-                        localScale = new Vector3(0.64f, 0.64f, 0.64f);
+                        localScale = new Vector3(0.76f, 0.76f, 0.76f);
                         localPos = new Vector3(0f, -0.06f, 0f);
                         tint = new Color(0.72f, 0.84f, 0.94f);
                         break;
@@ -970,32 +1121,32 @@ namespace PenguinRun
                 {
                     case SegmentObstaclePalette.SkyCloud:
                         modelName = "leaftree";
-                        localScale = new Vector3(0.28f, 0.28f, 0.28f);
+                        localScale = new Vector3(0.42f, 0.42f, 0.42f);
                         localPos = new Vector3(0f, -0.5f, 0f);
                         tint = new Color(0.78f, 0.9f, 1f);
                         break;
                     case SegmentObstaclePalette.CedarWood:
                     case SegmentObstaclePalette.MistFog:
                         modelName = "tree_simple";
-                        localScale = new Vector3(0.45f, 0.45f, 0.45f);
+                        localScale = new Vector3(0.58f, 0.58f, 0.58f);
                         localPos = new Vector3(0f, -0.48f, 0f);
                         tint = new Color(0.58f, 0.78f, 0.6f);
                         break;
                     case SegmentObstaclePalette.AuroraGlow:
                         modelName = "rock_largeA";
-                        localScale = new Vector3(0.72f, 0.72f, 0.72f);
+                        localScale = new Vector3(0.82f, 0.82f, 0.82f);
                         localPos = new Vector3(0f, -0.22f, 0f);
                         tint = new Color(0.64f, 0.58f, 0.92f);
                         break;
                     case SegmentObstaclePalette.OceanCoral:
                         modelName = "rock_largeA";
-                        localScale = new Vector3(0.68f, 0.68f, 0.68f);
+                        localScale = new Vector3(0.8f, 0.8f, 0.8f);
                         localPos = new Vector3(0f, -0.22f, 0f);
                         tint = new Color(0.62f, 0.86f, 0.88f);
                         break;
                     default:
                         modelName = "rock_largeA";
-                        localScale = new Vector3(0.7f, 0.7f, 0.7f);
+                        localScale = new Vector3(0.82f, 0.82f, 0.82f);
                         localPos = new Vector3(0f, -0.22f, 0f);
                         tint = new Color(0.72f, 0.8f, 0.9f);
                         break;
@@ -1010,10 +1161,16 @@ namespace PenguinRun
 
             var inst = Object.Instantiate(prefab, root, false);
             inst.name = $"ObstacleModel_{modelName}";
-            inst.transform.localPosition = localPos;
+            inst.transform.localPosition = lowBarrier ? localPos + new Vector3(0f, -0.04f, 0f) : localPos;
             inst.transform.localRotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
-            inst.transform.localScale = localScale * OpenObstacleVisualScaleBoost;
+            var scaleBoost = lowBarrier ? OpenObstacleVisualScaleBoost * 1.08f : OpenObstacleVisualScaleBoost;
+            inst.transform.localScale = localScale * scaleBoost;
             TintModel(inst, tint);
+            if (lowBarrier)
+            {
+                AddSlideGateGroundStrip(root);
+            }
+
             return true;
         }
 
@@ -1034,6 +1191,19 @@ namespace PenguinRun
             return prefab;
         }
 
+        private bool TryAttachObstacleModel(Transform root, string modelName, Vector3 localPos, Vector3 localScale, Color tint)
+        {
+            var prefab = LoadModelPrefab(modelName);
+            if (prefab == null) return false;
+            var inst = Object.Instantiate(prefab, root, false);
+            inst.name = $"ObstacleModel_{modelName}";
+            inst.transform.localPosition = localPos;
+            inst.transform.localRotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+            inst.transform.localScale = localScale * OpenObstacleVisualScaleBoost;
+            TintModel(inst, tint);
+            return true;
+        }
+
         private static void TintModel(GameObject root, Color tint)
         {
             if (root == null) return;
@@ -1045,12 +1215,12 @@ namespace PenguinRun
                 if (mat.HasProperty("_BaseColor"))
                 {
                     var baseColor = mat.GetColor("_BaseColor");
-                    mat.SetColor("_BaseColor", Color.Lerp(baseColor, tint, 0.4f));
+                    mat.SetColor("_BaseColor", Color.Lerp(baseColor, tint, 0.52f));
                 }
                 if (mat.HasProperty("_Color"))
                 {
                     var baseColor = mat.GetColor("_Color");
-                    mat.SetColor("_Color", Color.Lerp(baseColor, tint, 0.4f));
+                    mat.SetColor("_Color", Color.Lerp(baseColor, tint, 0.52f));
                 }
             }
         }
@@ -1090,6 +1260,84 @@ namespace PenguinRun
                     AddChildPrimitive(root, "Warning Lamp R", PrimitiveType.Sphere, new Vector3(0.74f, 0.18f, 0f), Vector3.one * 0.13f, new Color(1f, 0.95f, 0.4f, 0.85f), true);
                     break;
             }
+
+            AddSlideGateGroundStrip(root);
+        }
+
+        private static void AddSlideGateGroundStrip(Transform root)
+        {
+            AddChildPrimitive(root, "Hazard Strip", PrimitiveType.Cube,
+                new Vector3(0f, -0.14f, 0.02f), new Vector3(1.62f, 0.05f, 1.34f),
+                new Color(1f, 0.48f, 0.12f, 0.42f), true);
+        }
+
+        // ── 速度门 ──────────────────────────────────────────────
+
+        /// <summary>在指定位置生成速度门（玩家穿过获得短暂冲刺）。</summary>
+        public void SpawnSpeedGate(float z, RunnerLane lane, float runDistance, SegmentObstaclePalette palette)
+        {
+            var gate = new GameObject("Speed Gate");
+            var laneX = lane.ToX(laneWidth);
+            var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
+            gate.transform.position = new Vector3(laneX, surface, z);
+
+            var glowColor = palette switch
+            {
+                SegmentObstaclePalette.AuroraGlow => new Color(0.4f, 0.6f, 1f, 0.7f),
+                SegmentObstaclePalette.OceanCoral => new Color(0.2f, 0.9f, 0.95f, 0.7f),
+                SegmentObstaclePalette.SkyCloud => new Color(1f, 0.9f, 0.3f, 0.7f),
+                _ => new Color(0.3f, 0.9f, 1f, 0.7f),
+            };
+
+            // 左柱
+            var pillarL = RunnerVisuals.CreatePrimitive("GatePillarL", PrimitiveType.Cylinder,
+                Vector3.zero, new Vector3(0.18f, 2.2f, 0.18f), glowColor, true);
+            pillarL.transform.SetParent(gate.transform, false);
+            pillarL.transform.localPosition = new Vector3(-0.85f, 1.1f, 0f);
+
+            // 右柱
+            var pillarR = RunnerVisuals.CreatePrimitive("GatePillarR", PrimitiveType.Cylinder,
+                Vector3.zero, new Vector3(0.18f, 2.2f, 0.18f), glowColor, true);
+            pillarR.transform.SetParent(gate.transform, false);
+            pillarR.transform.localPosition = new Vector3(0.85f, 1.1f, 0f);
+
+            // 顶部横梁
+            var beam = RunnerVisuals.CreatePrimitive("GateBeam", PrimitiveType.Cube,
+                Vector3.zero, new Vector3(1.8f, 0.12f, 0.25f), glowColor, true);
+            beam.transform.SetParent(gate.transform, false);
+            beam.transform.localPosition = new Vector3(0f, 2.25f, 0f);
+
+            // 光环
+            var ring = RunnerVisuals.CreatePrimitive("GateRing", PrimitiveType.Cylinder,
+                Vector3.zero, new Vector3(1.2f, 0.04f, 1.2f), new Color(glowColor.r, glowColor.g, glowColor.b, 0.35f), true);
+            ring.transform.SetParent(gate.transform, false);
+            ring.transform.localPosition = new Vector3(0f, 0.05f, 0f);
+
+            speedGates.Add(gate);
+        }
+
+        /// <summary>检查玩家是否穿过速度门，返回 true 表示触发了冲刺。</summary>
+        public bool CheckSpeedGatePass(Transform player, float playerY, out string feedback)
+        {
+            feedback = string.Empty;
+            var px = player.position.x;
+            var pz = player.position.z;
+            for (var i = speedGates.Count - 1; i >= 0; i--)
+            {
+                var gate = speedGates[i];
+                if (gate == null) { speedGates.RemoveAt(i); continue; }
+                var gx = gate.transform.position.x;
+                var gz = gate.transform.position.z;
+                if (Mathf.Abs(gz - pz) > 0.85f) continue;
+                if (Mathf.Abs(gx - px) > 1.2f) continue;
+                if (Mathf.Abs(gate.transform.position.y - playerY) > 1.6f) continue;
+
+                Object.Destroy(gate);
+                speedGates.RemoveAt(i);
+                feedback = "速度门 · 冲刺！";
+                return true;
+            }
+            return false;
         }
 
         private static void BuildHighObstacle(Transform root, SegmentObstaclePalette palette)
@@ -1154,6 +1402,19 @@ namespace PenguinRun
             var builtWithModel = TryBuildOpenModelWideWall(obstacle.transform, palette);
             if (!builtWithModel)
             {
+                var wallTint = palette switch
+                {
+                    SegmentObstaclePalette.OceanCoral => new Color(0.88f, 0.52f, 0.42f),
+                    SegmentObstaclePalette.SkyCloud => new Color(0.72f, 0.78f, 0.9f),
+                    SegmentObstaclePalette.AuroraGlow => new Color(0.26f, 0.22f, 0.55f),
+                    SegmentObstaclePalette.CedarWood => new Color(0.34f, 0.38f, 0.44f),
+                    _ => new Color(0.16f, 0.28f, 0.42f),
+                };
+                builtWithModel = AttachProceduralMesh(obstacle.transform, ObstacleMeshBuilder.BuildWideWall(), wallTint, "ProcWall");
+            }
+
+            if (!builtWithModel)
+            {
                 switch (palette)
                 {
                     case SegmentObstaclePalette.OceanCoral:
@@ -1185,7 +1446,59 @@ namespace PenguinRun
                         break;
                 }
             }
-            RegisterObstacle(obstacle, ObstacleColliderSpec.WideWall, dy);
+            RegisterObstacle(obstacle, ObstacleColliderSpec.WideWall, dy, ObstacleKind.WideWall);
+        }
+
+        private void SpawnWideSlideGate(float z, RunnerLane obstacleLane, SegmentObstaclePalette palette, float runDistance)
+        {
+            var obstacle = new GameObject("Wide Slide Gate");
+            var dy = 0.22f;
+            var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
+            obstacle.transform.position = new Vector3(obstacleLane.ToX(laneWidth), surface + dy, z);
+
+            var builtWithModel = TryBuildOpenModelObstacle(obstacle.transform, true, palette);
+            if (!builtWithModel)
+                builtWithModel = AttachProceduralMesh(obstacle.transform, ObstacleMeshBuilder.BuildWideSlideGate(), GetObstaclePaletteTint(palette), "ProcWideSlideGate");
+            if (!builtWithModel)
+            {
+                BuildLowBarrier(obstacle.transform, palette);
+
+                var beam = obstacle.transform.Find("Gate Beam");
+                if (beam != null)
+                {
+                    var scale = beam.localScale;
+                    beam.localScale = new Vector3(scale.x * 2.2f, scale.y, scale.z);
+                }
+                else
+                {
+                    AddChildPrimitive(obstacle.transform, "Wide Gate Beam", PrimitiveType.Cube,
+                        new Vector3(0f, 0.03f, 0f), new Vector3(3.18f, 0.28f, 1.25f), new Color(0.88f, 0.38f, 0.12f));
+                    AddChildPrimitive(obstacle.transform, "Wide Gate Stripe", PrimitiveType.Cube,
+                        new Vector3(0f, 0.04f, 0f), new Vector3(3.08f, 0.08f, 0.18f), new Color(0.18f, 0.1f, 0.06f));
+                }
+            }
+
+            AddSlideGateGroundStrip(obstacle.transform);
+            RegisterObstacle(obstacle, ObstacleColliderSpec.WideSlideOnly, dy, ObstacleKind.WideSlideGate);
+        }
+
+        private void SpawnFlyingObstacle(float z, RunnerLane lane, SegmentObstaclePalette palette, float runDistance)
+        {
+            var obstacle = new GameObject("Flying Hazard");
+            var dy = 1.1f;
+            var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
+            obstacle.transform.position = new Vector3(lane.ToX(laneWidth), surface + dy, z);
+
+            var tint = palette switch
+            {
+                SegmentObstaclePalette.SkyCloud => new Color(0.72f, 0.82f, 1f, 0.88f),
+                SegmentObstaclePalette.OceanCoral => new Color(0.95f, 0.55f, 0.62f, 0.9f),
+                SegmentObstaclePalette.AuroraGlow => new Color(0.72f, 0.55f, 0.95f, 0.9f),
+                _ => new Color(0.55f, 0.78f, 0.95f, 0.9f),
+            };
+            AttachProceduralMesh(obstacle.transform, ObstacleMeshBuilder.BuildFlyingOrb(), tint, "ProcFlyingOrb");
+
+            RegisterObstacle(obstacle, ObstacleColliderSpec.SmallFlying, dy, ObstacleKind.Flying);
         }
 
         private bool TryBuildOpenModelWideWall(Transform root, SegmentObstaclePalette palette)
@@ -1207,8 +1520,8 @@ namespace PenguinRun
             inst.transform.localPosition = new Vector3(0f, -0.08f, 0f);
             inst.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
             var scale = modelName == "log_stackLarge"
-                ? new Vector3(1.1f, 0.95f, 1.45f)
-                : new Vector3(2.25f, 1.05f, 1.35f);
+                ? new Vector3(1.22f, 1.05f, 1.58f)
+                : new Vector3(2.42f, 1.15f, 1.48f);
             inst.transform.localScale = scale * OpenWideWallVisualScaleBoost;
 
             var tint = palette switch
@@ -1235,13 +1548,13 @@ namespace PenguinRun
             inst.name = patrolEnemy ? "PatrolEnemyModel" : "SwoopEnemyModel";
             inst.transform.localPosition = patrolEnemy ? new Vector3(0f, -0.22f, 0f) : new Vector3(0f, -0.18f, 0f);
             inst.transform.localRotation = Quaternion.Euler(0f, patrolEnemy ? 0f : 90f, patrolEnemy ? 0f : 12f);
-            var scale = patrolEnemy ? new Vector3(0.85f, 0.85f, 0.85f) : new Vector3(0.72f, 0.72f, 0.72f);
+            var scale = patrolEnemy ? new Vector3(0.95f, 0.95f, 0.95f) : new Vector3(0.84f, 0.84f, 0.84f);
             inst.transform.localScale = scale * OpenEnemyVisualScaleBoost;
             TintModel(inst, patrolEnemy ? new Color(0.74f, 0.2f, 0.22f) : new Color(0.58f, 0.36f, 0.82f));
 
             // 给敌人添加警示标志：红色危险环
             AddChildPrimitive(root, "EnemyWarnRing", PrimitiveType.Cylinder, new Vector3(0f, -0.3f, 0f),
-                new Vector3(1.05f, 0.06f, 1.05f), new Color(1f, 0.25f, 0.12f, 0.6f), true);
+                new Vector3(1.18f, 0.06f, 1.18f), new Color(1f, 0.25f, 0.12f, 0.6f), true);
             return true;
         }
 
@@ -1275,24 +1588,20 @@ namespace PenguinRun
             {
                 var inst = Object.Instantiate(prefab, obstacle.transform, false);
                 inst.transform.localPosition = new Vector3(0f, -0.25f, 0f);
-                inst.transform.localScale = new Vector3(0.55f, 0.95f, 0.55f);
+                inst.transform.localScale = new Vector3(0.68f, 1.15f, 0.68f);
                 TintModel(inst, tint);
             }
             else
             {
-                // Fallback：三棱柱尖刺
-                AddChildPrimitive(obstacle.transform, "Spike Body", PrimitiveType.Capsule,
-                    new Vector3(0f, 0.3f, 0f), new Vector3(0.4f, 1.2f, 0.4f), tint);
-                AddChildPrimitive(obstacle.transform, "Spike Tip", PrimitiveType.Cube,
-                    new Vector3(0f, 1.0f, 0f), new Vector3(0.2f, 0.35f, 0.2f), new Color(1f, 0.3f, 0.15f));
+                AttachProceduralMesh(obstacle.transform, ObstacleMeshBuilder.BuildSpike(), tint, "ProcSpike");
             }
 
             // 危险标志
             AddChildPrimitive(obstacle.transform, "DangerRing", PrimitiveType.Cylinder,
-                new Vector3(0f, -0.28f, 0f), new Vector3(0.85f, 0.05f, 0.85f),
+                new Vector3(0f, -0.28f, 0f), new Vector3(0.98f, 0.06f, 0.98f),
                 new Color(1f, 0.28f, 0.1f, 0.55f), true);
 
-            RegisterObstacle(obstacle, ObstacleColliderSpec.TallSpike, dy);
+            RegisterObstacle(obstacle, ObstacleColliderSpec.TallSpike, dy, ObstacleKind.TallSpike);
         }
 
         /// <summary>生成中等高度障碍（MediumBarrier 规格，可跳或可滑）。</summary>
@@ -1305,30 +1614,29 @@ namespace PenguinRun
 
             var builtWithModel = TryBuildOpenModelObstacle(obstacle.transform, true, palette);
             if (!builtWithModel)
+                builtWithModel = AttachProceduralMesh(obstacle.transform, ObstacleMeshBuilder.BuildMediumBarrier(), GetObstaclePaletteTint(palette), "ProcMediumBarrier");
+            if (!builtWithModel)
             {
-                // Fallback：厚板障碍
                 AddChildPrimitive(obstacle.transform, "Barrier Slab", PrimitiveType.Cube,
                     Vector3.zero, new Vector3(0.85f, 0.9f, 0.36f), new Color(0.65f, 0.75f, 0.85f));
                 AddChildPrimitive(obstacle.transform, "Barrier Stripe", PrimitiveType.Cube,
                     new Vector3(0f, 0.35f, -0.2f), new Vector3(0.88f, 0.12f, 0.04f), new Color(1f, 0.82f, 0.1f));
             }
 
-            RegisterObstacle(obstacle, ObstacleColliderSpec.MediumBarrier, dy);
+            RegisterObstacle(obstacle, ObstacleColliderSpec.MediumBarrier, dy, ObstacleKind.MediumBarrier);
         }
 
         private void SpawnRollingSnowball(float z, RunnerLane obstacleLane, SegmentObstaclePalette palette, float runDistance)
         {
-            var obstacle = RunnerVisuals.CreatePrimitive(
-                "Rolling Snowball",
-                PrimitiveType.Sphere,
-                Vector3.zero,
-                Vector3.one * 1.05f,
-                palette switch
-                {
-                    SegmentObstaclePalette.AuroraGlow => new Color(0.48f, 0.42f, 0.62f),
-                    SegmentObstaclePalette.MistFog => new Color(0.45f, 0.5f, 0.56f),
-                    _ => new Color(0.42f, 0.48f, 0.56f),
-                });
+            var obstacle = new GameObject("Rolling Snowball");
+            var tint = palette switch
+            {
+                SegmentObstaclePalette.AuroraGlow => new Color(0.48f, 0.42f, 0.62f),
+                SegmentObstaclePalette.MistFog => new Color(0.45f, 0.5f, 0.56f),
+                _ => new Color(0.42f, 0.48f, 0.56f),
+            };
+            if (!TryAttachObstacleModel(obstacle.transform, "rock_smallA", Vector3.zero, Vector3.one * 1.05f, tint))
+                AttachProceduralMesh(obstacle.transform, ObstacleMeshBuilder.BuildSnowball(), tint, "ProcSnowball");
             var dy = 0.53f;
             var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
             obstacle.transform.position = new Vector3(obstacleLane.ToX(laneWidth), surface + dy, z);
@@ -1347,7 +1655,7 @@ namespace PenguinRun
             AddChildPrimitive(obstacle.transform, "Snow Mist", PrimitiveType.Sphere,
                 new Vector3(0f, -0.1f, 0.55f), new Vector3(0.9f, 0.4f, 0.7f),
                 new Color(0.95f, 0.98f, 1f, 0.45f), true);
-            RegisterObstacle(obstacle, ObstacleColliderSpec.Rolling, dy);
+            RegisterObstacle(obstacle, ObstacleColliderSpec.Rolling, dy, ObstacleKind.Rolling);
             rollingObstacles.Add(
                 new RollingState
                 {
@@ -1370,13 +1678,112 @@ namespace PenguinRun
 
         private void SpawnCoin(float z, RunnerLane coinLane, float runDistance, float bonusY = 0f)
         {
-            var coin = RunnerVisuals.CreatePrimitive("Fish Coin", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.42f, new Color(1f, 0.82f, 0.25f));
+            var coin = BuildFishSnackVisual();
             var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
             coin.transform.position = new Vector3(coinLane.ToX(laneWidth), surface + CoinHoverHeight + bonusY, z);
             coins.Add(coin);
             if (bonusY > 0f)
             {
                 coinYDelta[coin] = bonusY;
+            }
+        }
+
+        private static GameObject BuildFishSnackVisual()
+        {
+            var root = new GameObject("Fish Coin");
+
+            var meshRoot = new GameObject("FishMesh");
+            meshRoot.transform.SetParent(root.transform, false);
+            var mf = meshRoot.AddComponent<MeshFilter>();
+            mf.sharedMesh = ObstacleMeshBuilder.BuildFishSnack();
+            var mr = meshRoot.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = CreateFishSnackMaterial(new Color(1f, 0.82f, 0.28f));
+
+            AttachFishSnackFace(meshRoot.transform);
+
+            var glow = RunnerVisuals.CreatePrimitive("PickupGlow", PrimitiveType.Cylinder,
+                new Vector3(0f, -0.2f, 0f), new Vector3(0.62f, 0.025f, 0.62f),
+                new Color(1f, 0.88f, 0.4f, 0.32f), true);
+            glow.transform.SetParent(root.transform, false);
+            glow.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+
+            root.AddComponent<FishSnackWobble>();
+            return root;
+        }
+
+        private static Material CreateFishSnackMaterial(Color color)
+        {
+            var mat = RunnerVisuals.CreateMaterial(color);
+            if (mat.HasProperty("_Smoothness"))
+                mat.SetFloat("_Smoothness", 0.58f);
+            if (mat.HasProperty("_Metallic"))
+                mat.SetFloat("_Metallic", 0.12f);
+            if (mat.HasProperty("_EmissionColor"))
+            {
+                mat.EnableKeyword("_EMISSION");
+                mat.SetColor("_EmissionColor", new Color(color.r, color.g, color.b) * 0.18f);
+            }
+            return mat;
+        }
+
+        private static void AttachFishSnackFace(Transform meshRoot, float scale = 1f)
+        {
+            var eyePos = new Vector3(0.17f * scale, 0.07f * scale, -0.21f * scale);
+            var eye = RunnerVisuals.CreatePrimitive("FishEye", PrimitiveType.Sphere, eyePos,
+                Vector3.one * (0.12f * scale), Color.white);
+            eye.transform.SetParent(meshRoot, false);
+
+            var pupil = RunnerVisuals.CreatePrimitive("FishPupil", PrimitiveType.Sphere,
+                eyePos + new Vector3(0f, 0f, -0.04f * scale), Vector3.one * (0.055f * scale),
+                new Color(0.12f, 0.08f, 0.04f));
+            pupil.transform.SetParent(meshRoot, false);
+
+            var cheek = RunnerVisuals.CreatePrimitive("FishCheek", PrimitiveType.Sphere,
+                new Vector3(0.2f * scale, -0.02f * scale, -0.14f * scale), Vector3.one * (0.07f * scale),
+                new Color(1f, 0.55f, 0.35f, 0.45f), true);
+            cheek.transform.SetParent(meshRoot, false);
+        }
+
+        private static GameObject BuildFishSnackProp(Transform parent, Vector3 localPos, float scale, float spinOffset = 0f)
+        {
+            var prop = new GameObject("FishSnackProp");
+            prop.transform.SetParent(parent, false);
+            prop.transform.localPosition = localPos;
+            prop.transform.localScale = Vector3.one * scale;
+
+            var mf = prop.AddComponent<MeshFilter>();
+            mf.sharedMesh = ObstacleMeshBuilder.BuildFishSnack();
+            var mr = prop.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = CreateFishSnackMaterial(new Color(1f, 0.82f, 0.28f));
+            AttachFishSnackFace(prop.transform);
+
+            var wobble = prop.AddComponent<FishSnackWobble>();
+            wobble.PhaseOffset = spinOffset;
+            return prop;
+        }
+
+        private sealed class FishSnackWobble : MonoBehaviour
+        {
+            public float PhaseOffset;
+            private Vector3 basePos;
+            private float phase;
+
+            private void Start()
+            {
+                basePos = transform.localPosition;
+                phase = PhaseOffset + Random.Range(0f, Mathf.PI * 2f);
+            }
+
+            private void Update()
+            {
+                var t = Time.time * 3.1f + phase;
+                var bob = Mathf.Sin(t) * 0.09f;
+                transform.localPosition = basePos + new Vector3(0f, bob, 0f);
+                var spin = (t * 58f) % 360f;
+                transform.localRotation = Quaternion.Euler(
+                    Mathf.Sin(t * 0.65f) * 7f,
+                    spin,
+                    Mathf.Cos(t * 0.5f) * 5f);
             }
         }
 
@@ -1536,31 +1943,16 @@ namespace PenguinRun
                     break;
 
                 case PowerUpKind.ScoreStar:
-                    AddChildPrimitive(root, "StarCenter", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.22f,
+                    AttachProceduralMesh(root, ObstacleMeshBuilder.BuildPowerUpStar(), secondaryColor, "ProcScoreStar");
+                    AddChildPrimitive(root, "StarCenter", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.12f,
                         new Color(1f, 0.95f, 1f, 0.95f));
-                    for (var i = 0; i < 5; i++)
-                    {
-                        var ang = (i * 72f - 90f) * Mathf.Deg2Rad;
-                        var ray = AddChildPrimitive(root, $"StarRay{i}", PrimitiveType.Cube,
-                            new Vector3(Mathf.Cos(ang) * 0.38f, Mathf.Sin(ang) * 0.38f, 0f),
-                            new Vector3(0.12f, 0.42f, 0.08f), secondaryColor, true);
-                        ray.transform.localRotation = Quaternion.Euler(0f, 0f, i * 72f);
-                    }
                     break;
 
                 case PowerUpKind.DoubleFishSnack:
-                    AddChildPrimitive(root, "FishSnackA Body", PrimitiveType.Capsule, new Vector3(0f, 0.22f, 0f),
-                        new Vector3(0.42f, 0.62f, 0.42f), color);
-                    AddChildPrimitive(root, "FishSnackA Tail", PrimitiveType.Cube, new Vector3(0f, 0.22f, 0.32f),
-                        new Vector3(0.32f, 0.22f, 0.14f), secondaryColor);
-                    AddChildPrimitive(root, "FishSnackA Eye", PrimitiveType.Sphere, new Vector3(0.14f, 0.28f, -0.22f),
-                        Vector3.one * 0.08f, Color.white);
-                    AddChildPrimitive(root, "FishSnackB Body", PrimitiveType.Capsule, new Vector3(0f, -0.22f, 0f),
-                        new Vector3(0.42f, 0.62f, 0.42f), color);
-                    AddChildPrimitive(root, "FishSnackB Tail", PrimitiveType.Cube, new Vector3(0f, -0.22f, 0.32f),
-                        new Vector3(0.32f, 0.22f, 0.14f), secondaryColor);
-                    AddChildPrimitive(root, "FishSnackB Eye", PrimitiveType.Sphere, new Vector3(0.14f, -0.16f, -0.22f),
-                        Vector3.one * 0.08f, Color.white);
+                    BuildFishSnackProp(root, new Vector3(0f, 0.24f, 0f), 0.82f, 0f);
+                    BuildFishSnackProp(root, new Vector3(0f, -0.24f, 0f), 0.82f, 1.7f);
+                    AddChildPrimitive(root, "DoubleGlow", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.72f,
+                        new Color(color.r, color.g, color.b, 0.12f), true);
                     break;
 
                 case PowerUpKind.TimeHourglass:

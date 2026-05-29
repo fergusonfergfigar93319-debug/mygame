@@ -67,6 +67,19 @@ namespace PenguinRun
             return material.HasProperty("_Color") ? material.GetColor("_Color") : Color.white;
         }
 
+        public static void SetRendererAlpha(Renderer renderer, float alpha)
+        {
+            if (renderer == null) return;
+            var material = renderer.sharedMaterial;
+            var color = GetColor(material);
+            color.a = Mathf.Clamp01(alpha);
+            SetColor(material, color);
+            if (color.a < 0.99f)
+            {
+                MakeTransparent(material);
+            }
+        }
+
         private static void MakeTransparent(Material material)
         {
             if (material.HasProperty("_Surface"))

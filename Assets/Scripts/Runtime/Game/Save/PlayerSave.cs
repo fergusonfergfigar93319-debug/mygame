@@ -47,9 +47,13 @@ namespace PenguinRun.Game.Save
         private const string KeyCompanionDror = "companion_dror_unlocked";
         private const string KeyVisitedCamp = "visited_camp";
         private const string KeyRunner3DTutorialDone = "runner3d_tutorial_done";
-        private const string KeySeenCampUnlockNotice = "seen_camp_unlock_notice";
+        private const string KeyRunnerSlideGateTutorialDone = "runner_slide_gate_tutorial_done";
         private const string KeySelectedDifficulty = "selected_difficulty";
         private const string KeyDefeatedBossCsv = "defeated_boss_ids_csv";
+        private const string KeyLoginStreak = "login_streak";
+        private const string KeyLastLoginDate = "last_login_date";
+        private const string KeyTotalRuns = "total_runs";
+        private const string KeyDailyCheckInClaimed = "daily_checkin_claimed_";
 
         public const string DefaultNickname = "咕咕嘎嘎";
 
@@ -360,10 +364,10 @@ namespace PenguinRun.Game.Save
             set => PlayerPrefs.SetInt(KeyRunner3DTutorialDone, value ? 1 : 0);
         }
 
-        public static bool SeenCampUnlockNotice
+        public static bool RunnerSlideGateTutorialDone
         {
-            get => PlayerPrefs.GetInt(KeySeenCampUnlockNotice, 0) != 0;
-            set => PlayerPrefs.SetInt(KeySeenCampUnlockNotice, value ? 1 : 0);
+            get => PlayerPrefs.GetInt(KeyRunnerSlideGateTutorialDone, 0) != 0;
+            set => PlayerPrefs.SetInt(KeyRunnerSlideGateTutorialDone, value ? 1 : 0);
         }
 
         public static DifficultyKind SelectedDifficulty
@@ -418,6 +422,137 @@ namespace PenguinRun.Game.Save
         }
 
         public static void Flush() => PlayerPrefs.Save();
+
+        // ── 登录连续天数 & 每日签到 ──────────────────────────────────────────────
+
+        public static int LoginStreak
+        {
+            get => Mathf.Max(0, PlayerPrefs.GetInt(KeyLoginStreak, 0));
+            private set => PlayerPrefs.SetInt(KeyLoginStreak, Mathf.Max(0, value));
+        }
+
+        /// <summary>每次进入主菜单时调用，更新连续登录天数并返回是否是今天首次登录。</summary>
+        public static bool TryRecordLogin()
+        {
+            var today = DateTime.Today.ToString("yyyy-MM-dd");
+            var last = PlayerPrefs.GetString(KeyLastLoginDate, string.Empty);
+            if (last == today) return false;
+
+            var yesterday = DateTime.Today.AddDays(-1).ToString("yyyy-MM-dd");
+            LoginStreak = last == yesterday ? LoginStreak + 1 : 1;
+            PlayerPrefs.SetString(KeyLastLoginDate, today);
+            PlayerPrefs.Save();
+            return true;
+        }
+
+        /// <summary>今日签到奖励是否已领取。</summary>
+        public static bool IsDailyCheckInClaimed()
+        {
+            var today = DateTime.Today.ToString("yyyy-MM-dd");
+            return PlayerPrefs.GetInt(KeyDailyCheckInClaimed + today, 0) != 0;
+        }
+
+        /// <summary>领取今日签到奖励，返回奖励鱼干数量（0 表示已领取或失败）。</summary>
+        public static int ClaimDailyCheckIn()
+        {
+            if (IsDailyCheckInClaimed()) return 0;
+            var today = DateTime.Today.ToString("yyyy-MM-dd");
+            var streak = LoginStreak;
+            // 连续天数越多奖励越高，最高 7 天循环
+            var reward = streak switch
+            {
+                1 => 10,
+                2 => 15,
+                3 => 20,
+                4 => 25,
+                5 => 30,
+                6 => 40,
+                _ => 50,
+            };
+            AddFishSnacks(reward);
+            PlayerPrefs.SetInt(KeyDailyCheckInClaimed + today, 1);
+            PlayerPrefs.Save();
+            return reward;
+        }
+
+        /// <summary>
+        /// 今日若未签到，预览将获得的鱼干数（与 <see cref="ClaimDailyCheckIn"/> 公式一致）。
+        /// </summary>
+        public static int PreviewDailyCheckInReward()
+        {
+            var streak = Mathf.Max(1, LoginStreak);
+            return streak switch
+            {
+                1 => 10,
+                2 => 15,
+                3 => 20,
+                4 => 25,
+                5 => 30,
+                6 => 40,
+                _ => 50,
+            };
+        }
+
+        // ── 总局数 ────────────────────────────────────────────────────────────────
+
+        public static int TotalRuns
+        {
+            get => Mathf.Max(0, PlayerPrefs.GetInt(KeyTotalRuns, 0));
+            set => PlayerPrefs.SetInt(KeyTotalRuns, Mathf.Max(0, value));
+        }
+
+        public static void IncrementTotalRuns() => TotalRuns = TotalRuns + 1;
+
+        /// <summary>老存档回填：若历史记录条数多于已记总局数，以记录数为准。</summary>
+        public static void EnsureTotalRunsSynced()
+        {
+            var fromRecords = RunRecords.GetStats().TotalRuns;
+            if (fromRecords > TotalRuns)
+                TotalRuns = fromRecords;
+        }
+
+        // ── 玩家等级（基于累计鱼干 + 最高分） ────────────────────────────────────
+
+        /// <summary>根据累计鱼干和最高分计算玩家等级（1-50）。</summary>
+        public static int PlayerLevel
+        {
+            get
+            {
+                var xp = TotalFishSnacks + BestScore / 10;
+                // 每级所需 XP 递增：Lv1=100, Lv2=250, Lv3=450...
+                var level = 1;
+                var threshold = 0;
+                for (var i = 1; i <= 50; i++)
+                {
+                    threshold += 100 + (i - 1) * 50;
+                    if (xp >= threshold) level = i + 1;
+                    else break;
+                }
+                return Mathf.Clamp(level, 1, 50);
+            }
+        }
+
+        /// <summary>当前等级的 XP 进度（0~1）。</summary>
+        public static float PlayerLevelProgress
+        {
+            get
+            {
+                var xp = TotalFishSnacks + BestScore / 10;
+                var level = PlayerLevel;
+                var prevThreshold = 0;
+                var nextThreshold = 100;
+                var acc = 0;
+                for (var i = 1; i <= 50; i++)
+                {
+                    var needed = 100 + (i - 1) * 50;
+                    if (i < level) { acc += needed; prevThreshold = acc; }
+                    else if (i == level) { nextThreshold = acc + needed; break; }
+                }
+                var range = nextThreshold - prevThreshold;
+                if (range <= 0) return 1f;
+                return Mathf.Clamp01((float)(xp - prevThreshold) / range);
+            }
+        }
 
         public static bool HasDefeatedBoss(string bossId)
         {

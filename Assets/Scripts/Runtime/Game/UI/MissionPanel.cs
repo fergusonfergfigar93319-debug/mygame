@@ -15,6 +15,7 @@ namespace PenguinRun.Game.UI
         private System.Action<MainMenuBootstrap.PanelEvent, string> dispatch;
         private MissionTrack track = MissionTrack.Daily;
         private RectTransform contentRoot;
+        private RectTransform headerBar;
         private Text countdownText;
         private GameObject countdownRow;
         private float countdownTickAcc;
@@ -56,7 +57,7 @@ namespace PenguinRun.Game.UI
 
         private void BuildLayout(RectTransform parent)
         {
-            PanelHeader.Create(parent, "每日任务", "完成目标领取鱼干", () => dispatch(MainMenuBootstrap.PanelEvent.Close, null));
+            headerBar = PanelHeader.Create(parent, "每日任务", "完成目标领取鱼干", () => dispatch(MainMenuBootstrap.PanelEvent.Close, null));
 
             const float tabsHeight = 88f;
             const float tabsGap = 16f;
@@ -181,6 +182,7 @@ namespace PenguinRun.Game.UI
 
         private void Refresh()
         {
+            PanelHeader.RefreshCurrency(headerBar);
             for (var i = contentRoot.childCount - 1; i >= 0; i--)
             {
                 Destroy(contentRoot.GetChild(i).gameObject);

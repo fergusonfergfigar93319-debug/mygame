@@ -8,7 +8,7 @@ namespace PenguinRun.Game.UI
 {
     /// <summary>
     /// 营地/商店/记录三合一面板：统一入口、统一货币显示、Tab 切换。
-    /// 整合原 CampPanel + ShopPanel 功能，新增 RunRecords 战绩页。
+    /// 整合自 CampPanel + ShopPanel 功能，新增 RunRecords 战绩页。
     /// </summary>
     public sealed class CampShopPanel : MonoBehaviour
     {
@@ -366,7 +366,7 @@ namespace PenguinRun.Game.UI
             // 三个统计 chip
             BuildStatChip(row, "总等级", $"{totalLevels}/{maxTotal}", new Color(0.4f, 0.85f, 1f, 1f), 0.02f);
             BuildStatChip(row, "已满级", $"{CampUpgrades.MaxedKindCount()}/{CampUpgrades.AllKinds.Length}", new Color(0.4f, 0.95f, 0.7f, 1f), 0.35f);
-            BuildStatChip(row, "综合加成", $"鱼+{fishPct:0}% 分+{scorePct:0}%", new Color(1f, 0.82f, 0.35f, 1f), 0.68f);
+            BuildStatChip(row, "综合加成", $"鱼+{fishPct:0}%  分+{scorePct:0}%", new Color(1f, 0.82f, 0.35f, 1f), 0.68f);
 
             // 底部进度条
             var track = UiBuilder.CreateRect("Track", row,
@@ -522,7 +522,7 @@ namespace PenguinRun.Game.UI
 
             var nextVal = maxed ? "已满级" : CampUpgrades.FormatEffectAt(kind, level + 1);
             var nextText = UiBuilder.CreateText("Next", previewBg,
-                $"下一级 {nextVal}", 17, FontStyle.Bold, TextAnchor.MiddleLeft,
+                $"下一级 · {nextVal}", 17, FontStyle.Bold, TextAnchor.MiddleLeft,
                 maxed ? UiBuilder.WarmGold : kindColor);
             var nrt = (RectTransform)nextText.transform;
             nrt.anchorMin = new Vector2(0.5f, 0f);
@@ -588,7 +588,7 @@ namespace PenguinRun.Game.UI
                 if (CampUpgrades.TryPurchase(kind))
                 {
                     var newLv = CampUpgrades.GetLevel(kind);
-                    var msg = newLv >= maxLevel ? $"{CampUpgrades.GetTitle(kind)} 升至满级！" : $"升级到 Lv {newLv}";
+                    var msg = newLv >= maxLevel ? $"{CampUpgrades.GetTitle(kind)} 升至满级！" : $"升级至 Lv {newLv}";
                     dispatch(MainMenuBootstrap.PanelEvent.Toast, msg);
                     Refresh();
                 }
@@ -758,7 +758,7 @@ namespace PenguinRun.Game.UI
             var df = ShopStore.InventoryCount(ShopItemKind.BoosterDoubleFish);
             var sb = ShopStore.InventoryCount(ShopItemKind.BoosterScoreBoost);
             var ls = ShopStore.InventoryCount(ShopItemKind.BoosterLuckyStart);
-            var invText = df + sb + ls == 0 ? "持有道具：暂无" : $"双倍 ×{df} · 加分 ×{sb} · 幸运 ×{ls}";
+            var invText = df + sb + ls == 0 ? "持有道具：暂无消耗券" : $"双倍 ×{df} · 加分 ×{sb} · 幸运 ×{ls}";
 
             var invLabel = UiBuilder.CreateText("InvText", row, invText,
                 21, FontStyle.Bold, TextAnchor.MiddleLeft, Color.white);
@@ -1148,7 +1148,7 @@ namespace PenguinRun.Game.UI
                     new Vector2(76f, 28f), new Vector2(190f, -56f),
                     new Color(0.4f, 0.95f, 0.7f, 0.18f), rounded: true);
                 UiBuilder.AddOutline(doneChip.gameObject, new Color(0.4f, 0.95f, 0.7f, 0.55f), new Vector2(1f, -1f));
-                UiBuilder.CreateText("DoneText", doneChip.transform, "已购入", 16, FontStyle.Bold,
+                UiBuilder.CreateText("DoneText", doneChip.transform, "已购买", 16, FontStyle.Bold,
                     TextAnchor.MiddleCenter, new Color(0.4f, 0.95f, 0.7f, 1f));
             }
 
@@ -1176,7 +1176,7 @@ namespace PenguinRun.Game.UI
             }
             else
             {
-                var doneBtn = UiBuilder.CreateButton("Done", row, "已购入",
+                var doneBtn = UiBuilder.CreateButton("Done", row, "已购买",
                     new Color(0.12f, 0.22f, 0.32f, 0.85f),
                     new Color(1f, 1f, 1f, 0.55f), 21, rounded: true);
                 var brt = (RectTransform)doneBtn.transform;
@@ -1328,7 +1328,7 @@ namespace PenguinRun.Game.UI
             idrt.sizeDelta = new Vector2(-20f, 60f);
             idrt.anchoredPosition = new Vector2(98f, -48f);
 
-            // 价格块
+            // 价格区
             var priceBlock = UiBuilder.CreateRect("PriceBlock", dialog,
                 new Vector2(0f, 0f), new Vector2(1f, 0f),
                 new Vector2(0f, 170f), new Vector2(0f, 120f),
@@ -1471,7 +1471,7 @@ namespace PenguinRun.Game.UI
 
         private void BuildRecordsOverview(RunRecords.StatsSummary stats, RunRecords.Record best)
         {
-            var row = UiBuilder.CreateScrollListRow("RecOverview", contentRoot, 220f, UiBuilder.Surface1);
+            var row = UiBuilder.CreateScrollListRow("RecOverview", contentRoot, 280f, UiBuilder.Surface1);
             UiBuilder.AddOutline(row.gameObject, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
             UiBuilder.AddShadow(row.gameObject, new Color(0f, 0f, 0f, 0.25f), new Vector2(0f, -3f));
 
@@ -1491,11 +1491,11 @@ namespace PenguinRun.Game.UI
             trt.sizeDelta = new Vector2(0f, 34f);
             trt.anchoredPosition = new Vector2(20f, -14f);
 
-            // 四格统计
-            BuildRecordStatCell(row, 0.02f, "总次数", $"{stats.TotalRuns}", "\u2605", new Color(0.55f, 0.85f, 1f, 1f));
-            BuildRecordStatCell(row, 0.26f, "平均得分", $"{stats.AverageScore:N0}", "\u279E", UiBuilder.WarmGold);
-            BuildRecordStatCell(row, 0.50f, "破纪录", $"{stats.NewBestCount}", "\u2726", new Color(1f, 0.55f, 0.35f, 1f));
-            BuildRecordStatCell(row, 0.74f, "累计鱼干", $"{stats.TotalFishSnacks}", "\u2615", new Color(0.4f, 0.95f, 0.7f, 1f));
+            // 六格统计（3 × 2行）
+            BuildRecordStatCell(row, 0.02f, 0.65f, "总场次", $"{stats.TotalRuns}", "\u2605", new Color(0.55f, 0.85f, 1f, 1f));
+            BuildRecordStatCell(row, 0.34f, 0.65f, "最高得分", $"{stats.BestScore:N0}", "\u279E", UiBuilder.WarmGold);
+            BuildRecordStatCell(row, 0.66f, 0.65f, "最远距离", $"{stats.BestDistance}m", "\u2726", new Color(1f, 0.55f, 0.35f, 1f));
+            BuildRecordStatCell(row, 0.02f, 0.18f, "平均得分", $"{stats.AverageScore:N0}", "\u2615", new Color(0.4f, 0.95f, 0.7f, 1f));
 
             // 个人巅峰
             if (best != null)
@@ -1558,38 +1558,38 @@ namespace PenguinRun.Game.UI
             }
         }
 
-        private void BuildRecordStatCell(RectTransform parent, float anchorX, string label, string value, string icon, Color color)
+        private void BuildRecordStatCell(RectTransform parent, float anchorX, float anchorY, string label, string value, string icon, Color color)
         {
             var cell = UiBuilder.CreateRect("Stat_" + label, parent,
-                new Vector2(anchorX, 0.55f), new Vector2(anchorX + 0.22f, 0.55f),
+                new Vector2(anchorX, anchorY), new Vector2(anchorX + 0.30f, anchorY + 0.42f),
                 Vector2.zero, new Vector2(0f, 10f),
                 new Color(0.04f, 0.08f, 0.14f, 0.5f));
             cell.pivot = new Vector2(0f, 0.5f);
-            cell.sizeDelta = new Vector2(-10f, 64f);
+            cell.sizeDelta = new Vector2(-12f, 52f);
             UiBuilder.AddOutline(cell.gameObject, new Color(color.r, color.g, color.b, 0.35f), new Vector2(1f, -1f));
 
             // 图标
             var iconBg = UiBuilder.CreateRect("IconBg", cell,
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
-                new Vector2(32f, 32f), new Vector2(10f, 0f),
+                new Vector2(30f, 30f), new Vector2(8f, 0f),
                 new Color(color.r, color.g, color.b, 0.2f), circle: true);
-            UiBuilder.CreateText("Icon", iconBg.transform, icon, 16, FontStyle.Bold, TextAnchor.MiddleCenter, color);
+            UiBuilder.CreateText("Icon", iconBg.transform, icon, 15, FontStyle.Bold, TextAnchor.MiddleCenter, color);
 
-            var lbl = UiBuilder.CreateText("Label", cell, label, 14, FontStyle.Normal, TextAnchor.UpperLeft, UiBuilder.TextSecondary);
+            var lbl = UiBuilder.CreateText("Label", cell, label, 13, FontStyle.Normal, TextAnchor.UpperLeft, UiBuilder.TextSecondary);
             var lrt = (RectTransform)lbl.transform;
             lrt.anchorMin = new Vector2(0f, 1f);
             lrt.anchorMax = new Vector2(1f, 1f);
             lrt.pivot = new Vector2(0f, 1f);
-            lrt.sizeDelta = new Vector2(-8f, 18f);
-            lrt.anchoredPosition = new Vector2(48f, -6f);
+            lrt.sizeDelta = new Vector2(-8f, 16f);
+            lrt.anchoredPosition = new Vector2(44f, -4f);
 
-            var val = UiBuilder.CreateText("Value", cell, value, 20, FontStyle.Bold, TextAnchor.LowerLeft, color);
+            var val = UiBuilder.CreateText("Value", cell, value, 18, FontStyle.Bold, TextAnchor.LowerLeft, color);
             var vrt = (RectTransform)val.transform;
             vrt.anchorMin = new Vector2(0f, 0f);
             vrt.anchorMax = new Vector2(1f, 1f);
             vrt.pivot = new Vector2(0f, 0f);
-            vrt.sizeDelta = new Vector2(-8f, 24f);
-            vrt.anchoredPosition = new Vector2(48f, 4f);
+            vrt.sizeDelta = new Vector2(-8f, 22f);
+            vrt.anchoredPosition = new Vector2(44f, 2f);
         }
 
         private void BuildRecordRow(RunRecords.Record r)

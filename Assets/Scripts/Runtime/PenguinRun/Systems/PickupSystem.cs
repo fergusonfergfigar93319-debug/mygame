@@ -50,7 +50,7 @@ namespace PenguinRun
             }
         }
 
-        public void CollectPowerUps(Transform player, WorldDirector world, Dictionary<GameObject, PowerUpKind> powerUps, ref string feedbackText, ref float feedbackTimer, System.Action pulseHaptic)
+        public void CollectPowerUps(Transform player, WorldDirector world, Dictionary<GameObject, PowerUpKind> powerUps, ref string feedbackText, ref float feedbackTimer)
         {
             var px = player.position.x;
             var pz = player.position.z;
@@ -82,7 +82,6 @@ namespace PenguinRun
                 ActivatePowerUp(powerUps[power], world, ref feedbackText);
                 feedbackTimer = 0.85f;
                 audio.PlayPowerUp(powerUps[power]);
-                pulseHaptic?.Invoke();
 
                 Object.Destroy(power);
                 powerUps.Remove(power);
@@ -91,35 +90,38 @@ namespace PenguinRun
 
         private void ActivatePowerUp(PowerUpKind kind, WorldDirector world, ref string feedbackText)
         {
+            var comboMult = world.RegisterPowerUpPickup(kind);
+            var comboLabel = world.PowerUpComboLabel;
+
             switch (kind)
             {
                 case PowerUpKind.Dash:
-                    world.DashTimer = Mathf.Max(world.DashTimer, powerUpTuning.dashBaseSeconds + config.DashLevel * powerUpTuning.dashPerLevelSeconds);
-                    feedbackText = "鱼干冲刺";
+                    world.DashTimer = Mathf.Max(world.DashTimer, (powerUpTuning.dashBaseSeconds + config.DashLevel * powerUpTuning.dashPerLevelSeconds) * comboMult);
+                    feedbackText = string.IsNullOrEmpty(comboLabel) ? "鱼干冲刺" : $"鱼干冲刺 · {comboLabel}";
                     break;
                 case PowerUpKind.Magnet:
-                    world.MagnetTimer = Mathf.Max(world.MagnetTimer, powerUpTuning.magnetBaseSeconds + config.MagnetLevel * powerUpTuning.magnetPerLevelSeconds);
-                    feedbackText = "极光磁针";
+                    world.MagnetTimer = Mathf.Max(world.MagnetTimer, (powerUpTuning.magnetBaseSeconds + config.MagnetLevel * powerUpTuning.magnetPerLevelSeconds) * comboMult);
+                    feedbackText = string.IsNullOrEmpty(comboLabel) ? "极光磁针" : $"极光磁针 · {comboLabel}";
                     break;
                 case PowerUpKind.Shield:
-                    world.ShieldTimer = Mathf.Max(world.ShieldTimer, powerUpTuning.shieldBaseSeconds + config.TuanLevel * powerUpTuning.shieldPerLevelSeconds);
-                    feedbackText = "团团护盾";
+                    world.ShieldTimer = Mathf.Max(world.ShieldTimer, (powerUpTuning.shieldBaseSeconds + config.TuanLevel * powerUpTuning.shieldPerLevelSeconds) * comboMult);
+                    feedbackText = string.IsNullOrEmpty(comboLabel) ? "团团护盾" : $"团团护盾 · {comboLabel}";
                     break;
                 case PowerUpKind.ScoreStar:
-                    world.ScoreBoostTimer = Mathf.Max(world.ScoreBoostTimer, powerUpTuning.scoreStarBaseSeconds + config.PolarLevel * powerUpTuning.scoreStarPerLevelSeconds);
-                    feedbackText = "星光加分";
+                    world.ScoreBoostTimer = Mathf.Max(world.ScoreBoostTimer, (powerUpTuning.scoreStarBaseSeconds + config.PolarLevel * powerUpTuning.scoreStarPerLevelSeconds) * comboMult);
+                    feedbackText = string.IsNullOrEmpty(comboLabel) ? "星光加分" : $"星光加分 · {comboLabel}";
                     break;
                 case PowerUpKind.GlideFeather:
-                    world.GlideTimer = Mathf.Max(world.GlideTimer, powerUpTuning.glideBaseSeconds + config.TuanLevel * powerUpTuning.glidePerLevelSeconds);
-                    feedbackText = "极地滑翔";
+                    world.GlideTimer = Mathf.Max(world.GlideTimer, (powerUpTuning.glideBaseSeconds + config.TuanLevel * powerUpTuning.glidePerLevelSeconds) * comboMult);
+                    feedbackText = string.IsNullOrEmpty(comboLabel) ? "极地滑翔" : $"极地滑翔 · {comboLabel}";
                     break;
                 case PowerUpKind.DoubleFishSnack:
-                    world.ExtendDoubleFish(powerUpTuning.doubleFishBaseSeconds + config.PolarLevel * powerUpTuning.doubleFishPerPolarLevelSeconds);
-                    feedbackText = "双倍鱼干";
+                    world.ExtendDoubleFish((powerUpTuning.doubleFishBaseSeconds + config.PolarLevel * powerUpTuning.doubleFishPerPolarLevelSeconds) * comboMult);
+                    feedbackText = string.IsNullOrEmpty(comboLabel) ? "双倍鱼干" : $"双倍鱼干 · {comboLabel}";
                     break;
                 case PowerUpKind.TimeHourglass:
-                    world.ExtendSlowMo(powerUpTuning.hourglassBaseSeconds + config.PolarLevel * powerUpTuning.hourglassPerPolarLevelSeconds);
-                    feedbackText = "时间沙漏";
+                    world.ExtendSlowMo((powerUpTuning.hourglassBaseSeconds + config.PolarLevel * powerUpTuning.hourglassPerPolarLevelSeconds) * comboMult);
+                    feedbackText = string.IsNullOrEmpty(comboLabel) ? "时间沙漏" : $"时间沙漏 · {comboLabel}";
                     break;
                 case PowerUpKind.BubbleShield:
                     world.ShieldTimer = Mathf.Max(world.ShieldTimer, (powerUpTuning.shieldBaseSeconds + 1.2f) + config.TuanLevel * powerUpTuning.shieldPerLevelSeconds);

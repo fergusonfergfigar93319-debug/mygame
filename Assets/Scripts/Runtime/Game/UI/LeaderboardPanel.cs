@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using PenguinRun.Game.Leaderboard;
+using PenguinRun.Game.Save;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -14,8 +15,11 @@ namespace PenguinRun.Game.UI
     {
         private System.Action<MainMenuBootstrap.PanelEvent, string> dispatch;
         private LeaderboardSort sort = LeaderboardSort.ByTotalScore;
+        /// <summary>true = 只看今日挑战桶（yyyy-MM-dd）。</summary>
+        private bool todayOnly;
         private RectTransform contentRoot;
-        private readonly System.Collections.Generic.List<(Image img, Text label, LeaderboardSort s)> sortMarkers = new();
+        private readonly List<(Image img, Text label, LeaderboardSort s)> sortMarkers = new();
+        private readonly List<(Image img, Text label, bool today)> bucketMarkers = new();
 
         // 前三名奖牌色（金/银/铜）
         private static readonly Color GoldMedal = new(1f, 0.84f, 0.32f);
@@ -65,8 +69,26 @@ namespace PenguinRun.Game.UI
             CreateSortBtn(sortRow, "\u231B 存活", LeaderboardSort.BySurvivalTime);
             ApplySortBarStyle();
 
+            const float bucketRowHeight = 76f;
+            var bucketRowTop = sortRowTop + sortRowHeight + sortRowGap;
+            var bucketRow = UiBuilder.CreateRect("BucketRow", parent,
+                new Vector2(0.04f, 1f), new Vector2(0.96f, 1f),
+                new Vector2(0f, bucketRowHeight), new Vector2(0f, -bucketRowTop),
+                UiBuilder.Surface1, rounded: true);
+            bucketRow.pivot = new Vector2(0.5f, 1f);
+            UiBuilder.AddOutline(bucketRow.gameObject, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
+            var hlg2 = bucketRow.gameObject.AddComponent<HorizontalLayoutGroup>();
+            hlg2.padding = new RectOffset(8, 8, 8, 8);
+            hlg2.spacing = 12f;
+            hlg2.childAlignment = TextAnchor.MiddleCenter;
+            hlg2.childForceExpandWidth = true;
+            hlg2.childForceExpandHeight = true;
+            CreateBucketBtn(bucketRow, "全部榜单", false);
+            CreateBucketBtn(bucketRow, "今日挑战", true);
+            ApplyBucketBarStyle();
+
             UiBuilder.CreatePanelScrollList(parent, out var content,
-                topInset: sortRowTop + sortRowHeight + sortRowGap);
+                topInset: bucketRowTop + bucketRowHeight + sortRowGap);
             contentRoot = content;
         }
 
@@ -83,6 +105,37 @@ namespace PenguinRun.Game.UI
                 ApplySortBarStyle();
                 Refresh();
             });
+        }
+
+        private void CreateBucketBtn(RectTransform parent, string label, bool today)
+        {
+            var btn = UiBuilder.CreateButton("Bucket_" + label, parent, label,
+                Color.clear, Color.white, 22, rounded: true);
+            var img = btn.GetComponent<Image>();
+            var labelText = btn.GetComponentInChildren<Text>();
+            bucketMarkers.Add((img, labelText, today));
+            btn.onClick.AddListener(() =>
+            {
+                todayOnly = today;
+                ApplyBucketBarStyle();
+                Refresh();
+            });
+        }
+
+        private void ApplyBucketBarStyle()
+        {
+            foreach (var (img, label, today) in bucketMarkers)
+            {
+                if (img == null) continue;
+                var sel = todayOnly == today;
+                img.color = sel ? UiBuilder.WarmGold * new Color(1f, 1f, 1f, 0.42f)
+                    : new Color(0f, 0f, 0f, 0f);
+                if (label != null)
+                {
+                    label.color = sel ? new Color(0.12f, 0.07f, 0.02f, 1f) : UiBuilder.TextSecondary;
+                    label.fontStyle = sel ? FontStyle.Bold : FontStyle.Normal;
+                }
+            }
         }
 
         private void ApplySortBarStyle()
@@ -108,23 +161,28 @@ namespace PenguinRun.Game.UI
                 Destroy(contentRoot.GetChild(i).gameObject);
             }
 
-            var entries = LeaderboardStore.GetTopEntries(20, sort);
+            var bucket = todayOnly ? DateTime.Now.ToString("yyyy-MM-dd") : null;
+            var pid = PlayerSave.GetOrCreatePlayerId();
+            var hasPeakMetrics = LeaderboardStore.TryGetPlayerPeakMetrics(pid, bucket, out var pkScore, out var pkDist, out var pkSurv);
+
+            var entries = LeaderboardStore.GetTopEntries(20, sort, bucket);
             if (entries.Count == 0)
             {
-                BuildEmpty();
+                BuildEmpty(todayOnly);
                 UiBuilder.RebuildScrollContent(contentRoot);
                 return;
             }
 
             for (var i = 0; i < entries.Count; i++)
             {
-                BuildRow(i + 1, entries[i]);
+                var isMyPeak = hasPeakMetrics && IsMyPeakEntry(entries[i], pkScore, pkDist, pkSurv);
+                BuildRow(i + 1, entries[i], isMyPeak);
             }
 
             UiBuilder.RebuildScrollContent(contentRoot);
         }
 
-        private void BuildEmpty()
+        private void BuildEmpty(bool todayBucket)
         {
             var empty = UiBuilder.CreateScrollListRow("Empty", contentRoot, 400f, null);
 
@@ -140,7 +198,8 @@ namespace PenguinRun.Game.UI
             UiBuilder.CreateText("IconText", iconCircle.transform, "\u2605", 56, FontStyle.Bold,
                 TextAnchor.MiddleCenter, UiBuilder.AccentCyan);
 
-            var t = UiBuilder.CreateText("Title", empty, "还没有本地纪录",
+            var t = UiBuilder.CreateText("Title", empty,
+                todayBucket ? "今日还没有本地纪录" : "还没有本地纪录",
                 30, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
             var trt = (RectTransform)t.transform;
             trt.anchorMin = new Vector2(0f, 0.5f);
@@ -149,7 +208,8 @@ namespace PenguinRun.Game.UI
             trt.sizeDelta = new Vector2(0f, 60f);
             trt.anchoredPosition = new Vector2(0f, -30f);
 
-            var b = UiBuilder.CreateText("Body", empty, "去跑一局，刷下这块榜单。",
+            var b = UiBuilder.CreateText("Body", empty,
+                todayBucket ? "完成一次今日挑战即可登上今日榜单。" : "去跑一局，刷下这块榜单。",
                 22, FontStyle.Normal, TextAnchor.MiddleCenter, UiBuilder.TextSecondary);
             var brt = (RectTransform)b.transform;
             brt.anchorMin = new Vector2(0f, 0.5f);
@@ -159,7 +219,21 @@ namespace PenguinRun.Game.UI
             brt.anchoredPosition = new Vector2(0f, -80f);
         }
 
-        private void BuildRow(int index, LeaderboardEntry e)
+        private static bool NearlyEqualMetric(float a, float b) => Mathf.Abs(a - b) < 0.025f;
+
+        private bool IsMyPeakEntry(LeaderboardEntry e, int pkScore, float pkDist, float pkSurv)
+        {
+            var pid = PlayerSave.GetOrCreatePlayerId();
+            if (string.IsNullOrEmpty(pid) || e.playerId != pid) return false;
+            return sort switch
+            {
+                LeaderboardSort.ByDistance => NearlyEqualMetric(e.distanceScoreUnits, pkDist),
+                LeaderboardSort.BySurvivalTime => NearlyEqualMetric(e.survivalSeconds, pkSurv),
+                _ => e.totalScore == pkScore,
+            };
+        }
+
+        private void BuildRow(int index, LeaderboardEntry e, bool isMyPeak)
         {
             // 前三名突出显示：更亮的背景 + 奖牌效果
             var isMedal = index <= 3;
@@ -193,9 +267,21 @@ namespace PenguinRun.Game.UI
             }
 
             var row = UiBuilder.CreateScrollListRow("Row_" + index, contentRoot, 120f, rowBg);
-            UiBuilder.AddOutline(row.gameObject,
-                isMedal ? new Color(medalColor.r, medalColor.g, medalColor.b, 0.4f) : UiBuilder.BorderSubtle,
-                new Vector2(1f, -1f));
+            var outlineMul = isMedal ? new Color(medalColor.r, medalColor.g, medalColor.b, 0.4f) : UiBuilder.BorderSubtle;
+            UiBuilder.AddOutline(row.gameObject, outlineMul, new Vector2(1f, -1f));
+            if (isMyPeak && !string.IsNullOrEmpty(e.playerId))
+            {
+                UiBuilder.AddOutline(row.gameObject,
+                    new Color(UiBuilder.WarmGold.r, UiBuilder.WarmGold.g, UiBuilder.WarmGold.b, 0.92f),
+                    new Vector2(2.5f, -2.5f));
+                var peakChip = UiBuilder.CreateRect("MyPeakChip", row,
+                    new Vector2(0f, 1f), new Vector2(0f, 1f),
+                    new Vector2(48f, 30f), new Vector2(150f, -18f),
+                    new Color(1f, 0.76f, 0.28f, 0.52f), rounded: true);
+                peakChip.GetComponent<Image>().raycastTarget = false;
+                UiBuilder.CreateText("PeakLabel", peakChip.transform, "\u6211",
+                    16, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.14f, 0.06f, 0.02f, 1f));
+            }
 
             // 排名徽章（前三名为奖牌，其余为简洁数字）
             var medalBadge = UiBuilder.CreateRect("Medal", row,

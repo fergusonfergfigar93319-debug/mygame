@@ -27,7 +27,7 @@ namespace PenguinRun
         [Header("Speed")]
         public float startSpeed = 10f;
         public float maxSpeed = 32f;
-        public float speedPerDistance = 0.018f;
+        public float speedPerDistance = 0.014f;
         public float dashSpeedMultiplier = 1.22f;
 
         [Header("Scoring")]

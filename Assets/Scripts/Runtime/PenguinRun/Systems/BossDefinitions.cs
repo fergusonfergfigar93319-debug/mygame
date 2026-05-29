@@ -8,7 +8,7 @@ namespace PenguinRun
     /// <summary>
     /// Boss 特色定位：决定其主机制风格
     /// </summary>
-    internal enum BossArchetype
+    public enum BossArchetype
     {
         Balanced,      // 均衡型：冰霜雪王
         Grounded,      // 地面型：雪松哨兵，强调滑铲
@@ -21,7 +21,7 @@ namespace PenguinRun
     /// <summary>
     /// 单只 boss 的静态数据：视觉、配色、攻击模式池、特色机制等。
     /// </summary>
-    internal sealed class BossDefinition
+    public sealed class BossDefinition
     {
         public string BossId;
         public string DisplayName;
@@ -61,9 +61,13 @@ namespace PenguinRun
         public float VulnerableShakeFreq = 1.0f;
         /// <summary>是否在受击时触发全身闪烁（false=仅头部）。</summary>
         public bool FullBodyHitFlash = false;
+
+        // ── 动效主题（按 Boss 分化配色与震屏） ─────────────────
+        public float VfxShakeMultiplier = 1f;
+        public float VfxColorMultiplier = 1f;
     }
 
-    internal enum BossSilhouette
+    public enum BossSilhouette
     {
         SnowKing,       // 冰湖回音谷 / 默认
         CedarSentinel,  // 雪松废墟
@@ -76,7 +80,7 @@ namespace PenguinRun
     /// <summary>
     /// 根据地图主题选择 boss 定义；同一主题可能有多只 boss（按击败次数轮换）。
     /// </summary>
-    internal static class BossDefinitions
+    public static class BossDefinitions
     {
         private static BossDefinition[] AllBosses => new[]
         {
@@ -88,6 +92,9 @@ namespace PenguinRun
             StormEagle,
         };
 
+        /// <summary>图鉴等 UI：与 <see cref="AllBosses"/> 相同顺序的只读数组。</summary>
+        public static BossDefinition[] GetAllBossesOrdered() => AllBosses;
+
         /// <summary>Boss 刷新条件上下文</summary>
         internal sealed class BossSpawnContext
         {
@@ -97,7 +104,6 @@ namespace PenguinRun
             public float RunDistance;
             public int BossesDefeated;
             public HashSet<string> DefeatedBossIds;
-            public string ActivityTag;
         }
 
         /// <summary>Boss 刷新条件配置</summary>
@@ -179,7 +185,7 @@ namespace PenguinRun
         }
 
         /// <summary>根据完整上下文条件筛选 Boss</summary>
-        public static BossDefinition PickFor(BossSpawnContext ctx)
+        internal static BossDefinition PickFor(BossSpawnContext ctx)
         {
             // 优先尝试符合条件的主题专属 Boss
             var eligible = new List<BossDefinition>();
@@ -283,6 +289,8 @@ namespace PenguinRun
             AttackStrikePunch = 1.15f,
             VulnerableShakeFreq = 0.85f,
             FullBodyHitFlash = true,
+            VfxShakeMultiplier = 1.05f,
+            VfxColorMultiplier = 1.1f,
         };
 
         public static readonly BossDefinition CedarSentinel = new()
@@ -310,6 +318,8 @@ namespace PenguinRun
             AttackStrikePunch = 1.22f,
             VulnerableShakeFreq = 0.7f,
             FullBodyHitFlash = false,
+            VfxShakeMultiplier = 1.15f,
+            VfxColorMultiplier = 0.95f,
         };
 
         public static readonly BossDefinition AuroraSerpent = new()
@@ -337,6 +347,8 @@ namespace PenguinRun
             AttackStrikePunch = 0.88f,
             VulnerableShakeFreq = 1.5f,
             FullBodyHitFlash = true,
+            VfxShakeMultiplier = 0.92f,
+            VfxColorMultiplier = 1.2f,
         };
 
         public static readonly BossDefinition MistGuardian = new()
@@ -364,6 +376,8 @@ namespace PenguinRun
             AttackStrikePunch = 0.96f,
             VulnerableShakeFreq = 1.1f,
             FullBodyHitFlash = false,
+            VfxShakeMultiplier = 1f,
+            VfxColorMultiplier = 0.88f,
         };
 
         public static readonly BossDefinition CoralKraken = new()
@@ -391,6 +405,8 @@ namespace PenguinRun
             AttackStrikePunch = 1.08f,
             VulnerableShakeFreq = 1.2f,
             FullBodyHitFlash = true,
+            VfxShakeMultiplier = 1.08f,
+            VfxColorMultiplier = 1.05f,
         };
 
         public static readonly BossDefinition StormEagle = new()
@@ -418,6 +434,8 @@ namespace PenguinRun
             AttackStrikePunch = 1.18f,
             VulnerableShakeFreq = 1.8f,
             FullBodyHitFlash = true,
+            VfxShakeMultiplier = 1.22f,
+            VfxColorMultiplier = 1.15f,
         };
     }
 }

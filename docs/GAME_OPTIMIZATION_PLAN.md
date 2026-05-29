@@ -90,6 +90,11 @@
 - 修复主线 HUD 与第二关剧情文案乱码，让关卡内容、状态提示和失败复盘保持统一中文表达。
 - 营地成长扩展为四项升级，新增“磁针调校”，让极光磁针持续时间可通过局外鱼干资源提升。
 - 当前工程已通过 `./gradlew.bat :app:compileDebugKotlin`。
+- **Boss 战可读性与场景建模（2026-05）：** 程序化攻击与 `IsPatternDangerous` 同步（体前倾/缩放）；预警与跑道 FX 对齐 `PlayerTelegraphZ`；齐射投射物落点对准危险窗；雾堤假预警 decoy；冲锋改为安全车道判定；HUD 危险条；鱼干/滚球/旋刃视觉强化（程序化 + 现有 FBX）。
+- **主菜单 Lobby 完整重构（2026-05）：** 顶栏改为紧凑玩家条 + 点击打开 `ProfileStatsPanel` 战绩 Sheet；活动信息迁入 `TopTicker` 单行条，移除遮挡吉祥物的 `ActivityBanner`；主 CTA 上方增加可点击 `DifficultyChip`（`SettingsOnly` / 开局前选难度）；`RunOutcomeRouter` 结算时 `IncrementTotalRuns`，`PlayerSave.EnsureTotalRunsSynced` 回填老存档；底栏 Tab 选中态填色强化。
+- **跑道布景可读性（2026-05）：** `PlayableViewCorridor` + `SceneryLateralOffset` 随弯道对齐；天空云/光柱远场化，彩虹改为两侧细条；近场走廊内隐藏灯/云/光柱/远山；验收：16:9 **SkyFlight** 开局 10 s 中央可见三车道与前方障碍；侧向无大块实心遮挡。
+- **Unity 存档 / UI / 排行榜闭环（2026-05）：** 「幸运起手令」开局消耗 pending 并给予 +1 生命（与 `ShopStore` / `RunnerGameController` / `WorldDirector` 接通）；移除主菜单与 `PanelHeader` 调试日志；删除未使用的 `SeenCampUnlockNotice`、`LeaderboardStore.GetBestEntry`/`GetAverageTotalScore`、`RunRecords.GetAll`/`Clear`；`DifficultyPreset.ScoreMultiplier` 在 `RunOutcomeRouter.Apply` 与结算得分相乘；排行榜增加「全部榜单 / 今日 challenge 桶」筛选、`TryGetPlayerPeakMetrics` +「我」峰值行高亮；图鉴沿用 5 条剧情进度条，新增 Boss 战绩区块（读 `PlayerSave.HasDefeatedBoss`）、解锁阈值集中到 `CodexUnlocks` 常量；极地直觉 UI 文案使用 `PolarPowerUpChancePerLevel = 0.025` 与 SegmentSpawner 对齐；任务面板领奖后刷新头部鱼干胶囊（`PanelHeader.RefreshCurrency`）。
+- **Boss VFX 收口（2026-05）：** 修复 `BossPatternVfxPlayer.End()` 双重 Destroy 导致 FX 对象池失效；`SegmentSpawner` 补齐 5 处 `ObstacleKind` 标签；`EndPattern` 清零跨招震屏残留；SalvoOrb 动画去 O(N²)；雾堤/珊瑚 Boss 增加 `Head` 锚点使 `StrikeHeadPitch` 生效；6 招 Strike SFX 复用现有 clip + 音调/叠层差异化；Boss BGM 专属文件占位状态固化于 credits。
 
 ## 已执行：Boss 战与跑酷体验优化（Unity 版本）
 

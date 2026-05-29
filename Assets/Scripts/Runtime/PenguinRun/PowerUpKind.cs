@@ -1,6 +1,6 @@
 namespace PenguinRun
 {
-    internal enum PowerUpKind
+    public enum PowerUpKind
     {
         // ── 通用道具 ──────────────────────────────────────────
         Dash,               // 鱼干冲刺：短暂加速

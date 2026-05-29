@@ -1,3 +1,4 @@
+using PenguinRun;
 using PenguinRun.Game.Mission;
 
 namespace PenguinRun.Game.Save
@@ -8,6 +9,20 @@ namespace PenguinRun.Game.Save
     /// </summary>
     public static class CodexUnlocks
     {
+        // ── 与剧情图鉴提示文案共用（勿与 ApplyAfterRun 硬编码两套数）────────────────
+        public const int RescueTuanTuanDistanceMeters = 450;
+        public const int RescueTuanTuanMinScore = 1000;
+        public const int CompanionDrorMinDistanceMeters = 900;
+        public const int CompanionDrorMinLifetimeRuns = 5;
+        public const int TakamatsuMinScore = 2800;
+        public const float TakamatsuMinSurvivalSeconds = 70f;
+
+        /// <summary>剧情向独立条目数（进度条母数不变，避免老玩家突然「缩水」）。</summary>
+        public const int StoryEntryTotal = 5;
+
+        /// <summary>图鉴中 Boss 战绩条目数（与 PenguinRun.BossDefinitions 顺序总数一致）。</summary>
+        public const int BossEntryTotal = 6;
+
         public static void ApplyAfterRun(int score, int distanceMeters, float survivalSeconds, bool dailyMode)
         {
             var runs = MissionStore.LifetimeRunsTotal;
@@ -15,13 +30,13 @@ namespace PenguinRun.Game.Save
             if (!PlayerSave.Runner3DTutorialDone && runs >= 1)
                 PlayerSave.Runner3DTutorialDone = true;
 
-            if (!PlayerSave.RescuedTuanTuan && (distanceMeters >= 450 || score >= 1000))
+            if (!PlayerSave.RescuedTuanTuan && (distanceMeters >= RescueTuanTuanDistanceMeters || score >= RescueTuanTuanMinScore))
                 PlayerSave.RescuedTuanTuan = true;
 
-            if (!PlayerSave.CompanionDrorUnlocked && (dailyMode || distanceMeters >= 900 || runs >= 5))
+            if (!PlayerSave.CompanionDrorUnlocked && (dailyMode || distanceMeters >= CompanionDrorMinDistanceMeters || runs >= CompanionDrorMinLifetimeRuns))
                 PlayerSave.CompanionDrorUnlocked = true;
 
-            if (!PlayerSave.TakamatsuDefeated && (score >= 2800 || survivalSeconds >= 70f))
+            if (!PlayerSave.TakamatsuDefeated && (score >= TakamatsuMinScore || survivalSeconds >= TakamatsuMinSurvivalSeconds))
                 PlayerSave.TakamatsuDefeated = true;
         }
 
@@ -36,6 +51,14 @@ namespace PenguinRun.Game.Save
             return n;
         }
 
-        public const int EntryTotal = 5;
+        public static int BossesDefeatedCount()
+        {
+            var n = 0;
+            foreach (var b in BossDefinitions.GetAllBossesOrdered())
+            {
+                if (PlayerSave.HasDefeatedBoss(b.BossId)) n++;
+            }
+            return n;
+        }
     }
 }

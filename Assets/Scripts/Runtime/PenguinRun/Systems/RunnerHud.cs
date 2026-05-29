@@ -6,6 +6,21 @@ using UnityEngine;
 namespace PenguinRun
 {
     /// <summary>
+    /// IMGUI HUD 的逻辑画布尺寸（1080p 横屏基准高度缩放 + Safe Area 内排版）。
+    /// </summary>
+    internal readonly struct RunnerHudLayout
+    {
+        public readonly float LogicalWidth;
+        public readonly float LogicalHeight;
+
+        public RunnerHudLayout(float logicalWidth, float logicalHeight)
+        {
+            LogicalWidth = logicalWidth;
+            LogicalHeight = logicalHeight;
+        }
+    }
+
+    /// <summary>
     /// 游戏内 HUD：基于 IMGUI 的实时数据面板。
     /// 重构：分层卡片式布局、更好的间距、清晰的视觉层次、增益条带视觉化。
     /// </summary>
@@ -167,6 +182,7 @@ namespace PenguinRun
         }
 
         public bool Draw(
+            RunnerHudLayout layout,
             RunnerSessionConfig config,
             WorldDirector world,
             bool running,
@@ -180,12 +196,15 @@ namespace PenguinRun
         {
             EnsureGuiStyles();
 
+            var lw = layout.LogicalWidth;
+            var lh = layout.LogicalHeight;
+
             var buffLine = BuildBuffSummary(world);
             var hasBuff = !string.IsNullOrEmpty(buffLine);
             var hasComboLine = world.CoinCombo >= 2 || world.LastFishScoreMultiplier > 1.01f;
 
             // ── 主面板（左上）─────────────────────────────────
-            var panelW = Mathf.Clamp(Screen.width * 0.4f, 320f, 460f);
+            var panelW = Mathf.Clamp(lw * 0.4f, 320f, 460f);
             var panelH = 168f + (hasBuff ? 36f : 0f) + (hasComboLine ? 26f : 0f);
             var px = 16f;
             var py = 16f;
@@ -279,10 +298,10 @@ namespace PenguinRun
 
                 // 反馈背景胶囊（长提示加宽，并下移到 Boss 面板下方，避免遮挡）
                 var fbW = isLongTip
-                    ? Mathf.Clamp(Screen.width * 0.6f, 460f, 920f)
+                    ? Mathf.Clamp(lw * 0.6f, 460f, 920f)
                     : 360f;
-                var fbX = (Screen.width - fbW) * 0.5f;
-                var fbY = bossSystem != null && bossSystem.BossActive ? 154f : Screen.height * 0.18f;
+                var fbX = (lw - fbW) * 0.5f;
+                var fbY = bossSystem != null && bossSystem.BossActive ? 154f : lh * 0.18f;
                 var textRect = new Rect(fbX + 12f, fbY + 8f, fbW - 24f, 120f);
                 var textH = feedbackRenderStyle.CalcHeight(new GUIContent(feedbackText), textRect.width);
                 var fbH = Mathf.Clamp(textH + 16f, 56f, 130f);
@@ -294,7 +313,7 @@ namespace PenguinRun
             }
 
             // 返回按钮（右上）
-            var backR = new Rect(Screen.width - 140f, 18f, 120f, 56f);
+            var backR = new Rect(lw - 140f, 18f, 120f, 56f);
             DrawCard(backR, new Color(0.06f, 0.13f, 0.22f, 0.9f), ColorPanelStroke);
             DrawPanel(new Rect(backR.x + 1f, backR.y + 1f, backR.width - 2f, 2f),
                 new Color(ColorAccent.r, ColorAccent.g, ColorAccent.b, 0.5f));
@@ -306,46 +325,62 @@ namespace PenguinRun
             // ── BOSS 血条（屏幕顶部居中）─────────────────────────
             if (bossSystem != null && bossSystem.BossActive)
             {
-                DrawBossPanel(bossSystem);
+                DrawBossPanel(bossSystem, layout);
             }
 
             // ── 成就栏：boss 击败 / 完美闪避 / 鱼弹库存 ─────────────
             if (world.BossesDefeated > 0 || world.PerfectDodges > 0 || world.FishBombs > 0)
             {
-                DrawAchievementBar(world);
+                DrawAchievementBar(world, layout);
+            }
+
+            // ── 低血量告警 ────────────────────────────────────────
+            if (running && world.Lives <= 1 && !gameOver)
+            {
+                var pulse = Mathf.Sin(Time.time * 4.5f) * 0.45f + 0.55f;
+                var warnAlpha = 0.08f * pulse;
+                var edgeH = lh * 0.06f;
+                var edgeW = lw * 0.03f;
+                var warnColor = new Color(0.9f, 0.1f, 0.05f, warnAlpha);
+                GUI.color = warnColor;
+                GUI.DrawTexture(new Rect(0f, 0f, lw, edgeH), Pixel);
+                GUI.DrawTexture(new Rect(0f, lh - edgeH, lw, edgeH), Pixel);
+                GUI.DrawTexture(new Rect(0f, 0f, edgeW, lh), Pixel);
+                GUI.DrawTexture(new Rect(lw - edgeW, 0f, edgeW, lh), Pixel);
+                GUI.color = Color.white;
             }
 
             // ── 暂停遮罩 ────────────────────────────────────────
             if (paused)
             {
-                DrawPanel(new Rect(0, 0, Screen.width, Screen.height), new Color(0f, 0.04f, 0.08f, 0.6f));
+                DrawPanel(new Rect(0, 0, lw, lh), new Color(0f, 0.04f, 0.08f, 0.6f));
                 centerStyle.normal.textColor = ColorAccent;
-                DrawTextShadow(new Rect(0, Screen.height * 0.4f, Screen.width, 60f), "\u23F8 暂停中", centerStyle);
+                DrawTextShadow(new Rect(0, lh * 0.4f, lw, 60f), "\u23F8 暂停中", centerStyle);
                 centerSubStyle.normal.textColor = ColorTextSecondary;
-                GUI.Label(new Rect(0, Screen.height * 0.4f + 56f, Screen.width, 36f),
+                GUI.Label(new Rect(0, lh * 0.4f + 56f, lw, 36f),
                     "按 P 继续 · 返回退出本局", centerSubStyle);
             }
 
             // 中央提示（未开始 / 游戏结束）
             if (!running)
             {
-                var titleY = Screen.height * 0.42f;
-                var subY = Screen.height * 0.42f + 56f;
+                var titleY = lh * 0.42f;
+                var subY = lh * 0.42f + 56f;
 
                 if (gameOver)
                 {
                     centerStyle.normal.textColor = ColorDanger;
-                    DrawTextShadow(new Rect(0, titleY, Screen.width, 60f), "游戏结束", centerStyle);
+                    DrawTextShadow(new Rect(0, titleY, lw, 60f), "游戏结束", centerStyle);
                     centerSubStyle.normal.textColor = ColorTextSecondary;
-                    GUI.Label(new Rect(0, subY, Screen.width, 36f),
+                    GUI.Label(new Rect(0, subY, lw, 36f),
                         "点击屏幕重来  ·  按返回结算", centerSubStyle);
                 }
                 else
                 {
                     centerStyle.normal.textColor = ColorAccent;
-                    DrawTextShadow(new Rect(0, titleY, Screen.width, 60f), "点击屏幕开始", centerStyle);
+                    DrawTextShadow(new Rect(0, titleY, lw, 60f), "点击屏幕开始", centerStyle);
                     centerSubStyle.normal.textColor = ColorTextSecondary;
-                    GUI.Label(new Rect(0, subY, Screen.width, 36f),
+                    GUI.Label(new Rect(0, subY, lw, 36f),
                         "三条生命  ·  P 暂停  ·  屏幕边缘可结算", centerSubStyle);
                 }
             }
@@ -353,13 +388,14 @@ namespace PenguinRun
             return false;
         }
 
-        private void DrawBossPanel(BossSystem bossSystem)
+        private void DrawBossPanel(BossSystem bossSystem, RunnerHudLayout layout)
         {
             var boss = bossSystem.CurrentBoss;
             if (boss == null) return;
 
-            var w = Mathf.Clamp(Screen.width * 0.5f, 420f, 700f);
-            var x = (Screen.width - w) * 0.5f;
+            var lw = layout.LogicalWidth;
+            var w = Mathf.Clamp(lw * 0.5f, 420f, 700f);
+            var x = (lw - w) * 0.5f;
             var y = 18f;
             var h = 132f;
             DrawCard(new Rect(x, y, w, h), new Color(0.12f, 0.05f, 0.08f, 0.92f), new Color(1f, 0.4f, 0.45f, 0.65f));
@@ -445,6 +481,32 @@ namespace PenguinRun
             };
             GUI.Label(new Rect(x, y + 58f, w, 20f), phaseLabel, phaseStyle);
 
+            if (boss.UsesDeceptiveTelegraphs)
+            {
+                var decoyStyle = new GUIStyle(bestLabelStyle)
+                {
+                    fontSize = 12,
+                    alignment = TextAnchor.MiddleCenter,
+                    normal = { textColor = new Color(0.65f, 0.78f, 0.92f, 0.9f) },
+                };
+                GUI.Label(new Rect(x, y + 76f, w, 16f), "雾堤：只信变红脉冲的圈", decoyStyle);
+            }
+
+            if (boss.Phase == BossPhase.Active && boss.Pattern != BossPattern.None && boss.Pattern != BossPattern.Vulnerable)
+            {
+                var bar2Y = boss.UsesDeceptiveTelegraphs ? y + 94f : y + 80f;
+                var windupW = barW * boss.WindupProgress01;
+                if (windupW > 2f)
+                {
+                    DrawPanel(new Rect(barX, bar2Y, windupW, 6f), new Color(1f, 0.82f, 0.35f, 0.85f));
+                }
+                if (boss.IsPatternDangerous)
+                {
+                    var dangerW = barW * (1f - boss.DangerWindowProgress01);
+                    DrawPanel(new Rect(barX, bar2Y + 8f, dangerW, 6f), new Color(1f, 0.2f, 0.25f, 0.95f));
+                }
+            }
+
             var rewardLeft = bossSystem.CurrentBossSpeedRewardTimeLeft;
             var rewardWindow = Mathf.Max(0.1f, bossSystem.CurrentBossSpeedRewardWindow);
             var rewardFrac = rewardLeft / rewardWindow;
@@ -501,10 +563,10 @@ namespace PenguinRun
             }
         }
 
-        private void DrawAchievementBar(WorldDirector world)
+        private void DrawAchievementBar(WorldDirector world, RunnerHudLayout layout)
         {
             var x = 16f;
-            var y = (float)Screen.height - 70f;
+            var y = layout.LogicalHeight - 70f;
             var w = 380f;
             var h = 54f;
             DrawCard(new Rect(x, y, w, h), ColorPanelBg, ColorPanelStroke);

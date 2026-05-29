@@ -5,6 +5,9 @@ namespace PenguinRun
 {
     internal sealed class CollisionSystem
     {
+        private const float PlayerMarginX = 0.06f;
+        private const float PlayerMarginZ = 0.10f;
+
         private readonly RunnerAudio audio;
         // 已记完美闪避的障碍（避免重复计分）
         private readonly HashSet<GameObject> perfectDodged = new();
@@ -51,9 +54,9 @@ namespace PenguinRun
                     : ObstacleColliderSpec.SmallJumpable;
 
                 var dz = Mathf.Abs(obstacle.transform.position.z - pz);
-                if (dz > spec.HalfDz) continue;
+                if (dz > spec.HalfDz + PlayerMarginZ) continue;
                 var dx = Mathf.Abs(obstacle.transform.position.x - px);
-                if (dx > spec.HalfDx) continue;
+                if (dx > spec.HalfDx + PlayerMarginX) continue;
 
                 // 通用跳跃越障判定：脚底高度超过障碍要求的清除高度即可跳过
                 var clearedByJump = playerY > obstacle.transform.position.y + spec.FeetClearanceAboveRoot;
@@ -62,7 +65,7 @@ namespace PenguinRun
                 // 滑铲穿过障碍、跳跃越过障碍 都算完美闪避（仅统计一次）
                 if (motor != null && motor.PerfectActionWindow > 0f && !perfectDodged.Contains(obstacle))
                 {
-                    if (slideTimerSeconds > 0f && motor.LastCriticalAction == RunnerAction.Slide)
+                    if (slideTimerSeconds > 0f && spec.IsLow && motor.LastCriticalAction == RunnerAction.Slide)
                     {
                         perfectDodged.Add(obstacle);
                         world.AddPerfectDodge();
@@ -80,8 +83,8 @@ namespace PenguinRun
                     }
                 }
 
-                // 滑铲：从障碍下方掠过（低矮横梁/小障碍都可以滑铲通过）
-                if (slideTimerSeconds > 0f) continue;
+                // 滑铲：仅通过低矮障碍（滑铲门 / 宽低横梁 / 中等栏）
+                if (slideTimerSeconds > 0f && spec.IsLow) continue;
                 // 跳跃：脚底高度超过障碍要求的清除高度
                 if (clearedByJump) continue;
 
@@ -156,6 +159,7 @@ namespace PenguinRun
 
                 spawner.TryRemoveObstacle(obstacle);
                 world.SetHitInvulnerability(2f);
+                world.BreakPerfectDodgeStreak();
                 var gameOver = world.LoseOneLife();
                 if (gameOver)
                 {

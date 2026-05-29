@@ -114,6 +114,18 @@ namespace PenguinRun
     /// </summary>
     public static class RunnerSegmentCatalog
     {
+        public static RunnerSegmentDefinition Fallback => new(
+            "fallback",
+            waveCount: 3,
+            powerChanceDelta: 0f,
+            coinLineChanceDelta: 0f,
+            singleObstacleChanceDelta: 0f,
+            lowObstacleBiasDelta: 0.1f,
+            rollingSpawnChance: 0f,
+            wideWallChance: 0f,
+            SegmentObstaclePalette.IceLake,
+            SegmentPatternKind.Mixed);
+
         public static RunnerSegmentDefinition[] GetPool(RunnerMapTheme theme)
         {
             return theme switch
@@ -134,10 +146,10 @@ namespace PenguinRun
             return new[]
             {
                 // 原有片段（名称修正）
-                new RunnerSegmentDefinition("围石热身",       2, -0.02f,  0.06f, -0.06f,  0.10f, 0f,    0f,    p),
+                new RunnerSegmentDefinition("围石热身",       2, -0.02f,  0.06f, -0.06f,  0.18f, 0f,    0f,    p),
                 new RunnerSegmentDefinition("宽道鱼干",       2, -0.03f,  0.14f, -0.12f,  0.06f, 0f,    0f,    p, SegmentPatternKind.RewardRun),
                 new RunnerSegmentDefinition("单障练习",       3,  0.00f, -0.05f,  0.06f,  0.04f, 0f,    0.02f, p, SegmentPatternKind.SplitGate),
-                new RunnerSegmentDefinition("混合节奏",       3,  0.02f, -0.02f,  0.02f,  0.00f, 0.03f, 0.04f, p),
+                new RunnerSegmentDefinition("混合节奏",       3,  0.02f, -0.02f,  0.02f,  0.10f, 0.03f, 0.04f, p),
                 new RunnerSegmentDefinition("喘息平台",       2, -0.04f,  0.12f, -0.14f,  0.12f, 0f,    0f,    p),
                 new RunnerSegmentDefinition("双线压力",       2,  0.03f, -0.08f,  0.10f, -0.06f, 0f,    0.06f, p, SegmentPatternKind.LaneWeave),
                 new RunnerSegmentDefinition("道具窗口",       2,  0.12f,  0.00f, -0.06f,  0.00f, 0f,    0f,    p),
@@ -158,8 +170,8 @@ namespace PenguinRun
             return new[]
             {
                 // 原有片段（名称修正）
-                new RunnerSegmentDefinition("木桥入场",       2, -0.02f,  0.04f, -0.04f,  0.14f, 0.02f, 0f,    p, SegmentPatternKind.JumpArc),
-                new RunnerSegmentDefinition("断桥预兆",       3,  0.00f, -0.06f,  0.08f,  0.08f, 0.06f, 0.08f, p, SegmentPatternKind.SplitGate),
+                new RunnerSegmentDefinition("木桥入场",       2, -0.02f,  0.04f, -0.04f,  0.20f, 0.02f, 0f,    p, SegmentPatternKind.JumpArc),
+                new RunnerSegmentDefinition("断桥预兆",       3,  0.00f, -0.06f,  0.08f,  0.16f, 0.06f, 0.08f, p, SegmentPatternKind.SplitGate),
                 new RunnerSegmentDefinition("rolling snowball", 2, 0.02f,-0.08f,  0.06f, -0.02f, 0.14f, 0.05f, p),
                 new RunnerSegmentDefinition("箭线金币",       2, -0.04f,  0.18f, -0.10f,  0.06f, 0f,    0f,    p, SegmentPatternKind.RewardRun),
                 new RunnerSegmentDefinition("简体低障",       3,  0.00f,  0.02f,  0.02f,  0.18f, 0f,    0.04f, p, SegmentPatternKind.JumpArc),

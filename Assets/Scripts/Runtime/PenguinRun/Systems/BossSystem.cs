@@ -8,7 +8,7 @@ namespace PenguinRun
     /// <summary>
     /// Boss attack patterns and the matching dodge/counter windows.
     /// </summary>
-    internal enum BossPattern
+    public enum BossPattern
     {
         None,
         SweepLow,
@@ -41,6 +41,8 @@ namespace PenguinRun
         public const int BossMaxHits = 3;
         public const float BossSpawnAheadZ = 30f;
         public const float BossActiveZ = 14f;
+        /// <summary>地面预警圈与跑道 FX 对齐的玩家前方 Z（玩家约在 z≈0）。</summary>
+        public const float PlayerTelegraphZ = 5.5f;
         public const float VulnerableSeconds = 1.6f;
         public const float HitInvulnerabilitySeconds = 0.6f;
         public const float DefeatRetreatSeconds = 1.4f;
@@ -53,6 +55,7 @@ namespace PenguinRun
         private float bossDangerWindowRatio;
         private float bossTelegraphLifetimeRatio;
         private float bossVulnerableChance;
+        private float minPatternDangerDelay = 0.55f;
 
         // 奖励
         public const int BossDefeatBonusFishSnacks = 25;
@@ -187,7 +190,9 @@ namespace PenguinRun
 
             CurrentBoss = new BossEncounter(def, baseGroundY, laneWidth, runDistance,
                 bossPatternMinSeconds, bossPatternMaxSeconds,
-                bossDangerWindowRatio, bossTelegraphLifetimeRatio, bossVulnerableChance);
+                bossDangerWindowRatio, bossTelegraphLifetimeRatio, bossVulnerableChance,
+                minPatternDangerDelay);
+            CurrentBoss.SetStrikeCallback(HandleBossPatternStrike);
             CurrentBoss.Root.transform.SetParent(sceneRoot, false);
             audio.EnterBossMusic(def);
             explainedPatterns.Clear();
@@ -260,39 +265,50 @@ namespace PenguinRun
         {
             if (!boss.IsPatternDangerous) return false;
 
+            // 跳跃回避高度阈值：玩家脚底离地超过此值视为"空中"
+            const float airDodgeHeight = 0.45f;
+            var playerAirborne = playerY > groundY + airDodgeHeight;
+            // 半车道容差（用于"安全车道"判定）
+            var halfLane = laneWidth * 0.52f;
+            // 车道外容差（在目标车道之外的判定）
+            var offLane = laneWidth * 0.55f;
+
             switch (boss.Pattern)
             {
                 case BossPattern.SweepLow:
-                    // 低扫：滑铲 / 待在安全车道可回避
-                    if (playerSliding) return false;
-                    if (Mathf.Abs(playerX - boss.SafeLaneX) < laneWidth * 0.5f) return false;
+                    // 低扫：跳跃/滑铲/待在安全车道皆可回避
+                    if (playerSliding || playerAirborne) return false;
+                    if (Mathf.Abs(playerX - boss.SafeLaneX) < halfLane) return false;
                     break;
 
                 case BossPattern.DiveHigh:
-                    // 俯冲：起跳 / 不在 Boss 所在车道可回避
-                    var inAir = playerY > groundY + 0.6f;
-                    if (inAir) return false;
-                    if (Mathf.Abs(playerX - boss.WorldX) > laneWidth * 0.55f) return false;
+                    // 俯冲：起跳 / 换到其他车道可回避
+                    if (playerAirborne) return false;
+                    if (Mathf.Abs(playerX - boss.WorldX) > offLane) return false;
                     break;
 
                 case BossPattern.ChargeAcross:
-                    if (playerY > groundY + 0.6f) return false;
+                    // 全场冲锋：跳跃 / 待在安全车道可回避
+                    if (playerAirborne) return false;
+                    if (Mathf.Abs(playerX - boss.SafeLaneX) < halfLane) return false;
                     break;
 
                 case BossPattern.RangedSalvo:
+                    // 远程齐射：冲刺小段无敌 / 避开落点车道
                     if (playerDashTimer > 0f) return false;
-                    if (!IsInSalvoLane(boss, playerX, laneWidth * 0.42f)) return false;
+                    // 容差从 0.42 放宽到 0.50，移动端更容易躲
+                    if (!IsInSalvoLane(boss, playerX, laneWidth * 0.50f)) return false;
                     break;
 
                 case BossPattern.CenterBeam:
-                    // 中央光束：中央车道危险；起跳也可规避
-                    if (playerY > groundY + 0.6f) return false;
-                    if (Mathf.Abs(playerX) > laneWidth * 0.45f) return false;
+                    // 中央光束：离开中央车道 / 起跳越过
+                    if (playerAirborne) return false;
+                    if (Mathf.Abs(playerX) > laneWidth * 0.50f) return false;
                     break;
 
                 case BossPattern.QuakePulse:
-                    // 震地脉冲：需滑铲躲过地面冲击
-                    if (playerSliding) return false;
+                    // 震地脉冲：滑铲贴地 / 跳跃滞空 均可躲过
+                    if (playerSliding || playerAirborne) return false;
                     break;
             }
 
@@ -331,6 +347,11 @@ namespace PenguinRun
             var bossInEngageBand = boss.WorldZ >= BossActiveZ - 5.5f && boss.WorldZ <= BossActiveZ + 3f;
             var laneAligned = Mathf.Abs(playerX - boss.WorldX) < laneTolerance;
             return bossInEngageBand && laneAligned;
+        }
+
+        private void HandleBossPatternStrike(BossPattern pattern, BossPatternVfxProfile profile)
+        {
+            audio.PlayBossPatternStrike(pattern, profile?.SfxStrikeId);
         }
 
         private void DamageBoss(BossEncounter boss, ref string feedbackText, ref float feedbackTimer)
@@ -502,6 +523,7 @@ namespace PenguinRun
             bossDangerWindowRatio = 0.48f;
             bossTelegraphLifetimeRatio = 0.75f;
             bossVulnerableChance = 0.5f;
+            minPatternDangerDelay = 0.55f;
 
             switch (kind)
             {
@@ -511,6 +533,7 @@ namespace PenguinRun
                     bossDangerWindowRatio = 0.35f;
                     bossTelegraphLifetimeRatio = 0.88f;
                     bossVulnerableChance = 0.72f;
+                    minPatternDangerDelay = 0.7f;
                     difficultyHintTag = "轻松";
                     break;
                 case DifficultyKind.Hard:
@@ -519,6 +542,7 @@ namespace PenguinRun
                     bossDangerWindowRatio = 0.52f;   // 标准预警
                     bossTelegraphLifetimeRatio = 0.65f;
                     bossVulnerableChance = 0.42f;    // 破绽偏少
+                    minPatternDangerDelay = 0.45f;
                     difficultyHintTag = "困难";
                     break;
                 case DifficultyKind.Expert:
@@ -527,6 +551,7 @@ namespace PenguinRun
                     bossDangerWindowRatio = 0.58f;   // 更短预警
                     bossTelegraphLifetimeRatio = 0.55f;
                     bossVulnerableChance = 0.35f;
+                    minPatternDangerDelay = 0.45f;
                     difficultyHintTag = "专家";
                     break;
                 default:
@@ -535,6 +560,7 @@ namespace PenguinRun
                     bossDangerWindowRatio = 0.45f;
                     bossTelegraphLifetimeRatio = 0.72f;
                     bossVulnerableChance = 0.55f;
+                    minPatternDangerDelay = 0.55f;
                     difficultyHintTag = "普通";
                     break;
             }
@@ -684,12 +710,12 @@ namespace PenguinRun
         {
             return pattern switch
             {
-                BossPattern.SweepLow => "滑铲或换到预警圈标示的安全车道",
+                BossPattern.SweepLow => "滑铲、起跳或换到预警圈标示的安全车道",
                 BossPattern.DiveHigh => "提早换道，或在落地前起跳躲过",
-                BossPattern.ChargeAcross => "三路同时预警时立刻起跳",
+                BossPattern.ChargeAcross => "换到没有预警圈的安全车道，或起跳越过",
                 BossPattern.RangedSalvo => "看准地面预警圈换位躲弹；冲刺可小段无敌穿过",
                 BossPattern.CenterBeam => "离开正中车道，或起跳越过光束",
-                BossPattern.QuakePulse => "黄圈出现立刻滑铲贴地躲过",
+                BossPattern.QuakePulse => "黄圈出现时滑铲贴地，或起跳滞空躲过",
                 _ => "保持移动，紧盯地面预警圈",
             };
         }
@@ -711,12 +737,12 @@ namespace PenguinRun
 
             var hint = lastHitPattern switch
             {
-                BossPattern.SweepLow => "败于低空横扫：红圈出现时滑铲或换到安全车道",
+                BossPattern.SweepLow => "败于低空横扫：红圈出现时滑铲、起跳或换到安全车道",
                 BossPattern.DiveHigh => "败于高空俯冲：BOSS 抬身时提早换道或起跳躲过",
-                BossPattern.ChargeAcross => "败于全场冲锋：三路同时亮预警时立刻起跳",
+                BossPattern.ChargeAcross => "败于全场冲锋：换到没有红圈的安全车道，或起跳越过",
                 BossPattern.RangedSalvo => "败于远程齐射：看准落点圈换位；也可用冲刺穿过",
                 BossPattern.CenterBeam => "败于中央光束：离开正中车道或起跳越过",
-                BossPattern.QuakePulse => "败于震地脉冲：黄圈出现立刻滑铲，不要硬跳",
+                BossPattern.QuakePulse => "败于震地脉冲：黄圈出现时滑铲贴地，或起跳滞空躲过",
                 _ => "被 BOSS 击败：观察预警圈，选择对应躲法"
             };
 

@@ -139,6 +139,38 @@ namespace PenguinRun
             return new PenguinCharacter(parent);
         }
 
+        /// <summary>
+        /// 使用程序化 Mesh 生成技术创建可爱卡通风格的企鹅。
+        /// 相比 Create() 的 Primitive 拼接版本，这个版本使用圆润的球体变形、
+        /// 平滑法线和统一的材质，视觉效果更接近手绘卡通风格。
+        /// </summary>
+        public static PenguinCharacter CreateCute(Transform parent)
+        {
+            var rootGo = CutePenguinMesh.Create(parent, out var parts);
+
+            var ch = new PenguinCharacter(rootGo.transform);
+            // 替换 body/head 等核心引用为新的 Mesh 版本
+            // 覆盖构造函数中创建的 primitive 引用
+            OverridePartsForCute(ch, parts);
+            return ch;
+        }
+
+        private static void OverridePartsForCute(PenguinCharacter ch, PenguinCharacterParts parts)
+        {
+            // 用新 mesh 部件替换构造函数中的 primitive 引用
+            // body: 替换 Root 下名为 "Body" 的 primitive → 新 mesh
+            if (parts.Body != null)
+            {
+                var oldBody = ch.Root.Find("Body");
+                if (oldBody != null) Object.Destroy(oldBody.gameObject);
+                // 新 body 已在 CutePenguinMesh.Create 中作为 Root 的子节点创建
+            }
+
+            // 这里不强制替换所有部件 — 保持向后兼容。
+            // 使用 CutePenguinMesh 前端的全套部件时，只需让动画系统
+            // 按名字查找即可（body/head/leftWing 等名字一致）。
+        }
+
         public void Animate(float dt, bool running, bool grounded, bool sliding, bool gameOver, float speed01, float laneLean, float dashTimer, float magnetTimer, float shieldTimer, float invulnerabilityTimer)
         {
             var dashActive = dashTimer > 0f;

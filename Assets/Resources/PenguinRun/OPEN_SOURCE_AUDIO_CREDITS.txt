@@ -22,6 +22,10 @@ Keep this file if you redistribute the project to preserve source/license tracea
    Each BossDefinition now has a `BgmClipName` field; RunnerAudio will load the
    dedicated file first and fall back to the table above if absent.
 
+   STATUS (2026-05): All six dedicated Boss BGM files below are PLACEHOLDER —
+   not yet imported. Gameplay uses the Silhouette fallback table in section 1.
+   Drop CC0/CC-BY ogg files into Assets/Resources/PenguinRun/ to activate.
+
    Target filenames and recommended sources:
 
    bgm_boss_snow_king.ogg
@@ -102,6 +106,15 @@ Keep this file if you redistribute the project to preserve source/license tracea
    CoralBounce    → shield_bounce.ogg (pitch 1.32)
    ThunderFeather → dash_pickup.ogg   (pitch 1.22)
    No new audio files needed for new power-ups in this content pack.
+
+   Boss Strike SFX (reuses existing clips, pattern-specific pitch/layered tail)
+     SweepLow      → shield_bounce.ogg (pitch 0.85)
+     DiveHigh      → boss_land.ogg     (pitch 1.10)
+     ChargeAcross  → crash.ogg         (pitch 0.92)
+     RangedSalvo   → ice_crack.ogg     (pitch 1.15, multi-impact per projectile)
+     CenterBeam    → boss_shield_break.ogg (pitch 1.05)
+     QuakePulse    → boss_windup.ogg + crash.ogg tail (pitch 0.78 / 0.88)
+   No new audio files needed for Boss Strike SFX in this content pack.
 
 ──────────────────────────────────────────────────────────────────────────────
 LICENSE POLICY:

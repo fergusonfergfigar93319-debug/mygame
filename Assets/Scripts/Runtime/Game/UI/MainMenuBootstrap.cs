@@ -1,6 +1,8 @@
 using PenguinRun.Game.Mission;
 using PenguinRun.Game.Save;
 using PenguinRun.Game.Shop;
+using PenguinRun.Game.Leaderboard;
+using PenguinRun.Game;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
@@ -18,13 +20,28 @@ namespace PenguinRun.Game.UI
         private Snackbar snackbar;
 
         private Text nicknameText;
-        private Text bestScoreText;
         private Text fishSnacksText;
-        private GameObject missionBadge;
+        private Text levelText;
+
+        /// <summary>顶栏下方单行活动 Ticker。</summary>
+        private Text topTickerText;
+
+        /// <summary>今日挑战卡片右侧的鱼干预览。</summary>
+        private Text dailyFishRewardChipText;
+
+        private Text strategyHeadlineText;
+        private Text strategyDetailText;
+        private Text strategyButtonText;
+        private Button strategyButton;
+        private StrategyAction currentStrategyAction;
+
         private RectTransform mascotArea;
         private RectTransform avatarMiniArea;
         private Text boosterPreviewText;
-
+        /// <summary>主 CTA 上方可点击难度芯片文案。</summary>
+        private Text difficultyHintText;
+        private Button difficultyChipButton;
+        private GameObject profileStatsOverlay;
         private Transform panelLayer;
         private GameObject currentPanel;
         private string currentPanelName;
@@ -46,8 +63,36 @@ namespace PenguinRun.Game.UI
             public Image activeLine;
             public Color accentColor;
             public bool wasSelected;
+            public GameObject iconGlow;
+            public GameObject badgeRoot;
+            public Text badgeCountText;
         }
         private readonly System.Collections.Generic.List<DockItem> dockItems = new();
+
+        private enum DockTabBadgeKind
+        {
+            None,
+            NumericMission,
+            NumericCamp,
+        }
+
+        private enum StrategyAction
+        {
+            CheckIn,
+            OpenMissions,
+            OpenCampShop,
+            OpenCodex,
+            OpenLeaderboard,
+            StartEndless,
+            StartDaily,
+        }
+
+        private enum DifficultyOverlayMode
+        {
+            BeforeEndlessRun,
+            BeforeDailyRun,
+            SettingsOnly,
+        }
 
         private static void EnsureLandscape()
         {
@@ -79,13 +124,116 @@ namespace PenguinRun.Game.UI
 
         private void Awake()
         {
+            // 确保场景过渡管理器存在
+            if (SceneTransitionManager.Instance == null)
+            {
+                var tm = new GameObject("SceneTransitionManager");
+                tm.AddComponent<SceneTransitionManager>();
+            }
+
             EnsureLandscape();
             EnsureEventSystem();
+            var isNewLogin = PlayerSave.TryRecordLogin();
             BuildScene();
             var lobbyGo = new GameObject("MenuLobbyAudio");
             lobbyGo.transform.SetParent(transform, false);
             lobbyGo.AddComponent<MenuLobbyAudio>();
             ShowResultOverlayIfAny();
+
+            // 首次进入游戏或每日首次登录时，展示签到引导
+            if (isNewLogin && !PlayerSave.IsDailyCheckInClaimed())
+            {
+                ShowFirstLoginPrompt();
+            }
+        }
+
+        private void ShowFirstLoginPrompt()
+        {
+            var streak = Mathf.Max(1, PlayerSave.LoginStreak);
+            var reward = PlayerSave.PreviewDailyCheckInReward();
+            if (reward <= 0) return;
+
+            var overlay = UiBuilder.CreatePanel("FirstLoginOverlay", canvas.transform,
+                new Color(0f, 0f, 0f, 0.65f));
+            overlay.transform.SetAsLastSibling();
+
+            var card = UiBuilder.CreateRect("WelcomeCard", overlay.transform,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(580f, 460f), Vector2.zero,
+                UiBuilder.Surface1, rounded: true);
+            UiBuilder.AddOutline(card.gameObject, UiBuilder.BorderAccent, new Vector2(1.5f, -1.5f));
+            UiBuilder.AddShadow(card.gameObject, new Color(0f, 0f, 0f, 0.5f), new Vector2(0f, -8f));
+
+            // 企鹅欢迎图标
+            var iconBadge = UiBuilder.CreateRect("WelcomeIcon", card,
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(96f, 96f), new Vector2(0f, -36f),
+                new Color(0.1f, 0.25f, 0.5f, 1f), circle: true);
+            iconBadge.pivot = new Vector2(0.5f, 1f);
+            UiBuilder.AddOutline(iconBadge.gameObject, UiBuilder.BorderAccent, new Vector2(2f, -2f));
+            UiBuilder.CreateText("IconText", iconBadge.transform, "❖", 44, FontStyle.Bold,
+                TextAnchor.MiddleCenter, UiBuilder.AccentCyan);
+
+            // 欢迎标题
+            var titleStr = streak <= 1 ? "欢迎来到企鹅快跑！" : $"欢迎回来 · 第 {streak} 天";
+            UiBuilder.CreateText("Title", card, titleStr,
+                34, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+            var trt = (RectTransform)card.Find("Title");
+            trt.anchorMin = new Vector2(0f, 1f);
+            trt.anchorMax = new Vector2(1f, 1f);
+            trt.sizeDelta = new Vector2(0f, 50f);
+            trt.anchoredPosition = new Vector2(0f, -144f);
+
+            // 奖励预览
+            var todayStr = $"今日签到可得 +{reward} 鱼干";
+            UiBuilder.CreateText("Subtitle", card, todayStr,
+                28, FontStyle.Bold, TextAnchor.MiddleCenter, UiBuilder.WarmGold);
+            var srt = (RectTransform)card.Find("Subtitle");
+            srt.anchorMin = new Vector2(0f, 1f);
+            srt.anchorMax = new Vector2(1f, 1f);
+            srt.sizeDelta = new Vector2(0f, 40f);
+            srt.anchoredPosition = new Vector2(0f, -200f);
+
+            // 引导文字
+            var guideStr = streak <= 1
+                ? "在极夜冰原上奔跑，收集鱼干，击败 Boss！\n左侧查看今日建议，下方入口探索营地与商店。"
+                : "左侧查看今日建议，先去营地升级能力，\n然后挑战极夜快跑或今日限定关卡。";
+            UiBuilder.CreateText("Guide", card, guideStr,
+                18, FontStyle.Normal, TextAnchor.MiddleCenter, UiBuilder.TextSecondary);
+            var grt = (RectTransform)card.Find("Guide");
+            grt.anchorMin = new Vector2(0f, 1f);
+            grt.anchorMax = new Vector2(1f, 1f);
+            grt.sizeDelta = new Vector2(0f, 60f);
+            grt.anchoredPosition = new Vector2(0f, -260f);
+
+            // 签到按钮
+            var checkInBtn = UiBuilder.CreateButton("CheckInNow", card, "立即签到",
+                new Color(1f, 0.84f, 0.32f, 1f), new Color(0.08f, 0.05f, 0.01f, 1f), 28, rounded: true);
+            var cbrt = (RectTransform)checkInBtn.transform;
+            cbrt.anchorMin = new Vector2(0.5f, 0f);
+            cbrt.anchorMax = new Vector2(0.5f, 0f);
+            cbrt.pivot = new Vector2(0.5f, 0f);
+            cbrt.sizeDelta = new Vector2(320f, 68f);
+            cbrt.anchoredPosition = new Vector2(0f, 48f);
+            UiBuilder.AddOutline(checkInBtn.gameObject, new Color(0.5f, 0.35f, 0.08f, 0.7f), new Vector2(2f, -2f));
+            UiBuilder.AddShadow(checkInBtn.gameObject, new Color(0f, 0f, 0f, 0.4f), new Vector2(0f, -4f));
+            checkInBtn.onClick.AddListener(() =>
+            {
+                Destroy(overlay);
+                OnCheckInClicked();
+            });
+
+            // 跳过按钮
+            var skipBtn = UiBuilder.CreateButton("Skip", card, "稍后再说",
+                new Color(0.12f, 0.22f, 0.36f, 0.9f), UiBuilder.TextSecondary, 22, rounded: true);
+            var srtt = (RectTransform)skipBtn.transform;
+            srtt.anchorMin = new Vector2(0.5f, 0f);
+            srtt.anchorMax = new Vector2(0.5f, 0f);
+            srtt.pivot = new Vector2(0.5f, 0f);
+            srtt.sizeDelta = new Vector2(260f, 48f);
+            srtt.anchoredPosition = new Vector2(0f, -2f);
+            UiBuilder.AddOutline(skipBtn.gameObject, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
+            skipBtn.onClick.AddListener(() => Destroy(overlay));
         }
 
         private void OnEnable()
@@ -124,13 +272,27 @@ namespace PenguinRun.Game.UI
             BuildBackground();
             BuildCanvas();
             BuildTopBar();
+            BuildTopTicker();
             BuildHero();
+            BuildLobbyInfoDeck();
             BuildBottomDock();
             BuildPrimaryCtaForegroundStrip();
             // 全屏面板必须在顶栏/主菜单之上，否则任务头等控件会与首页重叠且无法正确覆盖
             panelLayer.SetAsLastSibling();
             snackbar = Snackbar.EnsureUnder(canvas);
             snackbar.transform.SetAsLastSibling();
+
+            // 右下角版本号
+            var versionText = UiBuilder.CreateText("VersionText", canvas.transform,
+                "v1.0 · 企鹅快跑", 14, FontStyle.Normal, TextAnchor.LowerRight,
+                new Color(0.4f, 0.6f, 0.8f, 0.35f));
+            var vrt = (RectTransform)versionText.transform;
+            vrt.anchorMin = new Vector2(1f, 0f);
+            vrt.anchorMax = new Vector2(1f, 0f);
+            vrt.pivot = new Vector2(1f, 0f);
+            vrt.sizeDelta = new Vector2(200f, 24f);
+            vrt.anchoredPosition = new Vector2(-24f, 160f);
+            versionText.raycastTarget = false;
         }
 
         /// <summary>将开始游戏 + 今日挑战挂到全屏前景根下并提到底坞之上，射线命中顺序稳定。</summary>
@@ -574,47 +736,79 @@ namespace PenguinRun.Game.UI
 
         private void BuildTopBar()
         {
-            // 左侧玩家信息面板（自适应宽度，防止文字溢出）
-            var playerProfile = UiBuilder.CreateRect("PlayerProfile", canvas.transform,
-                new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(380f, 100f), new Vector2(24f, -24f),
-                new Color(0.08f, 0.16f, 0.28f, 0.9f), rounded: true);
-            playerProfile.pivot = new Vector2(0f, 1f);
-            UiBuilder.AddOutline(playerProfile.gameObject, new Color(0.4f, 0.85f, 0.95f, 0.4f), new Vector2(1.5f, -1.5f));
-            UiBuilder.AddShadow(playerProfile.gameObject, new Color(0f, 0f, 0f, 0.3f), new Vector2(0f, -4f));
+            const float compactHeight = 56f;
+            const float compactWidth = 300f;
 
-            // Avatar（稍微缩小）
-            var avatarBg = UiBuilder.CreateRect("AvatarBg", playerProfile,
+            var compactProfileGo = new GameObject("CompactProfile", typeof(RectTransform), typeof(CanvasRenderer),
+                typeof(Image), typeof(Button));
+            compactProfileGo.transform.SetParent(canvas.transform, false);
+            var compactProfile = (RectTransform)compactProfileGo.transform;
+            compactProfile.anchorMin = new Vector2(0f, 1f);
+            compactProfile.anchorMax = new Vector2(0f, 1f);
+            compactProfile.pivot = new Vector2(0f, 1f);
+            compactProfile.sizeDelta = new Vector2(compactWidth, compactHeight);
+            compactProfile.anchoredPosition = new Vector2(24f, -24f);
+            var profileImg = compactProfileGo.GetComponent<Image>();
+            profileImg.sprite = UiBuilder.RoundedSprite;
+            profileImg.type = Image.Type.Sliced;
+            profileImg.color = new Color(0.08f, 0.16f, 0.28f, 0.9f);
+            UiBuilder.AddOutline(compactProfileGo, new Color(0.4f, 0.85f, 0.95f, 0.4f), new Vector2(1.5f, -1.5f));
+            UiBuilder.AddShadow(compactProfileGo, new Color(0f, 0f, 0f, 0.3f), new Vector2(0f, -4f));
+            var profileBtn = compactProfileGo.GetComponent<Button>();
+            profileBtn.targetGraphic = profileImg;
+            var pColors = profileBtn.colors;
+            pColors.normalColor = profileImg.color;
+            pColors.highlightedColor = new Color(0.12f, 0.22f, 0.38f, 0.95f);
+            pColors.pressedColor = new Color(0.06f, 0.12f, 0.22f, 0.98f);
+            profileBtn.colors = pColors;
+            profileBtn.onClick.AddListener(OpenProfileStats);
+
+            var avatarBg = UiBuilder.CreateRect("AvatarBg", compactProfile,
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
-                new Vector2(72f, 72f), new Vector2(44f, 0f),
+                new Vector2(44f, 44f), new Vector2(10f, 0f),
                 new Color(0.12f, 0.45f, 0.75f, 0.95f), circle: true);
             UiBuilder.AddOutline(avatarBg.gameObject, new Color(1f, 0.82f, 0.35f, 0.75f), new Vector2(1.5f, -1.5f));
 
             avatarMiniArea = UiBuilder.CreateRect("AvatarInner", avatarBg,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(60f, 60f), Vector2.zero,
+                new Vector2(36f, 36f), Vector2.zero,
                 new Color(0.06f, 0.2f, 0.38f, 0.98f), circle: true);
             DrawMiniPenguinAvatar(avatarMiniArea);
 
-            // Player name（留足边距防止溢出）
-            nicknameText = UiBuilder.CreateText("Nickname", playerProfile, "", 28, FontStyle.Bold, TextAnchor.LowerLeft, new Color(1f, 1f, 1f, 0.95f));
+            nicknameText = UiBuilder.CreateText("Nickname", compactProfile, "", 20, FontStyle.Bold,
+                TextAnchor.MiddleLeft, new Color(1f, 1f, 1f, 0.95f));
             var nrt = (RectTransform)nicknameText.transform;
-            nrt.anchorMin = new Vector2(0f, 0.5f);
+            nrt.anchorMin = new Vector2(0f, 0f);
             nrt.anchorMax = new Vector2(1f, 1f);
-            nrt.offsetMin = new Vector2(100f, 2f);
-            nrt.offsetMax = new Vector2(-12f, -2f);
+            nrt.offsetMin = new Vector2(62f, 0f);
+            nrt.offsetMax = new Vector2(-88f, 0f);
 
-            bestScoreText = UiBuilder.CreateText("BestScore", playerProfile, "", 18, FontStyle.Normal, TextAnchor.UpperLeft, new Color(0.75f, 0.85f, 0.95f, 0.75f));
-            var brt = (RectTransform)bestScoreText.transform;
-            brt.anchorMin = new Vector2(0f, 0f);
-            brt.anchorMax = new Vector2(1f, 0.5f);
-            brt.offsetMin = new Vector2(100f, 0f);
-            brt.offsetMax = new Vector2(-12f, 2f);
+            var levelChip = UiBuilder.CreateRect("LevelChip", compactProfile,
+                new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
+                new Vector2(58f, 28f), new Vector2(-36f, 0f),
+                new Color(0f, 0.55f, 0.72f, 0.55f), rounded: true);
+            levelChip.pivot = new Vector2(1f, 0.5f);
+            UiBuilder.AddOutline(levelChip.gameObject, new Color(0f, 0.92f, 1f, 0.42f), new Vector2(1f, -1f));
+            levelText = UiBuilder.CreateText("LevelText", levelChip, "", 15, FontStyle.Bold,
+                TextAnchor.MiddleCenter, UiBuilder.AccentCyan);
 
-            // 右侧货币胶囊（固定位置，确保不溢出屏幕）
+            UiBuilder.CreateText("Chevron", compactProfile, "\u203A", 32, FontStyle.Bold,
+                TextAnchor.MiddleCenter, UiBuilder.TextTertiary);
+            var chevRt = (RectTransform)compactProfile.Find("Chevron");
+            if (chevRt != null)
+            {
+                chevRt.anchorMin = new Vector2(1f, 0f);
+                chevRt.anchorMax = new Vector2(1f, 1f);
+                chevRt.pivot = new Vector2(1f, 0.5f);
+                chevRt.sizeDelta = new Vector2(28f, 0f);
+                chevRt.anchoredPosition = new Vector2(-8f, 0f);
+                chevRt.GetComponent<Text>().raycastTarget = false;
+            }
+
+            // 右侧货币胶囊（持有鱼干，用于消费）
             var currencyPill = UiBuilder.CreateRect("CurrencyPill", canvas.transform,
                 new Vector2(1f, 1f), new Vector2(1f, 1f),
-                new Vector2(190f, 64f), new Vector2(-24f, -24f),
+                new Vector2(200f, 64f), new Vector2(-24f, -24f),
                 new Color(0.1f, 0.2f, 0.35f, 0.9f), rounded: true);
             currencyPill.pivot = new Vector2(1f, 1f);
             UiBuilder.AddOutline(currencyPill.gameObject, new Color(1f, 0.75f, 0.3f, 0.5f), new Vector2(1.5f, -1.5f));
@@ -633,6 +827,28 @@ namespace PenguinRun.Game.UI
             frt.anchorMax = new Vector2(1f, 1f);
             frt.offsetMin = new Vector2(58f, 0f);
             frt.offsetMax = new Vector2(-12f, 0f);
+        }
+
+        private void BuildTopTicker()
+        {
+            var tickerBg = UiBuilder.CreateRect("TopTicker", canvas.transform,
+                new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(-48f, 36f), new Vector2(24f, -88f),
+                new Color(0.06f, 0.12f, 0.22f, 0.82f), rounded: true);
+            tickerBg.pivot = new Vector2(0f, 1f);
+            var tickerImg = tickerBg.GetComponent<Image>();
+            if (tickerImg != null)
+                tickerImg.raycastTarget = false;
+            UiBuilder.AddOutline(tickerBg.gameObject, new Color(0f, 0.85f, 0.95f, 0.28f), new Vector2(1f, -1f));
+
+            topTickerText = UiBuilder.CreateText("TickerText", tickerBg, "",
+                17, FontStyle.Normal, TextAnchor.MiddleLeft, UiBuilder.TextSecondary);
+            var ttr = (RectTransform)topTickerText.transform;
+            ttr.anchorMin = Vector2.zero;
+            ttr.anchorMax = Vector2.one;
+            ttr.offsetMin = new Vector2(16f, 0f);
+            ttr.offsetMax = new Vector2(-16f, 0f);
+            topTickerText.raycastTarget = false;
         }
 
         private void BuildMountainSilhouettes()
@@ -800,21 +1016,21 @@ namespace PenguinRun.Game.UI
             var mascotGlow = UiBuilder.CreateRect(
                 "MascotGlow", canvas.transform,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(560f, 520f), new Vector2(0f, 52f),
+                new Vector2(560f, 520f), new Vector2(0f, 36f),
                 new Color(0.3f, 0.7f, 1f, 0.12f), glow: true);
             mascotGlow.GetComponent<Image>().raycastTarget = false;
 
             var mascotRing = UiBuilder.CreateRect(
                 "MascotRing", canvas.transform,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(430f, 410f), new Vector2(0f, 52f),
+                new Vector2(430f, 410f), new Vector2(0f, 36f),
                 new Color(0.5f, 0.85f, 1f, 0.11f), glow: true);
             mascotRing.GetComponent<Image>().raycastTarget = false;
 
             // Mascot (Center) — 由 UpdateMascotCosmetic 在装扮切换时重绘
             mascotArea = UiBuilder.CreateRect("MascotArea", canvas.transform,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(410f, 430f), new Vector2(0f, 44f));
+                new Vector2(410f, 430f), new Vector2(0f, 56f));
             DrawPenguinMascot(mascotArea);
             SetRaycastTargets(mascotArea, false);
             var mascotFloat = mascotArea.gameObject.AddComponent<FloatTween>();
@@ -862,6 +1078,39 @@ namespace PenguinRun.Game.UI
             bptRt.offsetMin = new Vector2(56f, 0f);
             bptRt.offsetMax = new Vector2(-16f, 0f);
             boosterChip.gameObject.SetActive(false);
+
+            var diffChipGo = new GameObject("DifficultyChip", typeof(RectTransform), typeof(CanvasRenderer),
+                typeof(Image), typeof(Button));
+            diffChipGo.transform.SetParent(canvas.transform, false);
+            var diffChipRt = (RectTransform)diffChipGo.transform;
+            diffChipRt.anchorMin = new Vector2(0.5f, 0f);
+            diffChipRt.anchorMax = new Vector2(0.5f, 0f);
+            diffChipRt.pivot = new Vector2(0.5f, 0.5f);
+            diffChipRt.sizeDelta = new Vector2(420f, 40f);
+            diffChipRt.anchoredPosition = new Vector2(0f, 518f);
+            var diffChipImg = diffChipGo.GetComponent<Image>();
+            diffChipImg.sprite = UiBuilder.RoundedSprite;
+            diffChipImg.type = Image.Type.Sliced;
+            diffChipImg.color = new Color(0.08f, 0.16f, 0.28f, 0.88f);
+            UiBuilder.AddOutline(diffChipGo, UiBuilder.BorderAccent, new Vector2(1f, -1f));
+            difficultyChipButton = diffChipGo.GetComponent<Button>();
+            difficultyChipButton.targetGraphic = diffChipImg;
+            var dcColors = difficultyChipButton.colors;
+            dcColors.normalColor = diffChipImg.color;
+            dcColors.highlightedColor = new Color(0.12f, 0.24f, 0.4f, 0.95f);
+            dcColors.pressedColor = new Color(0.06f, 0.14f, 0.26f, 1f);
+            difficultyChipButton.colors = dcColors;
+            difficultyChipButton.onClick.AddListener(() => ShowDifficultyOverlay(DifficultyOverlayMode.SettingsOnly));
+            diffChipGo.AddComponent<ClickScaleTween>();
+
+            difficultyHintText = UiBuilder.CreateText("DifficultyHint", diffChipRt, "",
+                16, FontStyle.Normal, TextAnchor.MiddleCenter, UiBuilder.TextSecondary);
+            var dhRt = (RectTransform)difficultyHintText.transform;
+            dhRt.anchorMin = Vector2.zero;
+            dhRt.anchorMax = Vector2.one;
+            dhRt.offsetMin = new Vector2(12f, 0f);
+            dhRt.offsetMax = new Vector2(-12f, 0f);
+            difficultyHintText.raycastTarget = false;
 
             // 开始游戏按钮（位置从 410 调到 360，避免和底栏重叠）
             var startBtn = UiBuilder.CreateButton(
@@ -941,8 +1190,8 @@ namespace PenguinRun.Game.UI
             var drt = (RectTransform)dailyBtn.transform;
             drt.anchorMin = new Vector2(0.5f, 0f);
             drt.anchorMax = new Vector2(0.5f, 0f);
-            drt.sizeDelta = new Vector2(380f, 76f);
-            drt.anchoredPosition = new Vector2(0f, 204f);
+            drt.sizeDelta = new Vector2(520f, 76f);
+            drt.anchoredPosition = new Vector2(0f, 210f);
 
             // 主按钮自带的 Label 不再需要（用复合内容替代）
             var dailyDefaultLabel = dailyBtn.GetComponentInChildren<Text>();
@@ -955,10 +1204,7 @@ namespace PenguinRun.Game.UI
             dailyColors.selectedColor = new Color(0.16f, 0.4f, 0.6f, 1f);
             dailyBtn.colors = dailyColors;
 
-            dailyBtn.onClick.AddListener(() => {
-                Debug.Log("[MainMenu] 今日挑战按钮被点击");
-                StartDaily();
-            });
+            dailyBtn.onClick.AddListener(StartDaily);
             dailyBtn.transition = Selectable.Transition.None;
 
             UiBuilder.AddShadow(dailyBtn.gameObject, new Color(0f, 0f, 0f, 0.45f), new Vector2(0, -5f));
@@ -980,6 +1226,23 @@ namespace PenguinRun.Game.UI
             dailyIconGlow.SetAsFirstSibling();
             UiBuilder.CreateText("DailyIconText", dailyIcon.transform, "\u2600", 26, FontStyle.Bold,
                 TextAnchor.MiddleCenter, new Color(0.04f, 0.1f, 0.18f, 1f));
+            var dailyIconPulse = dailyIcon.gameObject.AddComponent<PulseTween>();
+            dailyIconPulse.amplitude = 0.07f;
+            dailyIconPulse.speed = 5.5f;
+
+            var dailyRewardChip = UiBuilder.CreateRect("DailyRewardChip", dailyBtn.transform,
+                new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
+                new Vector2(100f, 44f), new Vector2(-14f, 0f),
+                new Color(1f, 0.84f, 0.35f, 0.95f), rounded: true);
+            dailyRewardChip.GetComponent<Image>().raycastTarget = false;
+            UiBuilder.AddOutline(dailyRewardChip.gameObject, new Color(0.35f, 0.2f, 0.05f, 0.55f), new Vector2(1f, -1f));
+            dailyFishRewardChipText = UiBuilder.CreateText("DailyFishReward", dailyRewardChip, "+50 鱼干",
+                19, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.12f, 0.06f, 0.02f, 1f));
+            var dchipTr = (RectTransform)dailyFishRewardChipText.transform;
+            dchipTr.anchorMin = Vector2.zero;
+            dchipTr.anchorMax = Vector2.one;
+            dchipTr.offsetMin = Vector2.zero;
+            dchipTr.offsetMax = Vector2.zero;
 
             // 主标
             var dailyTitle = UiBuilder.CreateText("DailyTitle", dailyBtn.transform,
@@ -988,7 +1251,7 @@ namespace PenguinRun.Game.UI
             dtRt.anchorMin = new Vector2(0f, 0.5f);
             dtRt.anchorMax = new Vector2(1f, 1f);
             dtRt.offsetMin = new Vector2(76f, 0f);
-            dtRt.offsetMax = new Vector2(-20f, -4f);
+            dtRt.offsetMax = new Vector2(-126f, -4f);
 
             // 副标
             var dailySub = UiBuilder.CreateText("DailySub", dailyBtn.transform,
@@ -998,7 +1261,7 @@ namespace PenguinRun.Game.UI
             dsRt.anchorMin = new Vector2(0f, 0f);
             dsRt.anchorMax = new Vector2(1f, 0.5f);
             dsRt.offsetMin = new Vector2(76f, 4f);
-            dsRt.offsetMax = new Vector2(-20f, 0f);
+            dsRt.offsetMax = new Vector2(-126f, 0f);
 
             // 顶部高光（细条，使用纯色精灵避免 9-slice 异常）
             var dailyShine = UiBuilder.CreateRect("DailyShine", dailyBtn.transform,
@@ -1055,15 +1318,75 @@ namespace PenguinRun.Game.UI
             hlg.childForceExpandHeight = true;
 
             // 5 个 Tab 入口
-            CreateDockButton(layoutGo.transform, "\u2726", "营地", OpenCampShop, true, "CampShop", UiBuilder.Warning);
-            missionBadge = CreateDockButton(layoutGo.transform, "\u2630", "任务", OpenMissions, true, "Missions", UiBuilder.AccentCyan);
-            CreateDockButton(layoutGo.transform, "\u2605", "排行", OpenLeaderboard, false, "Leaderboard", UiBuilder.WarmGold);
-            CreateDockButton(layoutGo.transform, "\u25A1", "图鉴", OpenCodex, false, "Codex", new Color(0.7f, 0.55f, 0.95f, 1f));
-            CreateDockButton(layoutGo.transform, "\u2699", "设置", OpenSettings, false, "Settings", new Color(0.65f, 0.72f, 0.85f, 1f));
+            CreateDockButton(layoutGo.transform, "\u2726", "营地", OpenCampShop, "CampShop", UiBuilder.Warning, DockTabBadgeKind.NumericCamp);
+            CreateDockButton(layoutGo.transform, "\u2630", "任务", OpenMissions, "Missions", UiBuilder.AccentCyan, DockTabBadgeKind.NumericMission);
+            CreateDockButton(layoutGo.transform, "\u2605", "排行", OpenLeaderboard, "Leaderboard", UiBuilder.WarmGold, DockTabBadgeKind.None);
+            CreateDockButton(layoutGo.transform, "\u25A1", "图鉴", OpenCodex, "Codex", new Color(0.7f, 0.55f, 0.95f, 1f), DockTabBadgeKind.None);
+            CreateDockButton(layoutGo.transform, "\u2699", "设置", OpenSettings, "Settings", new Color(0.65f, 0.72f, 0.85f, 1f), DockTabBadgeKind.None);
         }
 
-        /// <summary>底栏导航 Tab：图标 + 文字标签，选中时顶部亮条 + 文字变白变大。</summary>
-        private GameObject CreateDockButton(Transform parent, string glyph, string label, System.Action onClick, bool withBadge, string panelName, Color accent)
+        private void BuildLobbyInfoDeck()
+        {
+            var deck = UiBuilder.CreateRect("LobbyInfoDeck", canvas.transform,
+                new Vector2(0f, 0f), new Vector2(1f, 1f),
+                Vector2.zero, Vector2.zero);
+
+            // 左侧腰栏：不侵入中央 Hero（吉祥物 + CTA），锚在竖直居中略偏上
+            var strategyCard = UiBuilder.CreateRect("StrategyCard", deck,
+                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(380f, 188f), new Vector2(24f, 68f),
+                new Color(0.07f, 0.15f, 0.26f, 0.94f), rounded: true);
+            strategyCard.pivot = new Vector2(0f, 0.5f);
+            UiBuilder.AddOutline(strategyCard.gameObject, new Color(0.4f, 0.85f, 0.95f, 0.35f), new Vector2(1f, -1f));
+            UiBuilder.AddShadow(strategyCard.gameObject, new Color(0f, 0f, 0f, 0.28f), new Vector2(0f, -4f));
+
+            var strategyGlow = UiBuilder.CreateRect("StrategyGlow", strategyCard,
+                new Vector2(0.92f, 1f), new Vector2(0.92f, 1f),
+                new Vector2(120f, 120f), new Vector2(0f, -8f),
+                new Color(0f, 0.85f, 0.95f, 0.16f), glow: true);
+            strategyGlow.GetComponent<Image>().raycastTarget = false;
+
+            var strategyChip = UiBuilder.CreateRect("StrategyChip", strategyCard,
+                new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(110f, 28f), new Vector2(22f, -18f),
+                new Color(0f, 0.85f, 0.95f, 0.2f), rounded: true);
+            UiBuilder.AddOutline(strategyChip.gameObject, new Color(0f, 0.85f, 0.95f, 0.45f), new Vector2(1f, -1f));
+            UiBuilder.CreateText("ChipText", strategyChip, "今日建议", 16, FontStyle.Bold,
+                TextAnchor.MiddleCenter, UiBuilder.AccentCyan);
+
+            strategyHeadlineText = UiBuilder.CreateText("Headline", strategyCard, "",
+                28, FontStyle.Bold, TextAnchor.UpperLeft, Color.white);
+            var shrt = (RectTransform)strategyHeadlineText.transform;
+            shrt.anchorMin = new Vector2(0f, 1f);
+            shrt.anchorMax = new Vector2(1f, 1f);
+            shrt.pivot = new Vector2(0f, 1f);
+            shrt.sizeDelta = new Vector2(-80f, 50f);
+            shrt.anchoredPosition = new Vector2(22f, -56f);
+
+            strategyDetailText = UiBuilder.CreateText("Detail", strategyCard, "",
+                17, FontStyle.Normal, TextAnchor.UpperLeft, UiBuilder.TextSecondary);
+            var sdrt = (RectTransform)strategyDetailText.transform;
+            sdrt.anchorMin = new Vector2(0f, 0f);
+            sdrt.anchorMax = new Vector2(1f, 1f);
+            sdrt.offsetMin = new Vector2(22f, 64f);
+            sdrt.offsetMax = new Vector2(-16f, -88f);
+
+            strategyButton = UiBuilder.CreateButton("Action", strategyCard, "立即前往",
+                new Color(1f, 0.83f, 0.33f, 1f), new Color(0.08f, 0.06f, 0.02f, 1f), 22, rounded: true);
+            var sabrt = (RectTransform)strategyButton.transform;
+            sabrt.anchorMin = new Vector2(0f, 0f);
+            sabrt.anchorMax = new Vector2(1f, 0f);
+            sabrt.pivot = new Vector2(0.5f, 0f);
+            sabrt.sizeDelta = new Vector2(-40f, 50f);
+            sabrt.anchoredPosition = new Vector2(0f, 18f);
+            UiBuilder.AddOutline(strategyButton.gameObject, new Color(0.45f, 0.28f, 0.05f, 0.6f), new Vector2(1.5f, -1.5f));
+            UiBuilder.AddShadow(strategyButton.gameObject, new Color(0f, 0f, 0f, 0.35f), new Vector2(0f, -4f));
+            strategyButton.onClick.AddListener(ExecuteStrategyAction);
+            strategyButtonText = strategyButton.GetComponentInChildren<Text>();
+        }
+
+        /// <summary>底栏导航 Tab：图标 + 文字标签；选中时图标外圈光晕 + 顶部亮条 + 文字加粗。</summary>
+        private void CreateDockButton(Transform parent, string glyph, string label, System.Action onClick, string panelName, Color accent, DockTabBadgeKind badgeKind)
         {
             // 整个 Tab 区域（充满 HLayoutGroup 分配的宽度）
             var itemGo = new GameObject("Tab_" + label, typeof(RectTransform), typeof(CanvasRenderer),
@@ -1095,6 +1418,14 @@ namespace PenguinRun.Game.UI
             activeLine.GetComponent<Image>().raycastTarget = false;
             activeLine.gameObject.SetActive(false);
 
+            var iconGlowRt = UiBuilder.CreateRect("IconGlow", itemGo.transform,
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(88f, 88f), new Vector2(0f, -32f),
+                new Color(accent.r, accent.g, accent.b, 0.45f), glow: true);
+            iconGlowRt.pivot = new Vector2(0.5f, 1f);
+            iconGlowRt.GetComponent<Image>().raycastTarget = false;
+            iconGlowRt.gameObject.SetActive(false);
+
             // 图标（圆形背景 + 字符符号）
             var iconCircle = UiBuilder.CreateRect("IconBg", itemGo.transform,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
@@ -1122,6 +1453,40 @@ namespace PenguinRun.Game.UI
             lrt.sizeDelta = new Vector2(0f, 36f);
             lrt.anchoredPosition = new Vector2(0f, 14f);
 
+            GameObject badgeRootGo = null;
+            Text badgeCount = null;
+
+            if (badgeKind != DockTabBadgeKind.None)
+            {
+                badgeRootGo = new GameObject("Badge", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                badgeRootGo.transform.SetParent(iconCircle, false);
+                var brt = (RectTransform)badgeRootGo.transform;
+                brt.anchorMin = new Vector2(1f, 1f);
+                brt.anchorMax = new Vector2(1f, 1f);
+                brt.pivot = new Vector2(1f, 1f);
+                brt.anchoredPosition = new Vector2(10f, 10f);
+                brt.sizeDelta = new Vector2(30f, 26f);
+                var badgeBg = badgeRootGo.GetComponent<Image>();
+                badgeBg.sprite = UiBuilder.RoundedSprite;
+                badgeBg.type = Image.Type.Sliced;
+                badgeBg.color = badgeKind == DockTabBadgeKind.NumericCamp
+                    ? new Color(1f, 0.76f, 0.35f, 0.96f)
+                    : new Color(1f, 0.28f, 0.35f, 0.96f);
+                UiBuilder.AddOutline(badgeRootGo, new Color(0f, 0f, 0f, 0.35f), new Vector2(0.75f, -0.75f));
+
+                badgeCount = UiBuilder.CreateText("BadgeCount", badgeRootGo.transform, "",
+                    15, FontStyle.Bold, TextAnchor.MiddleCenter,
+                    badgeKind == DockTabBadgeKind.NumericCamp
+                        ? new Color(0.08f, 0.04f, 0.03f, 1f)
+                        : new Color(1f, 1f, 1f, 1f));
+                var btr = (RectTransform)badgeCount.rectTransform;
+                btr.anchorMin = Vector2.zero;
+                btr.anchorMax = Vector2.one;
+                btr.offsetMin = new Vector2(2f, 1f);
+                btr.offsetMax = new Vector2(-2f, -1f);
+                badgeRootGo.SetActive(false);
+            }
+
             dockItems.Add(new DockItem
             {
                 panelName = panelName,
@@ -1132,24 +1497,10 @@ namespace PenguinRun.Game.UI
                 activeLine = activeLine.GetComponent<Image>(),
                 accentColor = accent,
                 wasSelected = false,
+                iconGlow = iconGlowRt.gameObject,
+                badgeRoot = badgeRootGo,
+                badgeCountText = badgeCount,
             });
-
-            if (!withBadge) return null;
-
-            // 通知红点（圆形徽章，放图标右上角）
-            var badgeGo = new GameObject("Badge", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            badgeGo.transform.SetParent(iconCircle, false);
-            var brt = (RectTransform)badgeGo.transform;
-            brt.anchorMin = new Vector2(1f, 1f);
-            brt.anchorMax = new Vector2(1f, 1f);
-            brt.pivot = new Vector2(0.5f, 0.5f);
-            brt.sizeDelta = new Vector2(18f, 18f);
-            brt.anchoredPosition = new Vector2(4f, 4f);
-            var badgeImg = badgeGo.GetComponent<Image>();
-            badgeImg.color = new Color(1f, 0.28f, 0.35f, 0.95f);
-            badgeImg.sprite = UiBuilder.CircleSprite;
-            badgeGo.SetActive(false);
-            return badgeGo;
         }
 
         private static void DrawPenguinMascot(RectTransform parent)
@@ -1351,15 +1702,329 @@ namespace PenguinRun.Game.UI
 
         private void RefreshHeader()
         {
-            nicknameText.text = $"嗨，{PlayerSave.PlayerNickname}";
-            bestScoreText.text = $"历史最高 {PlayerSave.BestScore}";
-            fishSnacksText.text = $"{PlayerSave.TotalFishSnacks}  鱼干";
-            if (missionBadge != null)
+            PlayerSave.EnsureTotalRunsSynced();
+
+            if (nicknameText != null)
+                nicknameText.text = PlayerSave.PlayerNickname;
+            if (fishSnacksText != null)
+                fishSnacksText.text = $"{PlayerSave.TotalFishSnacks:N0}";
+            if (levelText != null)
+                levelText.text = $"Lv.{PlayerSave.PlayerLevel}";
+
+            if (dailyFishRewardChipText != null)
+                dailyFishRewardChipText.text = "+50 鱼干";
+
+            if (difficultyHintText != null)
             {
-                missionBadge.SetActive(MissionStore.HasClaimableMissions());
+                var preset = DifficultyPreset.ForKind(PlayerSave.SelectedDifficulty);
+                difficultyHintText.text =
+                    $"当前难度：{preset.DisplayName} · 得分×{preset.ScoreMultiplier:0.##} · {preset.Tag}  ▾ 修改";
             }
+
+            RefreshActivityTicker();
+            UpdateDockBadges();
+            RefreshStrategyCard();
             UpdateBoosterPreview();
             UpdateMascotCosmetic();
+        }
+
+        private void RefreshActivityTicker()
+        {
+            if (topTickerText == null) return;
+
+            if (!PlayerSave.IsDailyCheckInClaimed())
+            {
+                var reward = PlayerSave.PreviewDailyCheckInReward();
+                topTickerText.text = $"今日签到可得 {reward} 鱼干 · 点击左侧「今日建议」领取";
+                return;
+            }
+
+            var claimableMissionCount = MissionStore.CountClaimableMissions();
+            if (claimableMissionCount > 0)
+            {
+                topTickerText.text = $"有 {claimableMissionCount} 个任务奖励待领取";
+                return;
+            }
+
+            var affordableUpgrades = CampUpgrades.CountAffordableUpgrades();
+            if (affordableUpgrades > 0)
+            {
+                topTickerText.text = $"营地 {affordableUpgrades} 项升级可购买 · 鱼干收益永久提升";
+                return;
+            }
+
+            if (!HasPlayedDailyToday())
+            {
+                topTickerText.text = "今日挑战尚未开始 · 限定关卡 · 双倍鱼干";
+                return;
+            }
+
+            var defeatedBosses = CodexUnlocks.BossesDefeatedCount();
+            topTickerText.text =
+                $"极夜赛季进行中 · 已击败 Boss {defeatedBosses}/{CodexUnlocks.BossEntryTotal}";
+        }
+
+        private static bool HasPlayedDailyToday()
+        {
+            var today = System.DateTime.Today;
+            foreach (var r in RunRecords.GetRecent(20))
+            {
+                if (r.mode == "daily" && r.Timestamp.Date == today)
+                    return true;
+            }
+            return false;
+        }
+
+        private void OpenProfileStats()
+        {
+            if (profileStatsOverlay != null) return;
+            profileStatsOverlay = ProfileStatsPanel.Show(canvas.transform, new ProfileStatsPanel.HostCallbacks
+            {
+                OnClose = () => profileStatsOverlay = null,
+                OnOpenLeaderboard = OpenLeaderboard,
+                OnOpenCodex = OpenCodex,
+                DrawMiniAvatar = DrawMiniPenguinAvatar,
+            });
+        }
+
+        private void RefreshStrategyCard()
+        {
+            if (strategyHeadlineText == null || strategyDetailText == null || strategyButtonText == null) return;
+
+            if (!PlayerSave.IsDailyCheckInClaimed())
+            {
+                var reward = PlayerSave.PreviewDailyCheckInReward();
+                var streak = Mathf.Max(1, PlayerSave.LoginStreak);
+                ApplyStrategyCard(
+                    "领取今日签到",
+                    $"连续签到第 {streak} 天，先拿 {reward} 鱼干，再去升级营地或挑战排行榜。",
+                    "立即签到",
+                    StrategyAction.CheckIn);
+                return;
+            }
+
+            var claimableMissionCount = MissionStore.CountClaimableMissions();
+            if (claimableMissionCount > 0)
+            {
+                ApplyStrategyCard(
+                    "回收今日奖励",
+                    $"你有 {claimableMissionCount} 个任务奖励待领取，先收鱼干，再决定是强化营地还是继续跑酷。",
+                    "打开任务",
+                    StrategyAction.OpenMissions);
+                return;
+            }
+
+            var affordableUpgrades = CampUpgrades.CountAffordableUpgrades();
+            if (affordableUpgrades > 0)
+            {
+                ApplyStrategyCard(
+                    "强化常驻成长",
+                    $"当前有 {affordableUpgrades} 项营地升级可购买，优先补强冲刺、磁吸和收益，会让后续每局更舒服。",
+                    "前往营地",
+                    StrategyAction.OpenCampShop);
+                return;
+            }
+
+            var defeatedBosses = CodexUnlocks.BossesDefeatedCount();
+            if (defeatedBosses < CodexUnlocks.BossEntryTotal)
+            {
+                ApplyStrategyCard(
+                    "推进图鉴收集",
+                    $"你已击败 {defeatedBosses}/{CodexUnlocks.BossEntryTotal} 个 Boss，再跑几局就能补全更多图鉴条目。",
+                    "查看图鉴",
+                    StrategyAction.OpenCodex);
+                return;
+            }
+
+            var topEntries = LeaderboardStore.GetTopEntries(limit: 20);
+            var playerId = PlayerSave.GetOrCreatePlayerId();
+            var onBoard = false;
+            foreach (var entry in topEntries)
+            {
+                if (entry.playerId == playerId)
+                {
+                    onBoard = true;
+                    break;
+                }
+            }
+
+            if (!onBoard)
+            {
+                ApplyStrategyCard(
+                    "冲进排行榜",
+                    "你还没有进入本地前 20，现在最适合开一局标准模式，把成绩先挂上榜单。",
+                    "开始跑酷",
+                    StrategyAction.StartEndless);
+                return;
+            }
+
+            ApplyStrategyCard(
+                "挑战每日限定",
+                "当前基础成长已经很完整，去试试今日挑战，顺手把分数和图鉴进度再往上推一段。",
+                "开始挑战",
+                StrategyAction.StartDaily);
+        }
+
+        private void ApplyStrategyCard(string headline, string detail, string actionLabel, StrategyAction action)
+        {
+            strategyHeadlineText.text = headline;
+            strategyDetailText.text = TruncateStrategyDetail(detail);
+            strategyButtonText.text = actionLabel;
+            currentStrategyAction = action;
+        }
+
+        private static string TruncateStrategyDetail(string detail)
+        {
+            if (string.IsNullOrEmpty(detail)) return detail;
+            const int maxChars = 56;
+            if (detail.Length <= maxChars) return detail;
+            return detail.Substring(0, maxChars - 1) + "…";
+        }
+
+        private void ExecuteStrategyAction()
+        {
+            switch (currentStrategyAction)
+            {
+                case StrategyAction.CheckIn:
+                    OnCheckInClicked();
+                    break;
+                case StrategyAction.OpenMissions:
+                    OpenMissions();
+                    break;
+                case StrategyAction.OpenCampShop:
+                    OpenCampShop();
+                    break;
+                case StrategyAction.OpenCodex:
+                    OpenCodex();
+                    break;
+                case StrategyAction.OpenLeaderboard:
+                    OpenLeaderboard();
+                    break;
+                case StrategyAction.StartDaily:
+                    StartDaily();
+                    break;
+                default:
+                    StartEndless();
+                    break;
+            }
+        }
+
+        private void OnCheckInClicked()
+        {
+            var reward = PlayerSave.ClaimDailyCheckIn();
+            if (reward <= 0) return;
+            PlayerSave.Flush();
+            ShowCheckInCelebration(reward);
+            RefreshHeader();
+        }
+
+        private void ShowCheckInCelebration(int reward)
+        {
+            var streak = PlayerSave.LoginStreak;
+            var overlay = UiBuilder.CreatePanel("CheckInOverlay", canvas.transform,
+                new Color(0f, 0f, 0f, 0.72f));
+            overlay.transform.SetAsLastSibling();
+
+            // 居中卡片
+            var card = UiBuilder.CreateRect("Card", overlay.transform,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(600f, 520f), Vector2.zero,
+                UiBuilder.Surface1, rounded: true);
+            UiBuilder.AddOutline(card.gameObject, new Color(1f, 0.84f, 0.32f, 0.7f), new Vector2(2f, -2f));
+            UiBuilder.AddShadow(card.gameObject, new Color(0f, 0f, 0f, 0.55f), new Vector2(0f, -10f));
+
+            // 顶部金色辉光
+            var topGlow = UiBuilder.CreateRect("TopGlow", card,
+                new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(0f, 180f), new Vector2(0f, -90f),
+                new Color(1f, 0.75f, 0.2f, 0.2f), rounded: true);
+            topGlow.GetComponent<Image>().raycastTarget = false;
+
+            // 签到图标
+            var iconCircle = UiBuilder.CreateRect("CheckIcon", card,
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(100f, 100f), new Vector2(0f, -40f),
+                new Color(1f, 0.84f, 0.32f, 0.3f), circle: true);
+            iconCircle.pivot = new Vector2(0.5f, 1f);
+            UiBuilder.AddOutline(iconCircle.gameObject, new Color(1f, 0.84f, 0.32f, 0.6f), new Vector2(2f, -2f));
+            UiBuilder.CreateText("IconText", iconCircle.transform, "☀", 48, FontStyle.Bold,
+                TextAnchor.MiddleCenter, new Color(1f, 0.85f, 0.4f, 1f));
+
+            // 标题
+            UiBuilder.CreateText("Title", card, "签到成功",
+                38, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+            var trt = (RectTransform)card.Find("Title");
+            trt.anchorMin = new Vector2(0f, 1f);
+            trt.anchorMax = new Vector2(1f, 1f);
+            trt.sizeDelta = new Vector2(0f, 50f);
+            trt.anchoredPosition = new Vector2(0f, -150f);
+
+            // 奖励数字（大号）
+            var rewardText = UiBuilder.CreateText("Reward", card, $"+{reward} 鱼干",
+                52, FontStyle.Bold, TextAnchor.MiddleCenter, UiBuilder.WarmGold);
+            var rrt = (RectTransform)rewardText.transform;
+            rrt.anchorMin = new Vector2(0f, 1f);
+            rrt.anchorMax = new Vector2(1f, 1f);
+            rrt.sizeDelta = new Vector2(0f, 64f);
+            rrt.anchoredPosition = new Vector2(0f, -210f);
+
+            // 连续签到信息
+            var streakText = UiBuilder.CreateText("Streak", card,
+                $"连续签到第 {streak} 天 · 明天可得 {Mathf.Min(50, 10 + (streak % 7) * 5)} 鱼干",
+                20, FontStyle.Normal, TextAnchor.MiddleCenter, UiBuilder.TextSecondary);
+            var srt = (RectTransform)streakText.transform;
+            srt.anchorMin = new Vector2(0f, 1f);
+            srt.anchorMax = new Vector2(1f, 1f);
+            srt.sizeDelta = new Vector2(0f, 32f);
+            srt.anchoredPosition = new Vector2(0f, -280f);
+
+            // 连续天数小圆点
+            var dotsRow = UiBuilder.CreateRect("DotsRow", card,
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(300f, 24f), new Vector2(0f, -325f),
+                new Color(0f, 0f, 0f, 0f));
+            for (var i = 0; i < 7; i++)
+            {
+                var filled = i < streak % 7 || (streak % 7 == 0 && i < 7);
+                var dotColor = filled
+                    ? new Color(1f, 0.84f, 0.32f, 1f)
+                    : new Color(0.15f, 0.25f, 0.4f, 1f);
+                var dot = UiBuilder.CreateRect($"Dot{i}", dotsRow,
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                    new Vector2(18f, 18f), new Vector2((i - 3) * 32f, 0f),
+                    dotColor, circle: true);
+                dot.GetComponent<Image>().raycastTarget = false;
+                if (filled) UiBuilder.AddOutline(dot.gameObject, new Color(1f, 1f, 1f, 0.4f), new Vector2(1f, -1f));
+            }
+
+            // 确认按钮
+            var okBtn = UiBuilder.CreateButton("OK", card, "好的",
+                new Color(1f, 0.84f, 0.32f, 1f), new Color(0.08f, 0.05f, 0.01f, 1f), 28, rounded: true);
+            var obrt = (RectTransform)okBtn.transform;
+            obrt.anchorMin = new Vector2(0.5f, 0f);
+            obrt.anchorMax = new Vector2(0.5f, 0f);
+            obrt.pivot = new Vector2(0.5f, 0f);
+            obrt.sizeDelta = new Vector2(340f, 72f);
+            obrt.anchoredPosition = new Vector2(0f, 36f);
+            UiBuilder.AddOutline(okBtn.gameObject, new Color(0.5f, 0.35f, 0.08f, 0.7f), new Vector2(2f, -2f));
+            UiBuilder.AddShadow(okBtn.gameObject, new Color(0f, 0f, 0f, 0.45f), new Vector2(0f, -5f));
+            okBtn.onClick.AddListener(() => Destroy(overlay));
+        }
+
+        private void UpdateDockBadges()
+        {
+            foreach (var item in dockItems)
+            {
+                if (item.badgeRoot == null || item.badgeCountText == null) continue;
+                var n = item.panelName switch
+                {
+                    "Missions" => MissionStore.CountClaimableMissions(),
+                    "CampShop" => CampUpgrades.CountAffordableUpgrades(),
+                    _ => 0,
+                };
+                item.badgeRoot.SetActive(n > 0);
+                item.badgeCountText.text = n > 99 ? "99+" : n.ToString();
+            }
         }
 
         /// <summary>下一局即将自动消耗的道具数量预览，挂在主 CTA 下方。</summary>
@@ -1368,7 +2033,8 @@ namespace PenguinRun.Game.UI
             if (boosterPreviewText == null) return;
             var df = ShopStore.InventoryCount(ShopItemKind.BoosterDoubleFish);
             var sb = ShopStore.InventoryCount(ShopItemKind.BoosterScoreBoost);
-            if (df <= 0 && sb <= 0)
+            var ls = ShopStore.InventoryCount(ShopItemKind.BoosterLuckyStart);
+            if (df <= 0 && sb <= 0 && ls <= 0)
             {
                 boosterPreviewText.transform.parent.gameObject.SetActive(false);
                 return;
@@ -1377,6 +2043,7 @@ namespace PenguinRun.Game.UI
             var parts = new System.Collections.Generic.List<string>();
             if (df > 0) parts.Add("鱼干 ×2");
             if (sb > 0) parts.Add("得分 ×1.5");
+            if (ls > 0) parts.Add("开局 +1 命");
             boosterPreviewText.text = "下一局：" + string.Join(" · ", parts);
         }
 
@@ -1412,25 +2079,26 @@ namespace PenguinRun.Game.UI
 
         // ── 难度选择 ─────────────────────────────────────────────────────────────
         private DifficultyKind pendingDifficulty = DifficultyKind.Normal;
-        private bool pendingIsDaily;
+        private DifficultyOverlayMode difficultyOverlayMode = DifficultyOverlayMode.BeforeEndlessRun;
         private GameObject difficultyOverlay;
 
         private void StartEndless()
         {
-            pendingIsDaily = false;
+            difficultyOverlayMode = DifficultyOverlayMode.BeforeEndlessRun;
             pendingDifficulty = PlayerSave.SelectedDifficulty;
-            ShowDifficultyOverlay();
+            ShowDifficultyOverlay(difficultyOverlayMode);
         }
 
         private void StartDaily()
         {
-            pendingIsDaily = true;
+            difficultyOverlayMode = DifficultyOverlayMode.BeforeDailyRun;
             pendingDifficulty = PlayerSave.SelectedDifficulty;
-            ShowDifficultyOverlay();
+            ShowDifficultyOverlay(difficultyOverlayMode);
         }
 
-        private void ShowDifficultyOverlay()
+        private void ShowDifficultyOverlay(DifficultyOverlayMode mode)
         {
+            difficultyOverlayMode = mode;
             if (difficultyOverlay != null) Destroy(difficultyOverlay);
 
             // 半透明遮罩
@@ -1454,8 +2122,15 @@ namespace PenguinRun.Game.UI
                 new Color(0f, 0.85f, 0.95f, 0.65f), rounded: true);
             topLine.GetComponent<Image>().raycastTarget = false;
 
+            var overlayTitle = mode switch
+            {
+                DifficultyOverlayMode.BeforeDailyRun => "今日挑战 · 选择难度",
+                DifficultyOverlayMode.BeforeEndlessRun => "极夜快跑 · 选择难度",
+                _ => "选择难度",
+            };
+
             // 标题
-            var titleText = UiBuilder.CreateText("Title", card, "选择难度", 44, FontStyle.Bold,
+            var titleText = UiBuilder.CreateText("Title", card, overlayTitle, 44, FontStyle.Bold,
                 TextAnchor.MiddleCenter, Color.white);
             var trt = (RectTransform)titleText.transform;
             trt.anchorMin = new Vector2(0f, 1f);
@@ -1594,7 +2269,8 @@ namespace PenguinRun.Game.UI
                 difficultyOverlay = null;
             });
 
-            var startFinalBtn = UiBuilder.CreateButton("StartFinal", card, "开始挑战",
+            var confirmLabel = mode == DifficultyOverlayMode.SettingsOnly ? "确认" : "开始挑战";
+            var startFinalBtn = UiBuilder.CreateButton("StartFinal", card, confirmLabel,
                 new Color(1f, 0.84f, 0.32f), new Color(0.08f, 0.05f, 0.01f), 32, rounded: true);
             var sfrt = (RectTransform)startFinalBtn.transform;
             sfrt.anchorMin = new Vector2(1f, 0f);
@@ -1608,13 +2284,20 @@ namespace PenguinRun.Game.UI
             if (startLabel2 != null) startLabel2.supportRichText = false;
             startFinalBtn.onClick.AddListener(() =>
             {
+                PlayerSave.SelectedDifficulty = pendingDifficulty;
+                PlayerSave.Flush();
                 Destroy(difficultyOverlay);
                 difficultyOverlay = null;
-                if (pendingIsDaily)
+                RefreshHeader();
+
+                if (mode == DifficultyOverlayMode.SettingsOnly)
+                    return;
+
+                if (mode == DifficultyOverlayMode.BeforeDailyRun)
                     RunSession.PrepareDailyRun(difficulty: pendingDifficulty);
                 else
                     RunSession.PrepareEndlessRun(difficulty: pendingDifficulty);
-                SceneManager.LoadScene("PenguinRunner");
+                SceneTransitionManager.Instance.TransitionTo("PenguinRunner");
             });
         }
 
@@ -1693,27 +2376,28 @@ namespace PenguinRun.Game.UI
                 if (item.activeLine != null)
                     item.activeLine.gameObject.SetActive(isSelected);
 
+                if (item.iconGlow != null)
+                    item.iconGlow.SetActive(isSelected);
+
                 // 圆形图标背景
                 if (item.iconBg != null)
                 {
                     item.iconBg.color = isSelected
-                        ? new Color(item.accentColor.r, item.accentColor.g, item.accentColor.b, 0.3f)
-                        : new Color(item.accentColor.r, item.accentColor.g, item.accentColor.b, 0.18f);
+                        ? new Color(item.accentColor.r, item.accentColor.g, item.accentColor.b, 0.92f)
+                        : new Color(0.12f, 0.24f, 0.42f, 0.85f);
 
                     if (isSelected && !item.wasSelected)
                     {
                         var bounce = item.iconBg.GetComponent<BounceTween>();
                         if (bounce != null)
-                        {
                             bounce.enabled = true;
-                        }
                     }
                 }
 
                 // 图标符号颜色
                 if (item.iconText != null)
                     item.iconText.color = isSelected
-                        ? item.accentColor
+                        ? UiBuilder.TextOnAccent
                         : Color.Lerp(item.accentColor, Color.white, 0.45f);
 
                 // 文字标签颜色 + 粗细

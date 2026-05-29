@@ -65,6 +65,24 @@ namespace PenguinRun
 
         /// <summary>完美闪避次数（在风险事件命中前 0.25s 内做出正确动作）。</summary>
         public int PerfectDodges { get; private set; }
+        /// <summary>完美闪避连续计数（中断重置）。</summary>
+        public int PerfectDodgeStreak { get; private set; }
+        /// <summary>距离里程碑奖励标记：每 500m 触发一次。</summary>
+        public float NextDistanceMilestone { get; private set; } = 500f;
+        /// <summary>本局已触发的距离里程碑数。</summary>
+        public int DistanceMilestonesHit { get; private set; }
+
+        /// <summary>检查是否达到新的距离里程碑，返回奖励鱼干数（0 = 未触发）。</summary>
+        public int TryHitDistanceMilestone()
+        {
+            if (Distance < NextDistanceMilestone) return 0;
+            DistanceMilestonesHit++;
+            NextDistanceMilestone += 500f;
+            var reward = 15 + DistanceMilestonesHit * 5;
+            Coins += reward;
+            ComboBonusScore += reward * 5;
+            return reward;
+        }
 
         /// <summary>FishBomb 持有数量：受伤时自动消耗 1 个抵消伤害。</summary>
         public int FishBombs { get; private set; }
@@ -74,6 +92,64 @@ namespace PenguinRun
 
         /// <summary>暂停状态（不写到 Time.timeScale，由游戏循环判断）。</summary>
         public bool Paused { get; set; }
+
+        // ── 道具连击系统 ────────────────────────────────────────
+        /// <summary>在连击窗口内连续拾取的道具数。</summary>
+        public int PowerUpCombo { get; private set; }
+        /// <summary>同种道具重复拾取的链式计数。</summary>
+        public int PowerUpChainCount { get; private set; }
+        private PowerUpKind lastPowerUpKind = (PowerUpKind)(-1);
+        private float powerUpComboTimer;
+
+        /// <summary>记录一次道具拾取，更新连击/链式状态，返回额外加成倍率（1.0 = 无加成）。</summary>
+        public float RegisterPowerUpPickup(PowerUpKind kind, float comboWindow = 3.5f)
+        {
+            if (kind == lastPowerUpKind && powerUpComboTimer > 0f)
+            {
+                PowerUpChainCount++;
+            }
+            else
+            {
+                PowerUpChainCount = 0;
+            }
+
+            powerUpComboTimer = comboWindow;
+            PowerUpCombo++;
+            lastPowerUpKind = kind;
+
+            // 连击加成：每 2 连击 +10% 效果
+            var comboBonus = 1f + (PowerUpCombo / 2) * 0.1f;
+            // 链式加成：连续同种 +15% 每次
+            var chainBonus = 1f + PowerUpChainCount * 0.15f;
+
+            return Mathf.Min(2.5f, comboBonus * chainBonus);
+        }
+
+        /// <summary>在计时中衰减道具连击计时器。</summary>
+        private void TickPowerUpCombo(float dt)
+        {
+            powerUpComboTimer = Mathf.Max(0f, powerUpComboTimer - dt);
+            if (powerUpComboTimer <= 0f)
+            {
+                PowerUpCombo = 0;
+                PowerUpChainCount = 0;
+                lastPowerUpKind = (PowerUpKind)(-1);
+            }
+        }
+
+        public string PowerUpComboLabel
+        {
+            get
+            {
+                if (PowerUpCombo >= 3 && PowerUpChainCount >= 2)
+                    return $"道具狂潮 x{PowerUpCombo} · 链式 x{PowerUpChainCount}";
+                if (PowerUpCombo >= 3)
+                    return $"道具连击 x{PowerUpCombo}";
+                if (PowerUpChainCount >= 2)
+                    return $"同种链式 x{PowerUpChainCount}";
+                return string.Empty;
+            }
+        }
 
         private float comboTimer;
 
@@ -107,11 +183,18 @@ namespace PenguinRun
             coinPickupScoreAccumulated = 0;
             BossesDefeated = 0;
             PerfectDodges = 0;
+            PerfectDodgeStreak = 0;
+            NextDistanceMilestone = 500f;
+            DistanceMilestonesHit = 0;
             FishBombs = 0;
             LastBossSpeedTier = "C";
             LastBossSpeedFishBonus = 0;
             LastBossSpeedScoreBonus = 0;
             Paused = false;
+            PowerUpCombo = 0;
+            PowerUpChainCount = 0;
+            powerUpComboTimer = 0f;
+            lastPowerUpKind = (PowerUpKind)(-1);
         }
 
         public void AddTreantArmorHits(int hits) => TreantArmorHits = Mathf.Min(3, TreantArmorHits + hits);
@@ -137,7 +220,15 @@ namespace PenguinRun
         public void AddPerfectDodge()
         {
             PerfectDodges += 1;
-            ComboBonusScore += 25;
+            PerfectDodgeStreak += 1;
+            var streakBonus = 25 + PerfectDodgeStreak * 10;
+            ComboBonusScore += streakBonus;
+        }
+
+        /// <summary>完美闪避中断（被击中时调用）。</summary>
+        public void BreakPerfectDodgeStreak()
+        {
+            PerfectDodgeStreak = 0;
         }
 
         public void AddFishBomb() => FishBombs += 1;
@@ -190,6 +281,7 @@ namespace PenguinRun
             FogLanternTimer = Mathf.Max(0f, FogLanternTimer - dt);
             ThunderFeatherTimer = Mathf.Max(0f, ThunderFeatherTimer - dt);
             comboTimer = Mathf.Max(0f, AuroraChainTimer > 0f ? comboTimer + dt * 0.5f : comboTimer - dt);
+            TickPowerUpCombo(dt);
             HitInvulnerabilityTimer = Mathf.Max(0f, HitInvulnerabilityTimer - dt);
             if (comboTimer <= 0f)
             {

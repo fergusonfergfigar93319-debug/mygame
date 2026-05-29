@@ -1,3 +1,4 @@
+using PenguinRun;
 using PenguinRun.Game.Save;
 using UnityEngine;
 using UnityEngine.UI;
@@ -84,8 +85,12 @@ namespace PenguinRun.Game.UI
             if (progressText != null)
             {
                 var u = CodexUnlocks.UnlockedCount();
-                var total = CodexUnlocks.EntryTotal;
-                progressText.text = $"<color=#00DAF0><b>{u}</b></color>  /  {total}  <size=18><color=#A8B6C8>· 多跑无尽 / 今日挑战 解锁更多条目</color></size>";
+                var total = CodexUnlocks.StoryEntryTotal;
+                var bu = CodexUnlocks.BossesDefeatedCount();
+                var bt = CodexUnlocks.BossEntryTotal;
+                progressText.text = $"<color=#00DAF0><b>{u}</b></color>/{total}<size=18><color=#A8B6C8> 故事</color></size>"
+                    + $"  ·  <color=#FFB84D><b>{bu}</b></color>/{bt}<size=18><color=#A8B6C8> Boss</color></size>"
+                    + $"  <size=18><color=#A8B6C8>· 无尽 / 今日挑战</color></size>";
                 progressText.supportRichText = true;
 
                 if (progressFill != null)
@@ -101,16 +106,23 @@ namespace PenguinRun.Game.UI
                 Destroy(contentRoot.GetChild(i).gameObject);
             }
 
-            BuildEntry("\u2665", "icon_companion_star", "救回团团", "在雪松村废墟救回第一位伙伴。提示：单局约 450m 或得分 1000+。",
+            BuildEntry("\u2665", "icon_companion_star", "救回团团",
+                $"在雪松村废墟救回第一位伙伴。提示：单局约 {CodexUnlocks.RescueTuanTuanDistanceMeters}m 或得分 {CodexUnlocks.RescueTuanTuanMinScore}+。",
                 PlayerSave.RescuedTuanTuan, new Color(1f, 0.55f, 0.7f, 1f));
-            BuildEntry("\u2606", "icon_companion_dror", "Dror 同行", "抵达冰湖后与 Dror 结伴。提示：完成一次今日挑战、单局 900m+ 或累计 5 局。",
+            BuildEntry("\u2606", "icon_companion_dror", "Dror 同行",
+                $"抵达冰湖后与 Dror 结伴。提示：完成一次今日挑战、单局 {CodexUnlocks.CompanionDrorMinDistanceMeters}m+ 或累计 {CodexUnlocks.CompanionDrorMinLifetimeRuns} 局。",
                 PlayerSave.CompanionDrorUnlocked, new Color(0.55f, 0.85f, 1f, 1f));
-            BuildEntry("\u2694", "icon_boss_defeat", "击败高松鹅", "在终章击退入侵雪原的高松鹅。提示：单局得分 2800+ 或存活 70 秒。",
+            BuildEntry("\u2694", "icon_boss_defeat", "击败高松鹅",
+                $"在终章击退入侵雪原的高松鹅。提示：单局得分 {CodexUnlocks.TakamatsuMinScore}+ 或存活 {CodexUnlocks.TakamatsuMinSurvivalSeconds:0.#} 秒。",
                 PlayerSave.TakamatsuDefeated, new Color(1f, 0.45f, 0.45f, 1f));
             BuildEntry("\u2302", "icon_camp", "营地之旅", "首次进入营地，开启局外强化。",
                 PlayerSave.VisitedCamp, new Color(0.4f, 0.95f, 0.7f, 1f));
             BuildEntry("\u2756", "icon_tutorial", "3D 跑酷新手教程", "完成至少一局完整结算。",
                 PlayerSave.Runner3DTutorialDone, new Color(1f, 0.85f, 0.4f, 1f));
+
+            BuildSectionHeader($"Boss 战绩 · {CodexUnlocks.BossesDefeatedCount()} / {CodexUnlocks.BossEntryTotal}");
+            foreach (var boss in BossDefinitions.GetAllBossesOrdered())
+                BuildBossEntry(boss);
 
             UiBuilder.RebuildScrollContent(contentRoot);
         }
@@ -202,6 +214,40 @@ namespace PenguinRun.Game.UI
                 unlocked ? "\u2713 已解锁" : "\u26AC 未解锁",
                 18, FontStyle.Bold, TextAnchor.MiddleCenter,
                 unlocked ? themeColor : UiBuilder.TextTertiary);
+        }
+
+        private void BuildSectionHeader(string label)
+        {
+            var row = UiBuilder.CreateScrollListRow("BossSectionHeader", contentRoot, 52f,
+                new Color(0.06f, 0.12f, 0.2f, 0.75f));
+            var rowBgImage = row.GetComponentInChildren<Image>(true);
+            if (rowBgImage != null)
+                rowBgImage.raycastTarget = false;
+            UiBuilder.CreateText("Label", row.transform, label, 22, FontStyle.Bold,
+                TextAnchor.MiddleCenter, UiBuilder.AccentCyan);
+            var lt = row.GetComponentInChildren<Text>();
+            if (lt != null)
+            {
+                var lrt = (RectTransform)lt.transform;
+                lrt.anchorMin = Vector2.zero;
+                lrt.anchorMax = Vector2.one;
+                lrt.offsetMin = new Vector2(16f, 0f);
+                lrt.offsetMax = new Vector2(-16f, 0f);
+            }
+        }
+
+        private void BuildBossEntry(BossDefinition boss)
+        {
+            if (boss == null) return;
+            var unlocked = PlayerSave.HasDefeatedBoss(boss.BossId);
+            var theme = boss.GlowColor;
+            theme.a = 1f;
+
+            BuildEntry("\u2694", "icon_boss_defeat",
+                unlocked ? boss.DefeatCodexLabel : boss.DisplayName,
+                unlocked ? $"{boss.SignatureReward} · {boss.SignatureMechanic}"
+                    : "在无尽或今日挑战中击败该首领以解锁图鉴条目。",
+                unlocked, theme);
         }
 
         private Sprite LoadIconSprite(string spriteName)

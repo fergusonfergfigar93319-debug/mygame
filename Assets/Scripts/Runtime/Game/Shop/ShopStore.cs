@@ -237,13 +237,20 @@ namespace PenguinRun.Game.Shop
                 scoreMul *= 1.5f;
                 PlayerSave.PendingScoreBoost = 0;
             }
-            // LuckyStart 占位：暂不影响结算
-            if (PlayerSave.PendingLuckyStart > 0)
-            {
-                PlayerSave.PendingLuckyStart = 0;
-            }
+            // LuckyStart 在开局已消耗（RunnerGameController.ResetRun），结算阶段不再处理 pending。
             PlayerSave.Flush();
             return (fishMul, scoreMul);
+        }
+
+        /// <summary>
+        /// 本局开始时在 WorldDirector.ResetRun 之后调用：若待发券存在则清空并返回 true，由调用方施加 +1 生命。
+        /// </summary>
+        public static bool TryConsumePendingLuckyStartForRunStart()
+        {
+            if (PlayerSave.PendingLuckyStart <= 0) return false;
+            PlayerSave.PendingLuckyStart = 0;
+            PlayerSave.Flush();
+            return true;
         }
 
         public static bool HasPendingBoostersForNextRun =>

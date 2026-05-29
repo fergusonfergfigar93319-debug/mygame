@@ -41,6 +41,7 @@ namespace PenguinRun.Game
         /// 应用一局结算：参数为 RunnerGameController 在 FinishRun 时算出的各项数据。
         /// </summary>
         public static Result Apply(int score, int distanceMeters, int coins, float survivalSeconds, bool dailyMode,
+            DifficultyKind difficulty,
             string lastBossSpeedTier = "C", int lastBossSpeedFishBonus = 0, int lastBossSpeedScoreBonus = 0)
         {
             score = Math.Max(0, score);
@@ -53,9 +54,10 @@ namespace PenguinRun.Game
             var consumedDoubleFish = ticketFishMul > 1.001f;
             var consumedScoreBoost = ticketScoreMul > 1.001f;
 
-            // 2) 叠加营地的全局乘数（鱼干收益 / 得分加成）。
+            // 2) 叠加营地的全局乘数（鱼干收益 / 得分加成）与难度得分倍率。
             var fishMul = CampUpgrades.GetFishGainMultiplier() * ticketFishMul;
-            var scoreMul = CampUpgrades.GetScoreMultiplier() * ticketScoreMul;
+            var difficultyScoreMul = Mathf.Max(0.01f, DifficultyPreset.ForKind(difficulty).ScoreMultiplier);
+            var scoreMul = CampUpgrades.GetScoreMultiplier() * ticketScoreMul * difficultyScoreMul;
 
             var baseCoins = coins;
             var baseScore = score;
@@ -89,6 +91,8 @@ namespace PenguinRun.Game
 
             MissionStore.RecordAfterRun(score, distanceMeters, coins, dailyMode);
             CodexUnlocks.ApplyAfterRun(score, distanceMeters, survivalSeconds, dailyMode);
+
+            PlayerSave.IncrementTotalRuns();
 
             // 记录本次跑酷数据到历史记录
             RunRecords.AddRecord(

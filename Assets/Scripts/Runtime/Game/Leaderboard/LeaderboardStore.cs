@@ -79,24 +79,31 @@ namespace PenguinRun.Game.Leaderboard
             };
         }
 
-        public static LeaderboardEntry GetBestEntry()
+        /// <summary>在给定 challenge 桶（null = 不限）内，统计该玩家的历史峰值，用于「我的最好一局」高亮。</summary>
+        public static bool TryGetPlayerPeakMetrics(
+            string playerId,
+            string challengeBucket,
+            out int peakTotalScore,
+            out float peakDistance,
+            out float peakSurvival)
         {
-            var all = LoadAll();
-            LeaderboardEntry best = null;
-            foreach (var e in all)
+            peakTotalScore = 0;
+            peakDistance = 0f;
+            peakSurvival = 0f;
+            if (string.IsNullOrEmpty(playerId)) return false;
+            var found = false;
+            foreach (var e in LoadAll())
             {
-                if (best == null || e.totalScore > best.totalScore) best = e;
+                if (e.playerId != playerId) continue;
+                if (!string.IsNullOrEmpty(challengeBucket) &&
+                    !string.Equals(e.challengeBucket, challengeBucket, StringComparison.Ordinal))
+                    continue;
+                found = true;
+                if (e.totalScore > peakTotalScore) peakTotalScore = e.totalScore;
+                if (e.distanceScoreUnits > peakDistance) peakDistance = e.distanceScoreUnits;
+                if (e.survivalSeconds > peakSurvival) peakSurvival = e.survivalSeconds;
             }
-            return best;
-        }
-
-        public static double GetAverageTotalScore()
-        {
-            var all = LoadAll();
-            if (all.Count == 0) return 0d;
-            double sum = 0;
-            foreach (var e in all) sum += e.totalScore;
-            return sum / all.Count;
+            return found;
         }
 
         public static string NewEntryId() => Guid.NewGuid().ToString();

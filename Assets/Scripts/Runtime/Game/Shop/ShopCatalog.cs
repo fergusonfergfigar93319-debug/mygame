@@ -26,7 +26,7 @@ namespace PenguinRun.Game.Shop
     {
         BoosterDoubleFish,   // 局内：下一局结算鱼干 ×2
         BoosterScoreBoost,   // 局内：下一局结算得分 ×1.5
-        BoosterLuckyStart,   // 库存：占位"幸运起手"令牌（暂未消耗，留作将来扩展）
+        BoosterLuckyStart,   // 下一局开局 +1 生命（待发券在开局被消耗）
         FishPackSmall,       // 一次性：发放鱼干包（小）
         FishPackMedium,      // 一次性：发放鱼干包（中）
         CosmeticScarf,       // 装扮：解锁/装备围巾
@@ -183,7 +183,7 @@ namespace PenguinRun.Game.Shop
                 {
                     Id = "boost_lucky_start",
                     Title = "幸运起手令",
-                    Description = "下一局生效：开局 8 秒额外 1 次幸运掉率（占位道具，后续版本启用）。",
+                    Description = "下一局开局额外获得 1 颗心（本局内有效，不会超过生命上限）。",
                     IconGlyph = "\u2726",
                     Category = ShopCategory.Boosters,
                     Rarity = ShopRarity.Epic,

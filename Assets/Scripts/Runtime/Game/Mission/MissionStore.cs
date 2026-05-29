@@ -80,6 +80,21 @@ namespace PenguinRun.Game.Mission
             return false;
         }
 
+        /// <summary>可领取任务的数量（首页数字角标）。</summary>
+        public static int CountClaimableMissions()
+        {
+            EnsureDailyBucket();
+            var n = 0;
+            foreach (MissionTrack t in Enum.GetValues(typeof(MissionTrack)))
+            {
+                foreach (var s in MissionStates(t))
+                {
+                    if (s.Claimable) n++;
+                }
+            }
+            return n;
+        }
+
         /// <summary>跑酷结算后调用，更新所有相关计量；dailyMode=true 时计入「今日挑战」分数任务。</summary>
         public static void RecordAfterRun(int score, int distanceMeters, int coins, bool dailyMode)
         {

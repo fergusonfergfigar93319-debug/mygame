@@ -1,4 +1,5 @@
 using PenguinRun.Game;
+using PenguinRun.Game.Shop;
 using UnityEngine;
 
 namespace PenguinRun
@@ -22,6 +23,7 @@ namespace PenguinRun
         private readonly BossSystem bossSystem;
         private readonly Transform sceneRoot;
         private readonly System.Action pulseHaptic;
+        private readonly System.Action<Color, float> onScreenFlash;
         private readonly System.Action<RunnerRunResult> onFinish;
 
         private bool running;
@@ -41,6 +43,7 @@ namespace PenguinRun
             PenguinCharacter character,
             Transform sceneRoot,
             System.Action pulseHaptic,
+            System.Action<Color, float> onScreenFlash,
             System.Action<RunnerRunResult> onFinish)
         {
             this.tuning = tuning;
@@ -50,6 +53,7 @@ namespace PenguinRun
             this.character = character;
             this.sceneRoot = sceneRoot;
             this.pulseHaptic = pulseHaptic;
+            this.onScreenFlash = onScreenFlash;
             this.onFinish = onFinish;
 
             var waveDirector = new SegmentWaveDirector(config.MapTheme);
@@ -73,15 +77,19 @@ namespace PenguinRun
 
         public BossSystem Boss => bossSystem;
 
-        public string FeedbackText => feedbackText;
+        public RunnerAudio RunnerAudio => runnerAudio;
 
-        public float FeedbackTimer => feedbackTimer;
+        public string FeedbackText { get => feedbackText; set => feedbackText = value; }
+
+        public float FeedbackTimer { get => feedbackTimer; set => feedbackTimer = value; }
 
         public void ResetRun(bool start)
         {
             spawner.Reset();
             motor.ResetToStart();
             world.ResetRun();
+            if (start && ShopStore.TryConsumePendingLuckyStartForRunStart())
+                world.AddExtraLife();
             bossSystem.Reset();
             collisions.Reset();
             running = start;
@@ -231,9 +239,33 @@ namespace PenguinRun
             if (world.Paused) return;
             spawner.SpawnPaused = bossSystem.ShouldPauseSpawning;
             spawner.Tick(dt, effectiveSpeed, world.Distance);
+            if (spawner.TryConsumeSlideGateTutorial(out var slideTutorial))
+            {
+                feedbackText = slideTutorial;
+                feedbackTimer = 2.4f;
+            }
+
+            // 速度门检测
+            if (spawner.CheckSpeedGatePass(playerTransform, motor.PlayerY, out var gateFeedback))
+            {
+                world.DashTimer = Mathf.Max(world.DashTimer, 0.8f);
+                feedbackText = gateFeedback;
+                feedbackTimer = 0.7f;
+            }
             var groundY = TrackTerrain.SurfaceY(playerTransform.position.z, world.Distance, tuning.movement.groundY);
+            var invulnBeforeCollision = world.HitInvulnerabilityTimer;
+
+            // 距离里程碑奖励
+            var milestoneReward = world.TryHitDistanceMilestone();
+            if (milestoneReward > 0)
+            {
+                feedbackText = $"🎯 {world.DistanceMilestonesHit * 500}m 里程碑！+{milestoneReward} 鱼干";
+                feedbackTimer = 1.5f;
+                runnerAudio.PlayCheckpoint();
+            }
+
             pickups.CollectCoins(playerTransform, motor.PlayerY, world, spawner.coins, ref feedbackText, ref feedbackTimer);
-            pickups.CollectPowerUps(playerTransform, world, spawner.powerUps, ref feedbackText, ref feedbackTimer, pulseHaptic);
+            pickups.CollectPowerUps(playerTransform, world, spawner.powerUps, ref feedbackText, ref feedbackTimer);
 
             // ── Boss 战每帧逻辑 ─────────────────────────────────
             var px = playerTransform.position.x;
@@ -267,7 +299,7 @@ namespace PenguinRun
                 }
             }
 
-            // Boss 即将出现前，生成前奏片段
+            // Boss 即将出现前，生成前奏片段 + 预警提示
             if (bossSystem.IsBossApproaching(world.Distance, 100f) && !bossSystem.HasSpawnedPrelude)
             {
                 bossSystem.MarkPreludeSpawned();
@@ -275,11 +307,15 @@ namespace PenguinRun
                 if (nextDef != null)
                 {
                     spawner.SpawnBossPrelude(world.Distance, nextDef);
+                    feedbackText = $"⚠ 前方高能：{nextDef.DisplayName} 即将出现！\n{nextDef.SignatureMechanic}";
+                    feedbackTimer = 3.0f;
+                    onScreenFlash?.Invoke(new Color(0.8f, 0.45f, 0.08f, 0.15f), 0.4f);
                 }
             }
 
             if (bossHitsPlayer && world.HitInvulnerabilityTimer <= 0f)
             {
+                onScreenFlash?.Invoke(new Color(1f, 0.2f, 0.15f, 0.55f), 0.35f);
                 if (world.TryConsumeFishBomb())
                 {
                     world.SetHitInvulnerability(1.2f);
@@ -295,6 +331,7 @@ namespace PenguinRun
                         feedbackTimer = 1.4f;
                         runnerAudio.PlayCrash();
                         pulseHaptic?.Invoke();
+                        onScreenFlash?.Invoke(new Color(1f, 0.05f, 0.02f, 0.7f), 0.6f);
                         running = false;
                         gameOver = true;
                         return;
@@ -302,7 +339,22 @@ namespace PenguinRun
                 }
             }
 
-            if (collisions.CheckCollisions(
+            // Boss 渐进式临近预警：距离越近，警告越强
+            if (!bossSystem.BossActive && !bossSystem.HasSpawnedPrelude)
+            {
+                for (var tier = 0; tier < 4; tier++)
+                {
+                    var dist = 100f - tier * 20f; // 100, 80, 60, 40m
+                    if (bossSystem.IsBossApproaching(world.Distance, dist))
+                    {
+                        var intensity = 0.04f + tier * 0.04f;
+                        onScreenFlash?.Invoke(new Color(0.7f, 0.05f, 0.02f, intensity), 0.2f);
+                        break;
+                    }
+                }
+            }
+
+            var gameOverNow = collisions.CheckCollisions(
                     playerTransform,
                     motor.PlayerY,
                     groundY,
@@ -314,8 +366,17 @@ namespace PenguinRun
                     ref feedbackText,
                     ref feedbackTimer,
                     pulseHaptic,
-                    motor))
+                    motor);
+
+            // 非致命伤害闪屏
+            if (!gameOverNow && world.HitInvulnerabilityTimer > invulnBeforeCollision + 0.01f)
             {
+                onScreenFlash?.Invoke(new Color(1f, 0.35f, 0.2f, 0.4f), 0.28f);
+            }
+
+            if (gameOverNow)
+            {
+                onScreenFlash?.Invoke(new Color(1f, 0.1f, 0.05f, 0.65f), 0.45f);
                 running = false;
                 gameOver = true;
             }
