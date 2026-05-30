@@ -28,8 +28,13 @@ namespace PenguinRun
         /// <summary>返回当前片段的调色板，供生成器在波次消费前查询（如开局种子障碍）。</summary>
         public SegmentObstaclePalette CurrentPalette => current.Palette;
 
+        public SegmentPatternKind CurrentPatternKind => current.PatternKind;
+
+        public bool LastConsumeWasFirstWave { get; private set; }
+
         public SegmentSpawnModifiers ConsumeWave()
         {
+            LastConsumeWasFirstWave = wavesLeftInSegment == current.WaveCount;
             var modifiers = SegmentSpawnModifiers.FromDefinition(current);
             wavesLeftInSegment--;
             if (wavesLeftInSegment <= 0)

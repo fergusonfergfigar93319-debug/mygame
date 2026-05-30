@@ -9,30 +9,23 @@ namespace PenguinRun
         private const float PlayerMarginZ = 0.10f;
 
         private readonly RunnerAudio audio;
-        // 已记完美闪避的障碍（避免重复计分）
+        private readonly RunnerCombatTuning combat;
         private readonly HashSet<GameObject> perfectDodged = new();
 
-        public CollisionSystem(RunnerAudio audio)
+        public CollisionSystem(RunnerAudio audio, RunnerCombatTuning combat)
         {
             this.audio = audio;
+            this.combat = combat;
         }
 
         public void Reset() => perfectDodged.Clear();
-
-        /// <summary>雷羽可破坏的小型障碍：<see cref="ObstacleColliderSpec.SmallJumpable"/> 等价规格。</summary>
-        private static bool ObstacleColliderSpecLooksSmallDestructible(in ObstacleColliderSpec spec)
-        {
-            var s = ObstacleColliderSpec.SmallJumpable;
-            return !spec.IsLow && Mathf.Abs(spec.HalfDx - s.HalfDx) < 0.02f &&
-                   Mathf.Abs(spec.HalfDz - s.HalfDz) < 0.02f &&
-                   Mathf.Abs(spec.FeetClearanceAboveRoot - s.FeetClearanceAboveRoot) < 0.02f;
-        }
 
         public bool CheckCollisions(
             Transform player,
             float playerY,
             float groundY,
             float slideTimerSeconds,
+            float dashTimerSeconds,
             WorldDirector world,
             SegmentSpawner spawner,
             List<GameObject> obstacles,
@@ -40,7 +33,8 @@ namespace PenguinRun
             ref string feedbackText,
             ref float feedbackTimer,
             System.Action pulseHaptic,
-            PlayerMotor motor = null)
+            PlayerMotor motor = null,
+            System.Action onPerfectDodge = null)
         {
             if (world.HitInvulnerabilityTimer > 0f) return false;
 
@@ -58,11 +52,23 @@ namespace PenguinRun
                 var dx = Mathf.Abs(obstacle.transform.position.x - px);
                 if (dx > spec.HalfDx + PlayerMarginX) continue;
 
-                // 通用跳跃越障判定：脚底高度超过障碍要求的清除高度即可跳过
+                if (obstacle.TryGetComponent<ObstacleBehavior>(out var behavior) && !behavior.IsCollidable)
+                    continue;
+
                 var clearedByJump = playerY > obstacle.transform.position.y + spec.FeetClearanceAboveRoot;
 
-                // ── 完美闪避识别（在 critical action 窗口内成功避开）──
-                // 滑铲穿过障碍、跳跃越过障碍 都算完美闪避（仅统计一次）
+                if (dashTimerSeconds > 0f && obstacle.TryGetComponent<ShatterWall>(out var shatterWall))
+                {
+                    if (shatterWall.TryShatter())
+                    {
+                        feedbackText = "冲刺碎墙！";
+                        feedbackTimer = 0.65f;
+                        audio.PlayShieldBreak();
+                        pulseHaptic?.Invoke();
+                        continue;
+                    }
+                }
+
                 if (motor != null && motor.PerfectActionWindow > 0f && !perfectDodged.Contains(obstacle))
                 {
                     if (slideTimerSeconds > 0f && spec.IsLow && motor.LastCriticalAction == RunnerAction.Slide)
@@ -72,6 +78,7 @@ namespace PenguinRun
                         feedbackText = "\u26A1 完美滑铲！+25";
                         feedbackTimer = 0.7f;
                         audio.PlayPerfectDodge();
+                        onPerfectDodge?.Invoke();
                     }
                     else if (clearedByJump && motor.LastCriticalAction == RunnerAction.Jump)
                     {
@@ -80,104 +87,66 @@ namespace PenguinRun
                         feedbackText = "\u26A1 完美跳跃！+25";
                         feedbackTimer = 0.7f;
                         audio.PlayPerfectDodge();
+                        onPerfectDodge?.Invoke();
                     }
                 }
 
-                // 滑铲：仅通过低矮障碍（滑铲门 / 宽低横梁 / 中等栏）
                 if (slideTimerSeconds > 0f && spec.IsLow) continue;
-                // 跳跃：脚底高度超过障碍要求的清除高度
                 if (clearedByJump) continue;
 
-                if (world.ShieldTimer > 0f)
-                {
-                    world.ShieldTimer = 0f;
-                    feedbackText = "护盾抵消";
-                    feedbackTimer = 0.8f;
-                    audio.PlayShieldBreak();
-                    pulseHaptic?.Invoke();
-                    spawner.TryRemoveObstacle(obstacle);
-                    return false;
-                }
-
-                if (world.TryConsumeFishBomb())
-                {
-                    feedbackText = "鱼弹反弹！";
-                    feedbackTimer = 0.85f;
-                    audio.PlayShieldBreak();
-                    pulseHaptic?.Invoke();
-                    spawner.TryRemoveObstacle(obstacle);
-                    world.SetHitInvulnerability(1.2f);
-                    return false;
-                }
-
-                // 冰镜：一次冲撞消耗整段镜面时间，弹开障碍
-                if (world.IceMirrorTimer > 0f)
-                {
-                    world.IceMirrorTimer = 0f;
-                    feedbackText = "冰镜折射！";
-                    feedbackTimer = 0.82f;
-                    audio.PlayShieldBreak();
-                    pulseHaptic?.Invoke();
-                    spawner.TryRemoveObstacle(obstacle);
-                    world.SetHitInvulnerability(1.0f);
-                    return false;
-                }
-
-                // 树人护甲：吸收伤害层数
-                if (world.TryConsumeTreantArmor())
-                {
-                    feedbackText = $"树皮挡下！护甲×{world.TreantArmorHits}";
-                    feedbackTimer = 0.82f;
-                    audio.PlayShieldBreak();
-                    pulseHaptic?.Invoke();
-                    spawner.TryRemoveObstacle(obstacle);
-                    world.SetHitInvulnerability(1.1f);
-                    return false;
-                }
-
-                // 珊瑚回弹：预备态时抵消一次冲撞并触发冲刺/无敌（与护盾可叠：护盾先耗尽）
-                if (world.TryConsumeCoralBounce())
-                {
-                    feedbackText = "珊瑚回弹！";
-                    feedbackTimer = 0.9f;
-                    audio.PlayShieldBreak();
-                    pulseHaptic?.Invoke();
-                    spawner.TryRemoveObstacle(obstacle);
-                    return false;
-                }
-
-                // 雷羽：冲刺态下可粉碎小型可跳障碍
-                if (world.ThunderFeatherTimer > 0f && ObstacleColliderSpecLooksSmallDestructible(spec))
-                {
-                    feedbackText = "雷羽击破！";
-                    feedbackTimer = 0.65f;
-                    audio.PlayShieldBreak();
-                    pulseHaptic?.Invoke();
-                    spawner.TryRemoveObstacle(obstacle);
-                    return false;
-                }
-
-                spawner.TryRemoveObstacle(obstacle);
-                world.SetHitInvulnerability(2f);
-                world.BreakPerfectDodgeStreak();
-                var gameOver = world.LoseOneLife();
-                if (gameOver)
-                {
-                    feedbackText = "生命耗尽";
-                    feedbackTimer = 1.4f;
-                    audio.PlayCrash();
-                    pulseHaptic?.Invoke();
-                    return true;
-                }
-
-                feedbackText = $"受伤！剩余 {world.Lives} 心（2秒无敌）";
-                feedbackTimer = 0.95f;
-                audio.PlayPlayerHurt();
-                pulseHaptic?.Invoke();
-                return false;
+                var outcome = RunnerHitResolver.TryResolveObstacleDefense(world, spec, combat);
+                ApplyOutcome(outcome, world, spawner, obstacle, ref feedbackText, ref feedbackTimer, pulseHaptic);
+                if (outcome.Kind == HitOutcomeKind.GameOver) return true;
+                if (outcome.Kind != HitOutcomeKind.None) return false;
             }
 
             return false;
+        }
+
+        private void ApplyOutcome(
+            HitOutcome outcome,
+            WorldDirector world,
+            SegmentSpawner spawner,
+            GameObject obstacle,
+            ref string feedbackText,
+            ref float feedbackTimer,
+            System.Action pulseHaptic)
+        {
+            if (outcome.Kind == HitOutcomeKind.None) return;
+
+            if (outcome.ConsumeShield)
+                world.ShieldTimer = 0f;
+
+            if (outcome.RemoveObstacle)
+                spawner.TryRemoveObstacle(obstacle);
+
+            if (outcome.InvulnerabilitySeconds > 0f)
+                world.SetHitInvulnerability(outcome.InvulnerabilitySeconds);
+
+            if (outcome.Kind == HitOutcomeKind.Damage || outcome.Kind == HitOutcomeKind.GameOver)
+                world.BreakPerfectDodgeStreak();
+
+            if (!string.IsNullOrEmpty(outcome.FeedbackText))
+            {
+                feedbackText = outcome.FeedbackText;
+                feedbackTimer = outcome.FeedbackDuration;
+            }
+
+            switch (outcome.Kind)
+            {
+                case HitOutcomeKind.BlockedByDefense:
+                    audio.PlayShieldBreak();
+                    pulseHaptic?.Invoke();
+                    break;
+                case HitOutcomeKind.Damage:
+                    audio.PlayPlayerHurt();
+                    pulseHaptic?.Invoke();
+                    break;
+                case HitOutcomeKind.GameOver:
+                    audio.PlayCrash();
+                    pulseHaptic?.Invoke();
+                    break;
+            }
         }
     }
 }

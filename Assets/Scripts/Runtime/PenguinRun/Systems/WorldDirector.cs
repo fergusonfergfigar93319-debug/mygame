@@ -60,6 +60,17 @@ namespace PenguinRun
 
         public int PeakCoinCombo { get; private set; }
 
+        public float CoinComboTierProgress01
+        {
+            get
+            {
+                var every = Mathf.Max(1, pickupTuning.coinComboTierEvery);
+                if (CoinCombo <= 0) return 0f;
+                var inTier = CoinCombo % every;
+                return (inTier == 0 ? every : inTier) / (float)every;
+            }
+        }
+
         /// <summary>已击败 boss 数量（HUD 显示用）。</summary>
         public int BossesDefeated { get; set; }
 
@@ -213,7 +224,6 @@ namespace PenguinRun
             if (!CoralBounceReady) return false;
             CoralBounceReady = false;
             DashTimer = Mathf.Max(DashTimer, 1.2f);
-            SetHitInvulnerability(1.8f);
             return true;
         }
 

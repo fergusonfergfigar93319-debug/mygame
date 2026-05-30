@@ -45,7 +45,19 @@
   - `TallSpike` — **换道**
   - `Rolling` — **换道或跳跃**（滚球前后判定较紧）
   - `PatrolEnemy` / `SwoopEnemy` — **换道或跳跃**（滑铲无效）
+- **动态碰撞开关：** 挂载 `ObstacleBehavior` 的障碍（如 `TimedGate` 开门、`ShatterWall` 已碎）通过 `IsCollidable` 控制；`CollisionSystem` 在 AABB 通过后必须读取该标志。
+- **可破坏标记：** `ObstacleColliderSpec.IsThunderFeatherDestructible` 标记雷羽可粉碎的小型可跳障碍；`ShatterWall` 由冲刺（`DashTimer > 0`）触发 `TryShatter()`，与雷羽路径分离。
 - **勿混淆：** 移动敌人注册在 `EnemyNpcState` 中管理轨迹；Boss 战障碍由 `SpawnPaused` 暂停片段生成。
+
+### 完美动作窗口（PerfectActionWindow）
+
+- **意指：** 玩家执行跳跃或滑铲后的短窗口（默认 0.28–0.32 s，见 `RunnerTuningConfig`），在此窗口内成功规避障碍记为完美闪避并加分。
+- **执行点：** `PlayerMotor` 设置窗口；`CollisionSystem` 在窗口内匹配 `LastCriticalAction` 与规避方式。
+
+### 命中解析（RunnerHitResolver）
+
+- **意指：** 障碍与 Boss 共用的一层防御/扣血判定，统一护盾、鱼弹、冰镜、树人护甲、珊瑚回弹、雷羽击破与无敌时长（`RunnerCombatTuning`）。
+- **勿混淆：** Boss 招式闪避几何仍由 `RunnerHitResolver.IsBossPatternHit` 与 `BossSystem.CheckPatternHit` 协作；VFX 不改变命中规则。
 
 ### 移动敌人（MovingEnemy）
 
@@ -140,7 +152,7 @@
 ## 领域规则
 
 - 每个主题必须同时具有：片段池定义、调色板障碍外观映射、Boss 刷新条件、BGM 映射。
-- 新障碍必须配套 `ObstacleColliderSpec` 规格；不允许未注册碰撞规格的障碍进入 `obstacles` 列表。
+- 新障碍必须配套 `ObstacleColliderSpec` 规格；不允许未注册碰撞规格的障碍进入 `obstacles` 列表。动态障碍须实现 `ObstacleBehavior.IsCollidable` 并与视觉状态一致。
 - 新道具必须在 `PowerUpKind`、`PickupSystem.ActivatePowerUp`、`WorldDirector`（如有持续状态）、`GetPowerUpColors`、`AddPowerUpEffects`、`PlayPowerUp` 共 6 处同步扩展，缺一处视为未完成。
 - `Resources.Load` 路径区分大小写（部分平台）；模型/音频资源命名必须与代码字符串完全一致。
 - CC-BY 素材在引入前必须先记录作者、来源链接、许可证和本地文件名到 credits 文件；未记录即不允许提交。

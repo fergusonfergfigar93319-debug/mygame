@@ -47,6 +47,28 @@ namespace PenguinRun
     }
 
     [System.Serializable]
+    public sealed class RunnerCombatTuning
+    {
+        public float invulnAfterObstacleHit = 2.0f;
+        public float invulnAfterFishBombObstacle = 1.2f;
+        public float invulnAfterFishBombBoss = 1.2f;
+        public float invulnAfterBossHit = 2.0f;
+        public float invulnAfterShieldBreak = 1.0f;
+        public float invulnAfterIceMirror = 1.0f;
+        public float invulnAfterTreantArmor = 1.1f;
+        public float invulnAfterCoralBounce = 1.8f;
+        public float perfectWindowJumpSeconds = 0.32f;
+        public float perfectWindowSlideSeconds = 0.32f;
+        public float perfectWindowAirSlideSeconds = 0.28f;
+        public float perfectWindowDoubleJumpSeconds = 0.28f;
+        public float bossAirDodgeHeight = 0.45f;
+        public float bossSafeLaneHalfFactor = 0.52f;
+        public float bossOffLaneFactor = 0.55f;
+        public float bossSalvoLaneFactor = 0.50f;
+        public float bossCenterBeamLaneFactor = 0.50f;
+    }
+
+    [System.Serializable]
     public sealed class RunnerCameraTuning
     {
         public float behindDistance = 10.5f;
@@ -127,6 +149,7 @@ namespace PenguinRun
         public RunnerPickupTuning pickup = new();
         public RunnerPowerUpTuning powerUp = new();
         public RunnerCameraTuning camera = new();
+        public RunnerCombatTuning combat = new();
 
         public static RunnerTuning FromConfig(RunnerTuningConfig c)
         {
@@ -214,6 +237,26 @@ namespace PenguinRun
                     aimHeightAboveSurface = c.CameraAimHeightAboveSurface,
                     fieldOfView = c.CameraFieldOfView,
                     playerVisualScale = c.PlayerVisualScale,
+                },
+                combat = new RunnerCombatTuning
+                {
+                    invulnAfterObstacleHit = c.InvulnAfterObstacleHit,
+                    invulnAfterFishBombObstacle = c.InvulnAfterFishBombObstacle,
+                    invulnAfterFishBombBoss = c.InvulnAfterFishBombBoss,
+                    invulnAfterBossHit = c.InvulnAfterBossHit,
+                    invulnAfterShieldBreak = c.InvulnAfterShieldBreak,
+                    invulnAfterIceMirror = c.InvulnAfterIceMirror,
+                    invulnAfterTreantArmor = c.InvulnAfterTreantArmor,
+                    invulnAfterCoralBounce = c.InvulnAfterCoralBounce,
+                    perfectWindowJumpSeconds = c.PerfectWindowJumpSeconds,
+                    perfectWindowSlideSeconds = c.PerfectWindowSlideSeconds,
+                    perfectWindowAirSlideSeconds = c.PerfectWindowAirSlideSeconds,
+                    perfectWindowDoubleJumpSeconds = c.PerfectWindowDoubleJumpSeconds,
+                    bossAirDodgeHeight = c.BossAirDodgeHeight,
+                    bossSafeLaneHalfFactor = c.BossSafeLaneHalfFactor,
+                    bossOffLaneFactor = c.BossOffLaneFactor,
+                    bossSalvoLaneFactor = c.BossSalvoLaneFactor,
+                    bossCenterBeamLaneFactor = c.BossCenterBeamLaneFactor,
                 },
             };
         }

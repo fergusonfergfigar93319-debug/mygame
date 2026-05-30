@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using PenguinRun.Core;
 using PenguinRun.Game;
+using PenguinRun.Game.UI;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 #if DOTWEEN
@@ -144,6 +146,11 @@ namespace PenguinRun
             game = new RunnerGameController(tuning, config, runnerAudio, player.transform, character, transform, PulseHaptic, TriggerScreenFlash, OnRunFinished);
             game.ResetRun(false);
             lastLives = game.World.Lives;
+
+            // ── 注册核心服务 ──────────────────────────────────────
+            ServiceLocator.Register(runnerAudio);
+            ServiceLocator.Register(config);
+            EventBus.Emit(GameEvents.SceneTransitionComplete);
         }
 
         private void OnRunFinished(RunnerRunResult result)
@@ -156,6 +163,12 @@ namespace PenguinRun
                 result.LastBossSpeedTier, result.LastBossSpeedFishBonus, result.LastBossSpeedScoreBonus);
             RunSession.LastResult = applied;
             SceneTransitionManager.Instance.TransitionTo("MainMenu");
+        }
+
+        private void OnDestroy()
+        {
+            EventBus.Clear();
+            ServiceLocator.Clear();
         }
 
         private void OnApplicationFocus(bool hasFocus)
@@ -469,12 +482,13 @@ namespace PenguinRun
             var motor = game.Motor;
             var playerPos = player.transform.position;
 
-            // 收集金币粒子
+            // 收集金币 → 粒子 + 事件
             if (world.Coins > lastCoinCount)
             {
                 var diff = world.Coins - lastCoinCount;
                 var burstCount = Mathf.Min(diff * 2, 8);
                 particlePool.Emit(playerPos, new Color(1f, 0.9f, 0.3f), burstCount, 1.5f, 0.4f, true);
+                EventBus.Emit(GameEvents.CoinCollected, diff);
                 lastCoinCount = world.Coins;
             }
             else if (world.Coins < lastCoinCount)
@@ -482,39 +496,44 @@ namespace PenguinRun
                 lastCoinCount = world.Coins;
             }
 
-            // 受伤粒子
+            // 受伤 → 粒子 + 事件
             if (world.Lives < lastLives)
             {
                 particlePool.EmitBurst(playerPos, new Color(1f, 0.2f, 0.1f), 12, 4f, 0.7f);
+                EventBus.Emit(GameEvents.PlayerHurt);
+                EventBus.Emit(GameEvents.LivesChanged, world.Lives);
                 lastLives = world.Lives;
             }
             else if (world.Lives > lastLives)
             {
-                // 生命恢复粒子
                 particlePool.EmitRing(playerPos, new Color(0.3f, 1f, 0.5f), 10, 1f, 2.5f, 0.5f);
+                EventBus.Emit(GameEvents.LivesChanged, world.Lives);
                 lastLives = world.Lives;
             }
 
-            // 完美闪避粒子
+            // 完美闪避 → 粒子 + 事件
             if (world.PerfectDodges > lastPerfectDodges)
             {
                 particlePool.EmitBurst(playerPos, new Color(0.4f, 0.85f, 1f), 8, 3f, 0.6f);
+                EventBus.Emit(GameEvents.PerfectDodge);
                 lastPerfectDodges = world.PerfectDodges;
             }
 
-            // 着陆粒子
+            // 着陆
             if (motor.Grounded && !wasGroundedLastFrame)
             {
                 var groundPos = new Vector3(playerPos.x, tuning.movement.groundY + 0.02f, playerPos.z);
                 particlePool.Emit(groundPos, new Color(0.8f, 0.95f, 1f), 5, 1.2f, 0.35f, false);
+                EventBus.Emit(GameEvents.PlayerLanded);
             }
             wasGroundedLastFrame = motor.Grounded;
 
-            // 滑铲火花
+            // 滑铲
             if (motor.SlideTimer > 0f && !wasDodgingLastFrame)
             {
                 var slidePos = new Vector3(playerPos.x, tuning.movement.groundY + 0.02f, playerPos.z - 0.5f);
                 particlePool.Emit(slidePos, new Color(0.6f, 0.9f, 1f), 3, 0.8f, 0.3f, false);
+                EventBus.Emit(GameEvents.PlayerSlid);
             }
             wasDodgingLastFrame = motor.SlideTimer > 0f;
         }
@@ -588,9 +607,10 @@ namespace PenguinRun
                 TriggerScreenFlash(new Color(1f, 0.85f, 0.2f, 0.45f), 0.55f);
                 wasBossDefeated = true;
 
-                // 金色粒子爆发
+                // 金色粒子爆发 + 事件
                 if (player != null)
                     particlePool.EmitBurst(player.transform.position, new Color(1f, 0.85f, 0.2f), 30, 6f, 1.2f);
+                EventBus.Emit(GameEvents.BossDefeated);
             }
             else if (!isDefeated)
             {
@@ -621,7 +641,7 @@ namespace PenguinRun
         {
 #if DOTWEEN
             if (runnerCamera != null)
-                runnerCamera.transform.DOShakePosition(duration, intensity, 25, 90, false, true);
+                runnerCamera.PlayCameraShake(duration, intensity);
 #else
             cameraShakeTimer = duration;
             cameraShakeIntensity = intensity;
@@ -1904,7 +1924,7 @@ namespace PenguinRun
                 var world = game.World;
                 if (hud.Draw(layout, config, world, game.Running, game.GameOver, world.Score, game.FeedbackText, game.FeedbackTimer,
                         currentTheme,
-                        game.Boss, game.IsPaused))
+                        game.Boss, game.IsPaused, game.SegmentBannerTimer, game.SegmentBannerKind))
                 {
                     game.FinishRun();
                 }

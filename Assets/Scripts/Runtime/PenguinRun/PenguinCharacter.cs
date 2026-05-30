@@ -48,6 +48,10 @@ namespace PenguinRun
         private bool wasGroundedLast = true;
         private bool wasDashActiveLast;
         private float dashBurstTimer;
+        private float hurtFlashTimer;
+        private float perfectDodgeBurstTimer;
+        private static readonly Color DefaultBodyColor = new(0.035f, 0.095f, 0.17f);
+        private static readonly Color DashBodyColor = new(0.04f, 0.18f, 0.24f);
 
         private PenguinCharacter(Transform root)
         {
@@ -171,6 +175,14 @@ namespace PenguinRun
             // 按名字查找即可（body/head/leftWing 等名字一致）。
         }
 
+        public void TriggerHurtFlash() => hurtFlashTimer = 0.15f;
+
+        public void TriggerPerfectDodgeBurst()
+        {
+            perfectDodgeBurstTimer = 0.55f;
+            jumpRingTimer = 0.55f;
+        }
+
         public void Animate(float dt, bool running, bool grounded, bool sliding, bool gameOver, float speed01, float laneLean, float dashTimer, float magnetTimer, float shieldTimer, float invulnerabilityTimer)
         {
             var dashActive = dashTimer > 0f;
@@ -180,6 +192,8 @@ namespace PenguinRun
                 dashBurstTimer = 0.22f;
             }
             dashBurstTimer = Mathf.Max(0f, dashBurstTimer - dt);
+            hurtFlashTimer = Mathf.Max(0f, hurtFlashTimer - dt);
+            perfectDodgeBurstTimer = Mathf.Max(0f, perfectDodgeBurstTimer - dt);
 
             bob += dt * Mathf.Lerp(4.2f, 11.5f, speed01);
             var runWave = Mathf.Sin(bob);
@@ -242,9 +256,11 @@ namespace PenguinRun
             leftCheek.localScale = new Vector3(0.13f, 0.065f, 0.034f) * cheekPulse;
             rightCheek.localScale = new Vector3(0.13f, 0.065f, 0.034f) * cheekPulse;
 
-            var baseBodyColor = dashTimer > 0f ? new Color(0.04f, 0.18f, 0.24f) : new Color(0.035f, 0.095f, 0.17f);
+            var baseBodyColor = dashTimer > 0f ? DashBodyColor : DefaultBodyColor;
             var invulnMix = invulnerable ? (0.5f + 0.5f * Mathf.Sin(Time.time * 24f)) : 0f;
+            var hurtMix = hurtFlashTimer > 0f ? hurtFlashTimer / 0.15f : 0f;
             var targetBodyColor = Color.Lerp(baseBodyColor, new Color(1f, 0.55f, 0.48f), invulnMix * 0.65f);
+            targetBodyColor = Color.Lerp(targetBodyColor, new Color(1f, 0.25f, 0.22f), hurtMix * 0.85f);
             var bodyColor = Color.Lerp(
                 RunnerVisuals.GetColor(bodyRenderer.material),
                 targetBodyColor,
@@ -306,10 +322,15 @@ namespace PenguinRun
             jumpRing.gameObject.SetActive(jumpRingTimer > 0f);
             if (jumpRingTimer > 0f)
             {
-                var t = 1f - jumpRingTimer / 0.45f;
-                jumpRing.localScale = new Vector3(1.6f + t * 1.4f, 0.04f, 1.6f + t * 1.4f);
+                var ringDuration = perfectDodgeBurstTimer > 0f ? 0.55f : 0.45f;
+                var t = 1f - jumpRingTimer / ringDuration;
+                var baseScale = perfectDodgeBurstTimer > 0f ? 2.2f : 1.6f;
+                jumpRing.localScale = new Vector3(baseScale + t * 1.4f, 0.04f, baseScale + t * 1.4f);
                 var rc = RunnerVisuals.GetColor(jumpRingRenderer.material);
-                rc.a = 0.6f * (1f - t);
+                rc = perfectDodgeBurstTimer > 0f
+                    ? Color.Lerp(new Color(1f, 0.85f, 0.35f, 0.85f), rc, t)
+                    : rc;
+                rc.a = (perfectDodgeBurstTimer > 0f ? 0.75f : 0.6f) * (1f - t);
                 RunnerVisuals.SetColor(jumpRingRenderer.material, rc);
             }
 

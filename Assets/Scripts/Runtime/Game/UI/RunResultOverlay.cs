@@ -1,5 +1,8 @@
 using PenguinRun.Game;
 using PenguinRun.Game.Save;
+#if DOTWEEN
+using DG.Tweening;
+#endif
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -42,6 +45,10 @@ namespace PenguinRun.Game.UI
                 r.NewBest ? new Color(1f, 0.84f, 0.32f, 0.75f) : new Color(0f, 0.85f, 0.95f, 0.55f),
                 new Vector2(3f, -3f));
             UiBuilder.AddShadow(panel.gameObject, new Color(0f, 0f, 0f, 0.7f), new Vector2(0f, -10f));
+#if DOTWEEN
+            panel.transform.localScale = Vector3.one * 0.72f;
+            panel.transform.DOScale(1f, 0.38f).SetEase(Ease.OutBack);
+#endif
 
             // 顶部弧形辉光（新纪录用更强金色光效）
             var topGlowHeight = r.NewBest ? 320f : 240f;

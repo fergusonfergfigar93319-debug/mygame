@@ -26,7 +26,7 @@ namespace PenguinRun.Game.UI
         public static void PlayCameraShake(this Camera cam, float duration, float intensity, int vibrato = 30)
         {
 #if DOTWEEN
-            cam.DOShakePosition(duration, intensity, vibrato, 90, false, true);
+            cam.DOShakePosition(duration, intensity, vibrato, 90f, true, ShakeRandomnessMode.Full);
 #else
             // 回退到手动震动（PenguinRunnerGame 中原有逻辑）
             Debug.LogWarning($"CameraShake fallback: {duration}s @ {intensity}");

@@ -111,6 +111,29 @@ namespace PenguinRun
         public float GlideGravityMultiplier = 0.56f;
         public float GlideJumpMultiplier = 1.12f;
 
+        [Header("Combat / Invulnerability")]
+        public float InvulnAfterObstacleHit = 2.0f;
+        public float InvulnAfterFishBombObstacle = 1.2f;
+        public float InvulnAfterFishBombBoss = 1.2f;
+        public float InvulnAfterBossHit = 2.0f;
+        public float InvulnAfterShieldBreak = 1.0f;
+        public float InvulnAfterIceMirror = 1.0f;
+        public float InvulnAfterTreantArmor = 1.1f;
+        public float InvulnAfterCoralBounce = 1.8f;
+
+        [Header("Perfect Action Window")]
+        public float PerfectWindowJumpSeconds = 0.32f;
+        public float PerfectWindowSlideSeconds = 0.32f;
+        public float PerfectWindowAirSlideSeconds = 0.28f;
+        public float PerfectWindowDoubleJumpSeconds = 0.28f;
+
+        [Header("Boss Dodge")]
+        public float BossAirDodgeHeight = 0.45f;
+        public float BossSafeLaneHalfFactor = 0.52f;
+        public float BossOffLaneFactor = 0.55f;
+        public float BossSalvoLaneFactor = 0.50f;
+        public float BossCenterBeamLaneFactor = 0.50f;
+
         public static RunnerTuningConfig Default() => new();
     }
 }

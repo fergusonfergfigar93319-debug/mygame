@@ -89,16 +89,18 @@ namespace PenguinRun
         private readonly RunnerAudio audio;
         private readonly RunnerSessionConfig config;
         private readonly Transform sceneRoot;
+        private readonly RunnerCombatTuning combat;
         private readonly float baseGroundY;
         private readonly float laneWidth;
 
-        public BossSystem(RunnerAudio audio, RunnerSessionConfig config, Transform sceneRoot, float baseGroundY, float laneWidth)
+        public BossSystem(RunnerAudio audio, RunnerSessionConfig config, Transform sceneRoot, float baseGroundY, float laneWidth, RunnerCombatTuning combat)
         {
             this.audio = audio;
             this.config = config;
             this.sceneRoot = sceneRoot;
             this.baseGroundY = baseGroundY;
             this.laneWidth = laneWidth;
+            this.combat = combat;
 
             var preset = config.DifficultyPreset;
             ApplyDifficultyBossTuning(config.Difficulty, preset, config.Daily);
@@ -263,53 +265,19 @@ namespace PenguinRun
             bool playerSliding, float playerDashTimer, float playerShieldTimer,
             ref string feedbackText, ref float feedbackTimer)
         {
-            if (!boss.IsPatternDangerous) return false;
-
-            // 跳跃回避高度阈值：玩家脚底离地超过此值视为"空中"
-            const float airDodgeHeight = 0.45f;
-            var playerAirborne = playerY > groundY + airDodgeHeight;
-            // 半车道容差（用于"安全车道"判定）
-            var halfLane = laneWidth * 0.52f;
-            // 车道外容差（在目标车道之外的判定）
-            var offLane = laneWidth * 0.55f;
-
-            switch (boss.Pattern)
+            if (!RunnerHitResolver.IsBossPatternHit(
+                    boss.Pattern,
+                    boss.IsPatternDangerous,
+                    playerX,
+                    playerY,
+                    groundY,
+                    playerSliding,
+                    playerDashTimer,
+                    laneWidth,
+                    combat,
+                    boss))
             {
-                case BossPattern.SweepLow:
-                    // 低扫：跳跃/滑铲/待在安全车道皆可回避
-                    if (playerSliding || playerAirborne) return false;
-                    if (Mathf.Abs(playerX - boss.SafeLaneX) < halfLane) return false;
-                    break;
-
-                case BossPattern.DiveHigh:
-                    // 俯冲：起跳 / 换到其他车道可回避
-                    if (playerAirborne) return false;
-                    if (Mathf.Abs(playerX - boss.WorldX) > offLane) return false;
-                    break;
-
-                case BossPattern.ChargeAcross:
-                    // 全场冲锋：跳跃 / 待在安全车道可回避
-                    if (playerAirborne) return false;
-                    if (Mathf.Abs(playerX - boss.SafeLaneX) < halfLane) return false;
-                    break;
-
-                case BossPattern.RangedSalvo:
-                    // 远程齐射：冲刺小段无敌 / 避开落点车道
-                    if (playerDashTimer > 0f) return false;
-                    // 容差从 0.42 放宽到 0.50，移动端更容易躲
-                    if (!IsInSalvoLane(boss, playerX, laneWidth * 0.50f)) return false;
-                    break;
-
-                case BossPattern.CenterBeam:
-                    // 中央光束：离开中央车道 / 起跳越过
-                    if (playerAirborne) return false;
-                    if (Mathf.Abs(playerX) > laneWidth * 0.50f) return false;
-                    break;
-
-                case BossPattern.QuakePulse:
-                    // 震地脉冲：滑铲贴地 / 跳跃滞空 均可躲过
-                    if (playerSliding || playerAirborne) return false;
-                    break;
+                return false;
             }
 
             // 命中：有护盾则抵消，否则扣命
@@ -329,17 +297,7 @@ namespace PenguinRun
                 : $"{boss.Definition.DisplayName} 击中了你！";
             feedbackTimer = 1f;
             boss.HitFlashTimer = HitInvulnerabilitySeconds;
-            audio.PlayPlayerHurt();
             return true;
-        }
-
-        private static bool IsInSalvoLane(BossEncounter boss, float playerX, float laneTolerance)
-        {
-            foreach (var px in boss.SalvoLaneX)
-            {
-                if (Mathf.Abs(playerX - px) < laneTolerance) return true;
-            }
-            return false;
         }
 
         private static bool CanCounterBossInVulnerable(BossEncounter boss, float playerX, float laneTolerance)

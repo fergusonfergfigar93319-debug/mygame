@@ -7,7 +7,7 @@ namespace PenguinRun
 {
     /// <summary>
     /// DOTween 初始化和全局配置。挂到任意场景的 GameObject 上即可。
-    /// 在 PenguinRunner 和 MainMenu 场景中都会自动创建。
+    /// 安装：从 https://dotween.demigiant.com/download.php 导入 .unitypackage 后执行 Tools → Demigiant → DOTween Utility Panel → Setup（会自动添加 DOTWEEN 编译符号）。
     /// </summary>
     public sealed class TweenSetup : MonoBehaviour
     {
@@ -15,7 +15,7 @@ namespace PenguinRun
         private static void AutoInit()
         {
 #if DOTWEEN
-            // DOTween 从 OpenUPM 安装后自动初始化，此处设置全局参数
+            // DOTween Setup 完成后自动初始化，此处设置全局参数
             DOTween.Init(true, true, LogBehaviour.Default);
             DOTween.defaultAutoPlay = AutoPlay.None;
             DOTween.defaultAutoKill = true;

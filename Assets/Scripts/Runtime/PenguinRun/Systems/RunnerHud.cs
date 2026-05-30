@@ -192,20 +192,27 @@ namespace PenguinRun
             float feedbackTimer,
             RunnerMapTheme mapTheme,
             BossSystem bossSystem = null,
-            bool paused = false)
+            bool paused = false,
+            float segmentBannerTimer = 0f,
+            SegmentPatternKind segmentBannerKind = default)
         {
             EnsureGuiStyles();
 
             var lw = layout.LogicalWidth;
             var lh = layout.LogicalHeight;
 
+            if (segmentBannerTimer > 0f)
+            {
+                DrawSegmentBanner(layout, segmentBannerTimer, segmentBannerKind);
+            }
+
             var buffLine = BuildBuffSummary(world);
             var hasBuff = !string.IsNullOrEmpty(buffLine);
-            var hasComboLine = world.CoinCombo >= 2 || world.LastFishScoreMultiplier > 1.01f;
+            var hasComboLine = world.CoinCombo >= 1 || world.LastFishScoreMultiplier > 1.01f;
 
             // ── 主面板（左上）─────────────────────────────────
             var panelW = Mathf.Clamp(lw * 0.4f, 320f, 460f);
-            var panelH = 168f + (hasBuff ? 36f : 0f) + (hasComboLine ? 26f : 0f);
+            var panelH = 168f + (hasBuff ? 36f : 0f) + (hasComboLine ? 44f : 0f);
             var px = 16f;
             var py = 16f;
 
@@ -220,7 +227,17 @@ namespace PenguinRun
 
             // 得分区域
             GUI.Label(new Rect(ix, iy, 100, 16), "得分", scoreLabelStyle);
-            DrawTextShadow(new Rect(ix, iy + 16, 240, 50), scoreOverride.ToString("N0"), scoreValueStyle);
+            var isNewBest = running && scoreOverride > config.BestScore;
+            var scoreStyle = scoreValueStyle;
+            if (isNewBest)
+            {
+                var pulse = 0.85f + Mathf.Sin(Time.time * 5f) * 0.15f;
+                scoreStyle = new GUIStyle(scoreValueStyle)
+                {
+                    normal = { textColor = new Color(ColorGold.r, ColorGold.g, ColorGold.b, pulse) },
+                };
+            }
+            DrawTextShadow(new Rect(ix, iy + 16, 240, 50), scoreOverride.ToString("N0"), scoreStyle);
 
             // 生命值（右上）
             DrawHearts(new Rect(px + panelW - 130f, iy + 10f, 120f, 36f), world);
@@ -273,14 +290,23 @@ namespace PenguinRun
                 iy += 34f;
             }
 
-            // 连击行
+            // 连击行 + 倍率 tier 进度
             if (hasComboLine)
             {
-                var combo = $"\u2605 连击 ×{world.CoinCombo}    倍率 ×{world.LastFishScoreMultiplier:0.00}";
+                var combo = world.CoinCombo >= 2
+                    ? $"\u2605 连击 ×{world.CoinCombo}    倍率 ×{world.LastFishScoreMultiplier:0.00}"
+                    : $"倍率 ×{world.LastFishScoreMultiplier:0.00}";
                 if (world.PeakCoinCombo >= 3)
                     combo += $"    峰值 ×{world.PeakCoinCombo}";
                 var comboStyle = new GUIStyle(buffStyle) { normal = { textColor = ColorGold } };
                 GUI.Label(new Rect(ix, iy, panelW - 36f, 24f), combo, comboStyle);
+                iy += 26f;
+
+                var barW = panelW - 36f;
+                DrawPanel(new Rect(ix, iy, barW, 10f), new Color(0f, 0f, 0f, 0.35f));
+                var fillW = barW * world.CoinComboTierProgress01;
+                DrawPanel(new Rect(ix, iy, fillW, 10f), new Color(ColorGold.r, ColorGold.g, ColorGold.b, 0.85f));
+                iy += 14f;
             }
 
             // 反馈文本（屏幕上方居中）
@@ -288,15 +314,21 @@ namespace PenguinRun
             {
                 var alpha = Mathf.Clamp01(feedbackTimer / 0.45f);
                 var isLongTip = feedbackText != null && feedbackText.Length > 20;
+                var isPositive = IsPositiveFeedback(feedbackText);
+                var isDamage = IsDamageFeedback(feedbackText);
                 var feedbackRenderStyle = new GUIStyle(feedbackStyle)
                 {
                     fontSize = isLongTip ? 20 : 30,
                     wordWrap = true,
                     alignment = TextAnchor.MiddleCenter,
                 };
-                feedbackRenderStyle.normal.textColor = new Color(0.64f, 1f, 0.88f, alpha);
+                var textColor = isDamage
+                    ? new Color(1f, 0.72f, 0.68f, alpha)
+                    : isPositive
+                        ? new Color(0.64f, 1f, 0.78f, alpha)
+                        : new Color(0.64f, 1f, 0.88f, alpha);
+                feedbackRenderStyle.normal.textColor = textColor;
 
-                // 反馈背景胶囊（长提示加宽，并下移到 Boss 面板下方，避免遮挡）
                 var fbW = isLongTip
                     ? Mathf.Clamp(lw * 0.6f, 460f, 920f)
                     : 360f;
@@ -306,14 +338,20 @@ namespace PenguinRun
                 var textH = feedbackRenderStyle.CalcHeight(new GUIContent(feedbackText), textRect.width);
                 var fbH = Mathf.Clamp(textH + 16f, 56f, 130f);
 
-                DrawPanel(new Rect(fbX, fbY, fbW, fbH), new Color(0f, 0f, 0f, 0.5f * alpha));
+                var capsuleBg = isDamage
+                    ? new Color(0.35f, 0.05f, 0.08f, 0.62f * alpha)
+                    : isPositive
+                        ? new Color(0.02f, 0.22f, 0.12f, 0.58f * alpha)
+                        : new Color(0f, 0f, 0f, 0.5f * alpha);
+                DrawPanel(new Rect(fbX, fbY, fbW, fbH), capsuleBg);
+                var accent = isDamage ? ColorDanger : isPositive ? ColorSuccess : ColorAccent;
                 DrawPanel(new Rect(fbX + 1f, fbY + 1f, fbW - 2f, 2f),
-                    new Color(ColorAccent.r, ColorAccent.g, ColorAccent.b, 0.6f * alpha));
+                    new Color(accent.r, accent.g, accent.b, 0.6f * alpha));
                 DrawTextShadow(new Rect(fbX + 8f, fbY + 4f, fbW - 16f, fbH - 8f), feedbackText, feedbackRenderStyle);
             }
 
-            // 返回按钮（右上）
-            var backR = new Rect(lw - 140f, 18f, 120f, 56f);
+            // 返回按钮（右上，加大触控热区）
+            var backR = new Rect(lw - 156f, 12f, 140f, 64f);
             DrawCard(backR, new Color(0.06f, 0.13f, 0.22f, 0.9f), ColorPanelStroke);
             DrawPanel(new Rect(backR.x + 1f, backR.y + 1f, backR.width - 2f, 2f),
                 new Color(ColorAccent.r, ColorAccent.g, ColorAccent.b, 0.5f));
@@ -398,7 +436,10 @@ namespace PenguinRun
             var x = (lw - w) * 0.5f;
             var y = 18f;
             var h = 132f;
-            DrawCard(new Rect(x, y, w, h), new Color(0.12f, 0.05f, 0.08f, 0.92f), new Color(1f, 0.4f, 0.45f, 0.65f));
+            var borderColor = boss.Phase == BossPhase.Vulnerable
+                ? new Color(1f, 0.85f, 0.35f, 0.55f + Mathf.Sin(Time.time * 6f) * 0.35f)
+                : new Color(1f, 0.4f, 0.45f, 0.65f);
+            DrawCard(new Rect(x, y, w, h), new Color(0.12f, 0.05f, 0.08f, 0.92f), borderColor);
             DrawPanel(new Rect(x + 1f, y + 1f, w - 2f, 2.5f), new Color(1f, 0.5f, 0.4f, 0.85f));
 
             var bossNameStyle = new GUIStyle(scoreLabelStyle)
@@ -650,14 +691,57 @@ namespace PenguinRun
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.MiddleCenter,
             };
+            var pulse = world.Lives <= 1 ? 1f + Mathf.Sin(Time.time * 8f) * 0.12f : 1f;
             var x = area.x;
             for (var i = 0; i < world.MaxLives; i++)
             {
-                heartStyle.normal.textColor =
-                    i < world.Lives ? ColorDanger : new Color(0.25f, 0.32f, 0.42f, 0.6f);
-                GUI.Label(new Rect(x, area.y, 30f, 34f), "\u2665", heartStyle);
+                var filled = i < world.Lives;
+                heartStyle.normal.textColor = filled
+                    ? new Color(ColorDanger.r, ColorDanger.g, ColorDanger.b, pulse)
+                    : new Color(0.25f, 0.32f, 0.42f, 0.6f);
+                var heartW = filled && world.Lives <= 1 ? 32f * pulse : 30f;
+                GUI.Label(new Rect(x, area.y, heartW, 34f), "\u2665", heartStyle);
                 x += 30f;
             }
+        }
+
+        private static void DrawSegmentBanner(RunnerHudLayout layout, float timer, SegmentPatternKind kind)
+        {
+            var lw = layout.LogicalWidth;
+            var alpha = Mathf.Clamp01(timer / 1.2f);
+            var isHazard = kind == SegmentPatternKind.HazardRhythm;
+            var label = isHazard ? "危险节奏段" : "奖励冲刺段";
+            var bg = isHazard
+                ? new Color(1f, 0.55f, 0.35f, 0.22f * alpha)
+                : new Color(1f, 0.85f, 0.4f, 0.22f * alpha);
+            var stroke = isHazard ? new Color(1f, 0.55f, 0.35f, 0.75f * alpha) : new Color(1f, 0.85f, 0.4f, 0.75f * alpha);
+            var w = Mathf.Clamp(lw * 0.42f, 280f, 520f);
+            var r = new Rect((lw - w) * 0.5f, 158f, w, 34f);
+            DrawPanel(r, bg);
+            DrawPanel(new Rect(r.x, r.y, r.width, 2f), stroke);
+            var style = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 18,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(1f, 1f, 1f, 0.92f * alpha) },
+            };
+            GUI.Label(r, label, style);
+        }
+
+        private static bool IsPositiveFeedback(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            return text.Contains("完美") || text.Contains("抵消") || text.Contains("反弹") ||
+                   text.Contains("折射") || text.Contains("挡下") || text.Contains("回弹") ||
+                   text.Contains("击破") || text.Contains("碎墙") || text.Contains("里程碑");
+        }
+
+        private static bool IsDamageFeedback(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            return text.Contains("受伤") || text.Contains("击倒") || text.Contains("击中") ||
+                   text.Contains("生命耗尽") || text.Contains("耗尽");
         }
 
         private static void DrawTextShadow(Rect r, string text, GUIStyle style)

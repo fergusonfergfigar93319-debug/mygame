@@ -106,12 +106,35 @@ namespace PenguinRun
         /// <summary>当 boss 战激活时由外部设为 true，暂停障碍生成。</summary>
         public bool SpawnPaused { get; set; }
 
+        private bool pendingSegmentBanner;
+        private SegmentPatternKind pendingSegmentBannerKind;
+
+        public bool TryConsumeSegmentBanner(out SegmentPatternKind kind)
+        {
+            if (!pendingSegmentBanner)
+            {
+                kind = default;
+                return false;
+            }
+
+            kind = pendingSegmentBannerKind;
+            pendingSegmentBanner = false;
+            return true;
+        }
+
         public void Tick(float dt, float effectiveSpeed, float runDistance)
         {
             nextSpawnZ -= effectiveSpeed * dt;
             if (!SpawnPaused && nextSpawnZ < worldTuning.spawnDistance)
             {
                 var modifiers = waveDirector.ConsumeWave();
+                if (waveDirector.LastConsumeWasFirstWave &&
+                    (modifiers.PatternKind == SegmentPatternKind.HazardRhythm ||
+                     modifiers.PatternKind == SegmentPatternKind.RewardRun))
+                {
+                    pendingSegmentBanner = true;
+                    pendingSegmentBannerKind = modifiers.PatternKind;
+                }
                 var lead = Random.Range(worldTuning.spawnLeadMin, worldTuning.spawnLeadMax);
                 SpawnPattern(nextSpawnZ + worldTuning.spawnDistance + lead, modifiers, runDistance);
                 nextSpawnZ += Random.Range(worldTuning.spawnSpacingMin, worldTuning.spawnSpacingMax);

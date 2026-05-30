@@ -2346,7 +2346,10 @@ namespace PenguinRun.Game.UI
             ClosePanel();
             currentPanel = go;
             currentPanelName = panelName;
-            
+
+            if (go != null && go.TryGetComponent<RectTransform>(out var panelRt))
+                panelRt.PlayPanelPopIn();
+
             if (panelLayer != null) panelLayer.SetAsLastSibling();
             if (dockWrap != null) dockWrap.SetAsLastSibling();
             if (snackbar != null) snackbar.transform.SetAsLastSibling();

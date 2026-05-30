@@ -34,6 +34,7 @@ namespace PenguinRun
         private float pauseHoldUI;
         private bool waitingForGuidedReaction;
         private float manualDashCooldownTimer;
+        private int lastLifeCount = 3;
 
         public RunnerGameController(
             RunnerTuning tuning,
@@ -58,11 +59,11 @@ namespace PenguinRun
 
             var waveDirector = new SegmentWaveDirector(config.MapTheme);
             spawner = new SegmentSpawner(tuning.world, tuning.powerUp, tuning.movement.laneWidth, config, waveDirector, tuning.movement.groundY);
-            motor = new PlayerMotor(playerTransform, runnerAudio, tuning.movement, tuning.powerUp);
+            motor = new PlayerMotor(playerTransform, runnerAudio, tuning.movement, tuning.powerUp, tuning.combat);
             world = new WorldDirector(tuning.world, tuning.pickup);
             pickups = new PickupSystem(tuning.pickup, tuning.powerUp, runnerAudio, config);
-            collisions = new CollisionSystem(runnerAudio);
-            bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth);
+            collisions = new CollisionSystem(runnerAudio, tuning.combat);
+            bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth, tuning.combat);
         }
 
         public bool Running => running;
@@ -98,6 +99,7 @@ namespace PenguinRun
             feedbackTimer = 0f;
             waitingForGuidedReaction = false;
             manualDashCooldownTimer = 0f;
+            lastLifeCount = world.Lives;
 
             if (start)
             {
@@ -239,6 +241,8 @@ namespace PenguinRun
             if (world.Paused) return;
             spawner.SpawnPaused = bossSystem.ShouldPauseSpawning;
             spawner.Tick(dt, effectiveSpeed, world.Distance);
+            TickSegmentBanner(dt);
+
             if (spawner.TryConsumeSlideGateTutorial(out var slideTutorial))
             {
                 feedbackText = slideTutorial;
@@ -309,33 +313,40 @@ namespace PenguinRun
                     spawner.SpawnBossPrelude(world.Distance, nextDef);
                     feedbackText = $"⚠ 前方高能：{nextDef.DisplayName} 即将出现！\n{nextDef.SignatureMechanic}";
                     feedbackTimer = 3.0f;
-                    onScreenFlash?.Invoke(new Color(0.8f, 0.45f, 0.08f, 0.15f), 0.4f);
+                    EmitRunFeedback(RunFeedbackKind.BossWarning);
                 }
             }
 
             if (bossHitsPlayer && world.HitInvulnerabilityTimer <= 0f)
             {
-                onScreenFlash?.Invoke(new Color(1f, 0.2f, 0.15f, 0.55f), 0.35f);
-                if (world.TryConsumeFishBomb())
+                var hadShield = world.ShieldTimer > 0f;
+                var outcome = RunnerHitResolver.TryResolveBossHit(world, tuning.combat, hadShield);
+                if (!string.IsNullOrEmpty(outcome.FeedbackText))
                 {
-                    world.SetHitInvulnerability(1.2f);
-                    feedbackText = "鱼弹反弹 BOSS 攻击！";
-                    feedbackTimer = 1f;
+                    feedbackText = outcome.FeedbackText;
+                    feedbackTimer = outcome.FeedbackDuration;
                 }
-                else
+
+                if (outcome.InvulnerabilitySeconds > 0f)
+                    world.SetHitInvulnerability(outcome.InvulnerabilitySeconds);
+
+                if (outcome.Kind == HitOutcomeKind.BlockedByDefense)
                 {
-                    world.SetHitInvulnerability(2f);
-                    if (world.LoseOneLife())
-                    {
-                        feedbackText = "被 BOSS 击倒";
-                        feedbackTimer = 1.4f;
-                        runnerAudio.PlayCrash();
-                        pulseHaptic?.Invoke();
-                        onScreenFlash?.Invoke(new Color(1f, 0.05f, 0.02f, 0.7f), 0.6f);
-                        running = false;
-                        gameOver = true;
-                        return;
-                    }
+                    EmitRunFeedback(RunFeedbackKind.DefenseBlock);
+                }
+                else if (outcome.Kind == HitOutcomeKind.GameOver)
+                {
+                    EmitRunFeedback(RunFeedbackKind.BossDeath);
+                    running = false;
+                    gameOver = true;
+                    return;
+                }
+                else if (outcome.Kind == HitOutcomeKind.Damage)
+                {
+                    character.TriggerHurtFlash();
+                    runnerAudio.PlayPlayerHurt();
+                    pulseHaptic?.Invoke();
+                    EmitRunFeedback(RunFeedbackKind.BossHit);
                 }
             }
 
@@ -359,6 +370,7 @@ namespace PenguinRun
                     motor.PlayerY,
                     groundY,
                     motor.SlideTimer,
+                    world.DashTimer,
                     world,
                     spawner,
                     spawner.obstacles,
@@ -366,19 +378,80 @@ namespace PenguinRun
                     ref feedbackText,
                     ref feedbackTimer,
                     pulseHaptic,
-                    motor);
+                    motor,
+                    () => EmitRunFeedback(RunFeedbackKind.PerfectDodge));
+
+            if (world.Lives < lastLifeCount)
+            {
+                character.TriggerHurtFlash();
+                lastLifeCount = world.Lives;
+            }
 
             // 非致命伤害闪屏
             if (!gameOverNow && world.HitInvulnerabilityTimer > invulnBeforeCollision + 0.01f)
             {
-                onScreenFlash?.Invoke(new Color(1f, 0.35f, 0.2f, 0.4f), 0.28f);
+                EmitRunFeedback(RunFeedbackKind.ObstacleDamage);
             }
 
             if (gameOverNow)
             {
-                onScreenFlash?.Invoke(new Color(1f, 0.1f, 0.05f, 0.65f), 0.45f);
+                EmitRunFeedback(RunFeedbackKind.ObstacleDeath);
                 running = false;
                 gameOver = true;
+            }
+        }
+
+        public float SegmentBannerTimer => segmentBannerTimer;
+        public SegmentPatternKind SegmentBannerKind => segmentBannerKind;
+
+        private float segmentBannerTimer;
+        private SegmentPatternKind segmentBannerKind;
+
+        private void TickSegmentBanner(float dt)
+        {
+            segmentBannerTimer = Mathf.Max(0f, segmentBannerTimer - dt);
+            if (!spawner.TryConsumeSegmentBanner(out var kind)) return;
+            segmentBannerKind = kind;
+            segmentBannerTimer = 1.2f;
+            EmitRunFeedback(kind == SegmentPatternKind.HazardRhythm
+                ? RunFeedbackKind.SegmentHazard
+                : RunFeedbackKind.SegmentReward);
+        }
+
+        private void EmitRunFeedback(RunFeedbackKind kind)
+        {
+            switch (kind)
+            {
+                case RunFeedbackKind.PerfectDodge:
+                    onScreenFlash?.Invoke(new Color(1f, 0.85f, 0.2f, 0.22f), 0.25f);
+                    character.TriggerPerfectDodgeBurst();
+                    break;
+                case RunFeedbackKind.ObstacleDamage:
+                    onScreenFlash?.Invoke(new Color(1f, 0.35f, 0.2f, 0.4f), 0.28f);
+                    break;
+                case RunFeedbackKind.ObstacleDeath:
+                    onScreenFlash?.Invoke(new Color(1f, 0.1f, 0.05f, 0.65f), 0.45f);
+                    break;
+                case RunFeedbackKind.BossWarning:
+                    onScreenFlash?.Invoke(new Color(0.8f, 0.45f, 0.08f, 0.15f), 0.4f);
+                    break;
+                case RunFeedbackKind.BossHit:
+                    onScreenFlash?.Invoke(new Color(1f, 0.2f, 0.15f, 0.55f), 0.35f);
+                    break;
+                case RunFeedbackKind.BossDeath:
+                    onScreenFlash?.Invoke(new Color(1f, 0.05f, 0.02f, 0.7f), 0.6f);
+                    runnerAudio.PlayCrash();
+                    pulseHaptic?.Invoke();
+                    break;
+                case RunFeedbackKind.DefenseBlock:
+                    onScreenFlash?.Invoke(new Color(0.4f, 0.85f, 1f, 0.28f), 0.22f);
+                    break;
+                case RunFeedbackKind.SegmentHazard:
+                    onScreenFlash?.Invoke(new Color(1f, 0.55f, 0.35f, 0.12f), 0.35f);
+                    break;
+                case RunFeedbackKind.SegmentReward:
+                    onScreenFlash?.Invoke(new Color(1f, 0.85f, 0.4f, 0.12f), 0.35f);
+                    break;
             }
         }
 

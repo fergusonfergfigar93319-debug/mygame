@@ -477,7 +477,19 @@ namespace PenguinRun.Game.UI
             t.color = fg;
             t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             t.raycastTarget = false;
+            WireClickFeedback(btn);
             return btn;
+        }
+
+        /// <summary>为按钮点击绑定缩放反馈（DOTween 或 ClickScaleFallback）。</summary>
+        public static void WireClickFeedback(Button btn)
+        {
+            if (btn == null) return;
+#if !DOTWEEN
+            if (!btn.TryGetComponent<ClickScaleFallback>(out _))
+                btn.gameObject.AddComponent<ClickScaleFallback>();
+#endif
+            btn.onClick.AddListener(() => btn.transform.PlayClickBounce());
         }
 
         public static Image CreateProgressFill(string name, Transform parent, Color trackColor, Color fillColor, out Image fill)

@@ -9,15 +9,17 @@ namespace PenguinRun
 
         private readonly RunnerMovementTuning tuning;
         private readonly RunnerPowerUpTuning powerUpTuning;
+        private readonly RunnerCombatTuning combatTuning;
         private readonly RunnerAudio audio;
         private readonly Transform player;
 
-        public PlayerMotor(Transform player, RunnerAudio audio, RunnerMovementTuning tuning, RunnerPowerUpTuning powerUpTuning)
+        public PlayerMotor(Transform player, RunnerAudio audio, RunnerMovementTuning tuning, RunnerPowerUpTuning powerUpTuning, RunnerCombatTuning combatTuning)
         {
             this.player = player;
             this.audio = audio;
             this.tuning = tuning;
             this.powerUpTuning = powerUpTuning;
+            this.combatTuning = combatTuning;
             Lane = RunnerLane.Center;
             PlayerY = tuning.groundY;
             Grounded = true;
@@ -33,7 +35,7 @@ namespace PenguinRun
         /// <summary>本局已使用的二段跳次数（CloudWalk 期间允许 1 次）。</summary>
         public bool DoubleJumpUsed { get; private set; }
 
-        /// <summary>最近一次跳跃后的剩余 perfect-dodge 检测窗口（秒）。在 0.25s 内闪过障碍则记完美闪避。</summary>
+        /// <summary>最近一次跳跃/滑铲后的 perfect-dodge 检测窗口（秒）。在窗口内闪过障碍则记完美闪避。</summary>
         public float PerfectActionWindow { get; private set; }
 
         /// <summary>最近一次执行的关键动作类型：用于判定 perfect dodge。</summary>
@@ -76,7 +78,7 @@ namespace PenguinRun
                         feedbackText = "快速下落";
                         feedbackTimer = 0.45f;
                         LastCriticalAction = RunnerAction.Slide;
-                        PerfectActionWindow = 0.28f;
+                        PerfectActionWindow = combatTuning.perfectWindowAirSlideSeconds;
                         audio.PlaySlide();
                     }
                     else if (Grounded)
@@ -85,7 +87,7 @@ namespace PenguinRun
                         feedbackText = "滑铲";
                         feedbackTimer = 0.45f;
                         LastCriticalAction = RunnerAction.Slide;
-                        PerfectActionWindow = 0.32f;
+                        PerfectActionWindow = combatTuning.perfectWindowSlideSeconds;
                         audio.PlaySlide();
                     }
                     break;
@@ -161,7 +163,7 @@ namespace PenguinRun
                 feedbackText = "跳跃";
                 feedbackTimer = 0.45f;
                 LastCriticalAction = RunnerAction.Jump;
-                PerfectActionWindow = 0.32f;
+                PerfectActionWindow = combatTuning.perfectWindowJumpSeconds;
                 audio.PlayJump();
             }
             else if (glideTimerSeconds > 0f && !DoubleJumpUsed)
@@ -172,7 +174,7 @@ namespace PenguinRun
                 feedbackText = "二段跳";
                 feedbackTimer = 0.5f;
                 LastCriticalAction = RunnerAction.Jump;
-                PerfectActionWindow = 0.28f;
+                PerfectActionWindow = combatTuning.perfectWindowDoubleJumpSeconds;
                 audio.PlayJump();
             }
             else

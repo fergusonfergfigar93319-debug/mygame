@@ -95,6 +95,7 @@
 - **跑道布景可读性（2026-05）：** `PlayableViewCorridor` + `SceneryLateralOffset` 随弯道对齐；天空云/光柱远场化，彩虹改为两侧细条；近场走廊内隐藏灯/云/光柱/远山；验收：16:9 **SkyFlight** 开局 10 s 中央可见三车道与前方障碍；侧向无大块实心遮挡。
 - **Unity 存档 / UI / 排行榜闭环（2026-05）：** 「幸运起手令」开局消耗 pending 并给予 +1 生命（与 `ShopStore` / `RunnerGameController` / `WorldDirector` 接通）；移除主菜单与 `PanelHeader` 调试日志；删除未使用的 `SeenCampUnlockNotice`、`LeaderboardStore.GetBestEntry`/`GetAverageTotalScore`、`RunRecords.GetAll`/`Clear`；`DifficultyPreset.ScoreMultiplier` 在 `RunOutcomeRouter.Apply` 与结算得分相乘；排行榜增加「全部榜单 / 今日 challenge 桶」筛选、`TryGetPlayerPeakMetrics` +「我」峰值行高亮；图鉴沿用 5 条剧情进度条，新增 Boss 战绩区块（读 `PlayerSave.HasDefeatedBoss`）、解锁阈值集中到 `CodexUnlocks` 常量；极地直觉 UI 文案使用 `PolarPowerUpChancePerLevel = 0.025` 与 SegmentSpawner 对齐；任务面板领奖后刷新头部鱼干胶囊（`PanelHeader.RefreshCurrency`）。
 - **Boss VFX 收口（2026-05）：** 修复 `BossPatternVfxPlayer.End()` 双重 Destroy 导致 FX 对象池失效；`SegmentSpawner` 补齐 5 处 `ObstacleKind` 标签；`EndPattern` 清零跨招震屏残留；SalvoOrb 动画去 O(N²)；雾堤/珊瑚 Boss 增加 `Head` 锚点使 `StrikeHeadPitch` 生效；6 招 Strike SFX 复用现有 clip + 音调/叠层差异化；Boss BGM 专属文件占位状态固化于 credits。
+- **逻辑判定 / 反馈 / UI 三向优化（2026-05）：** `CollisionSystem` 读取 `ObstacleBehavior.IsCollidable`；冲刺接好 `ShatterWall.TryShatter`；`ObstacleColliderSpec.IsThunderFeatherDestructible` 替代尺寸启发式；`RunnerHitResolver` + `RunnerCombatTuning` 集中无敌与 Boss 闪避常量；`EmitRunFeedback` 统一闪屏；`PenguinCharacter` 受击 tint / 完美闪避环；危险/奖励片段 HUD 横幅；`RunnerHud` 倍率 tier 条与反馈胶囊分色；OpenUPM 安装 DOTween + `UiBuilder.WireClickFeedback` / 面板 `PlayPanelPopIn` / 结算 `DOScale`。
 
 ## 已执行：Boss 战与跑酷体验优化（Unity 版本）
 

@@ -6,12 +6,18 @@ namespace PenguinRun
     /// </summary>
     public readonly struct ObstacleColliderSpec
     {
-        public ObstacleColliderSpec(bool isLow, float halfDx, float halfDz, float feetClearanceAboveRoot = 999f)
+        public ObstacleColliderSpec(
+            bool isLow,
+            float halfDx,
+            float halfDz,
+            float feetClearanceAboveRoot = 999f,
+            bool isThunderFeatherDestructible = false)
         {
             IsLow = isLow;
             HalfDx = halfDx;
             HalfDz = halfDz;
             FeetClearanceAboveRoot = feetClearanceAboveRoot;
+            IsThunderFeatherDestructible = isThunderFeatherDestructible;
         }
 
         public bool IsLow { get; }
@@ -19,7 +25,10 @@ namespace PenguinRun
         public float HalfDz { get; }
         public float FeetClearanceAboveRoot { get; }
 
-        public static ObstacleColliderSpec SmallJumpable => new(false, 0.50f, 0.44f, 0.78f);
+        /// <summary>雷羽冲刺态下可粉碎的小型可跳障碍。</summary>
+        public bool IsThunderFeatherDestructible { get; }
+
+        public static ObstacleColliderSpec SmallJumpable => new(false, 0.50f, 0.44f, 0.78f, true);
 
         public static ObstacleColliderSpec LowSlideGate => new(true, 0.45f, 0.32f, 0.48f);
 
