@@ -62,7 +62,7 @@ namespace PenguinRun
             spawner = new SegmentSpawner(tuning.world, tuning.powerUp, tuning.movement.laneWidth, config, waveDirector, tuning.movement.groundY);
             motor = new PlayerMotor(playerTransform, runnerAudio, tuning.movement, tuning.powerUp, tuning.combat);
             world = new WorldDirector(tuning.world, tuning.pickup);
-            pickups = new PickupSystem(tuning.pickup, tuning.powerUp, runnerAudio, config);
+            pickups = new PickupSystem(tuning.pickup, tuning.powerUp, config);
             collisions = new CollisionSystem(runnerAudio, tuning.combat);
             bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth, tuning.combat);
         }

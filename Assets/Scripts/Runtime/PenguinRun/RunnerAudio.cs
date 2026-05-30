@@ -26,6 +26,7 @@ namespace PenguinRun
             EventBus.On(GameEvents.PlayerLanded, OnPlayerLanded);
             EventBus.On(GameEvents.PlayerSlid, OnPlayerSlid);
             EventBus.On(GameEvents.PerfectDodge, OnPerfectDodge);
+            EventBus.On<PowerUpKind>(GameEvents.PowerUpCollected, OnPowerUpCollected);
             EventBus.On(GameEvents.BossDefeated, OnBossDefeated);
         }
 
@@ -36,6 +37,7 @@ namespace PenguinRun
             EventBus.Off(GameEvents.PlayerLanded, OnPlayerLanded);
             EventBus.Off(GameEvents.PlayerSlid, OnPlayerSlid);
             EventBus.Off(GameEvents.PerfectDodge, OnPerfectDodge);
+            EventBus.Off<PowerUpKind>(GameEvents.PowerUpCollected, OnPowerUpCollected);
             EventBus.Off(GameEvents.BossDefeated, OnBossDefeated);
         }
 
@@ -49,6 +51,7 @@ namespace PenguinRun
 
         private void OnPerfectDodge() => PlayPerfectDodge();
 
+        private void OnPowerUpCollected(PowerUpKind kind) => PlayPowerUp(kind);
         private void OnBossDefeated() => PlayBossDefeat();
 
         public void Initialize(

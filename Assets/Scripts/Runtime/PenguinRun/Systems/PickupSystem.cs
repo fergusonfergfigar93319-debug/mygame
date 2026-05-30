@@ -9,14 +9,12 @@ namespace PenguinRun
     {
         private readonly RunnerPickupTuning pickupTuning;
         private readonly RunnerPowerUpTuning powerUpTuning;
-        private readonly RunnerAudio audio;
         private readonly RunnerSessionConfig config;
 
-        public PickupSystem(RunnerPickupTuning pickupTuning, RunnerPowerUpTuning powerUpTuning, RunnerAudio audio, RunnerSessionConfig config)
+        public PickupSystem(RunnerPickupTuning pickupTuning, RunnerPowerUpTuning powerUpTuning, RunnerSessionConfig config)
         {
             this.pickupTuning = pickupTuning;
             this.powerUpTuning = powerUpTuning;
-            this.audio = audio;
             this.config = config;
         }
 
@@ -46,7 +44,7 @@ namespace PenguinRun
                 feedbackText = nextCombo >= 3 ? $"金币连击 x{nextCombo}" : "+1 金币";
                 feedbackTimer = 0.55f;
                 EventBus.Emit(GameEvents.CoinCollected, nextCombo);
-                Object.Destroy(c);
+                c.SetActive(false); // 池化回收由 SegmentSpawner.Tick 处理
                 coinObjs.RemoveAt(i);
             }
         }
@@ -82,7 +80,7 @@ namespace PenguinRun
 
                 ActivatePowerUp(powerUps[power], world, ref feedbackText);
                 feedbackTimer = 0.85f;
-                audio.PlayPowerUp(powerUps[power]);
+                EventBus.Emit(GameEvents.PowerUpCollected, powerUps[power]);
 
                 Object.Destroy(power);
                 powerUps.Remove(power);

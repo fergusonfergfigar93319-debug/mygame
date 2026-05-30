@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using PenguinRun.Core;
 using PenguinRun.Game;
 using PenguinRun.Game.Save;
 using UnityEngine;
@@ -52,6 +53,8 @@ namespace PenguinRun
         private readonly Dictionary<string, GameObject> modelPrefabCache = new();
         private bool slideGateTutorialPending;
 
+        private readonly GameObjectPool coinPool;
+
         public SegmentSpawner(
             RunnerWorldTuning worldTuning,
             RunnerPowerUpTuning powerUpTuning,
@@ -67,6 +70,8 @@ namespace PenguinRun
             this.waveDirector = waveDirector;
             this.baseGroundY = baseGroundY;
             nextSpawnZ = worldTuning.initialSpawnZ;
+
+            coinPool = new GameObjectPool(BuildFishSnackVisual, null, 60, 200, recycleOnFull: true);
         }
 
         public readonly List<GameObject> obstacles = new();
@@ -160,6 +165,18 @@ namespace PenguinRun
             TickObstacleBehaviors(dt, runDistance);
             SyncObstacleHeights(runDistance);
 
+            // ── 回收被 PickupSystem 设为非活跃的金币 ──────────────
+            for (var i = coins.Count - 1; i >= 0; i--)
+            {
+                var c = coins[i];
+                if (c == null || !c.activeSelf)
+                {
+                    if (c != null) coinPool.Return(c);
+                    coinYDelta.Remove(c);
+                    coins.RemoveAt(i);
+                }
+            }
+
             for (var i = coins.Count - 1; i >= 0; i--)
             {
                 var c = coins[i];
@@ -177,8 +194,8 @@ namespace PenguinRun
                 SyncCoinHeight(c, runDistance);
                 if (c.transform.position.z < worldTuning.despawnZ)
                 {
-                    Object.Destroy(c);
                     coinYDelta.Remove(c);
+                    coinPool.Return(c);
                     coins.RemoveAt(i);
                 }
             }
@@ -301,7 +318,7 @@ namespace PenguinRun
             rollingObstacles.Clear();
             enemyNpcs.Clear();
 
-            foreach (var c in coins) Object.Destroy(c);
+            foreach (var c in coins) coinPool.Return(c);
             coins.Clear();
 
             foreach (var power in powerUps.Keys) Object.Destroy(power);
@@ -1701,7 +1718,8 @@ namespace PenguinRun
 
         private void SpawnCoin(float z, RunnerLane coinLane, float runDistance, float bonusY = 0f)
         {
-            var coin = BuildFishSnackVisual();
+            var coin = coinPool.Rent();
+            if (coin == null) return;
             var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
             coin.transform.position = new Vector3(coinLane.ToX(laneWidth), surface + CoinHoverHeight + bonusY, z);
             coins.Add(coin);
