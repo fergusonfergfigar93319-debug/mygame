@@ -5,11 +5,11 @@ using UnityEngine;
 namespace PenguinRun.Core
 {
     /// <summary>
-    /// 轻量事件总线：零分配发布-订阅，解耦各系统间通信。
+    /// 轻量事件总线：热路径无消息对象分配，解耦各系统间通信。
     ///
     /// 约束：
     /// - 同一 key 只能注册一种签名（Action 或 Action&lt;T&gt;），混用会抛异常。
-    /// - Emit 回调中调用 Off 是安全的（快照调用）。
+    /// - Emit 回调中调用 Off 是安全的（delegate 快照调用）。
     /// - 场景切换时应调用 Clear() 清理所有监听。
     /// </summary>
     public static class EventBus

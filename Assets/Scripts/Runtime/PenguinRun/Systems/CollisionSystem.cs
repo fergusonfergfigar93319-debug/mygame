@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using PenguinRun.Core;
 using UnityEngine;
 
 namespace PenguinRun
@@ -77,7 +78,7 @@ namespace PenguinRun
                         world.AddPerfectDodge();
                         feedbackText = "\u26A1 完美滑铲！+25";
                         feedbackTimer = 0.7f;
-                        audio.PlayPerfectDodge();
+                        EventBus.Emit(GameEvents.PerfectDodge);
                         onPerfectDodge?.Invoke();
                     }
                     else if (clearedByJump && motor.LastCriticalAction == RunnerAction.Jump)
@@ -86,7 +87,7 @@ namespace PenguinRun
                         world.AddPerfectDodge();
                         feedbackText = "\u26A1 完美跳跃！+25";
                         feedbackTimer = 0.7f;
-                        audio.PlayPerfectDodge();
+                        EventBus.Emit(GameEvents.PerfectDodge);
                         onPerfectDodge?.Invoke();
                     }
                 }
@@ -139,7 +140,7 @@ namespace PenguinRun
                     pulseHaptic?.Invoke();
                     break;
                 case HitOutcomeKind.Damage:
-                    audio.PlayPlayerHurt();
+                    EventBus.Emit(GameEvents.PlayerHurt);
                     pulseHaptic?.Invoke();
                     break;
                 case HitOutcomeKind.GameOver:

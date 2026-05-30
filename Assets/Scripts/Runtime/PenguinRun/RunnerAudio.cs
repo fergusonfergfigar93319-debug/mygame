@@ -18,7 +18,6 @@ namespace PenguinRun
         private string ambienceTrack = PlayerSave.DefaultAmbienceTrack;
         private string sfxStyle = PlayerSave.DefaultSfxStyle;
         private string baseRunClipName;
-        private int lastCoinCombo;
 
         private void OnEnable()
         {
@@ -40,11 +39,7 @@ namespace PenguinRun
             EventBus.Off(GameEvents.BossDefeated, OnBossDefeated);
         }
 
-        private void OnCoinCollected(int count)
-        {
-            lastCoinCombo = Mathf.Min(lastCoinCombo + count, 36);
-            PlayCoin(lastCoinCombo);
-        }
+        private void OnCoinCollected(int combo) => PlayCoin(combo);
 
         private void OnPlayerHurt() => PlayPlayerHurt();
 

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using PenguinRun.Core;
 using PenguinRun.Game;
 using UnityEngine;
 
@@ -44,7 +45,7 @@ namespace PenguinRun
 
                 feedbackText = nextCombo >= 3 ? $"金币连击 x{nextCombo}" : "+1 金币";
                 feedbackTimer = 0.55f;
-                audio.PlayCoin(nextCombo);
+                EventBus.Emit(GameEvents.CoinCollected, nextCombo);
                 Object.Destroy(c);
                 coinObjs.RemoveAt(i);
             }

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using PenguinRun.Core;
 using PenguinRun.Game;
 using PenguinRun.Game.Save;
 using UnityEngine;
@@ -331,7 +332,7 @@ namespace PenguinRun
                     ? $"★ 已击败 {boss.Definition.DisplayName}！速杀 {speedTier} 档 +{speedFish} 鱼干 +{speedScore} 分"
                     : $"★ 已击败 {boss.Definition.DisplayName}！+{fishReward} 鱼干";
                 feedbackTimer = 2.2f;
-                audio.PlayBossDefeat();
+                EventBus.Emit(GameEvents.BossDefeated);
                 MarkDefeatRewardPending(fishReward, scoreReward, speedTier, speedFish, speedScore);
             }
             else

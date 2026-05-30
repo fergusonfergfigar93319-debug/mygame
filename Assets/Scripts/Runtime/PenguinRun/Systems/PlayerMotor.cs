@@ -1,3 +1,4 @@
+using PenguinRun.Core;
 using UnityEngine;
 
 namespace PenguinRun
@@ -79,7 +80,7 @@ namespace PenguinRun
                         feedbackTimer = 0.45f;
                         LastCriticalAction = RunnerAction.Slide;
                         PerfectActionWindow = combatTuning.perfectWindowAirSlideSeconds;
-                        audio.PlaySlide();
+                        EventBus.Emit(GameEvents.PlayerSlid);
                     }
                     else if (Grounded)
                     {
@@ -88,7 +89,7 @@ namespace PenguinRun
                         feedbackTimer = 0.45f;
                         LastCriticalAction = RunnerAction.Slide;
                         PerfectActionWindow = combatTuning.perfectWindowSlideSeconds;
-                        audio.PlaySlide();
+                        EventBus.Emit(GameEvents.PlayerSlid);
                     }
                     break;
                 case RunnerAction.Left:
@@ -119,7 +120,7 @@ namespace PenguinRun
                 coyoteTimer = tuning.coyoteTime;
                 if (!wasGrounded)
                 {
-                    audio.PlayLand();
+                    EventBus.Emit(GameEvents.PlayerLanded);
                     DoubleJumpUsed = false;
                 }
             }

@@ -1,3 +1,4 @@
+using PenguinRun.Core;
 using PenguinRun.Game;
 using PenguinRun.Game.Shop;
 using UnityEngine;
@@ -344,7 +345,7 @@ namespace PenguinRun
                 else if (outcome.Kind == HitOutcomeKind.Damage)
                 {
                     character.TriggerHurtFlash();
-                    runnerAudio.PlayPlayerHurt();
+                    EventBus.Emit(GameEvents.PlayerHurt);
                     pulseHaptic?.Invoke();
                     EmitRunFeedback(RunFeedbackKind.BossHit);
                 }

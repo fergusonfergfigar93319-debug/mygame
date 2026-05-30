@@ -482,13 +482,14 @@ namespace PenguinRun
             var motor = game.Motor;
             var playerPos = player.transform.position;
 
-            // 收集金币 → 粒子 + 事件
+            // ── 以下仅负责粒子发射，音效由行为源通过 EventBus 驱动 ──
+
+            // 收集金币粒子（音效由 PickupSystem → EventBus → RunnerAudio）
             if (world.Coins > lastCoinCount)
             {
                 var diff = world.Coins - lastCoinCount;
                 var burstCount = Mathf.Min(diff * 2, 8);
                 particlePool.Emit(playerPos, new Color(1f, 0.9f, 0.3f), burstCount, 1.5f, 0.4f, true);
-                EventBus.Emit(GameEvents.CoinCollected, diff);
                 lastCoinCount = world.Coins;
             }
             else if (world.Coins < lastCoinCount)
@@ -496,11 +497,10 @@ namespace PenguinRun
                 lastCoinCount = world.Coins;
             }
 
-            // 受伤 → 粒子 + 事件
+            // 受伤粒子（音效由 CollisionSystem/Boss → EventBus → RunnerAudio）
             if (world.Lives < lastLives)
             {
                 particlePool.EmitBurst(playerPos, new Color(1f, 0.2f, 0.1f), 12, 4f, 0.7f);
-                EventBus.Emit(GameEvents.PlayerHurt);
                 EventBus.Emit(GameEvents.LivesChanged, world.Lives);
                 lastLives = world.Lives;
             }
@@ -511,29 +511,26 @@ namespace PenguinRun
                 lastLives = world.Lives;
             }
 
-            // 完美闪避 → 粒子 + 事件
+            // 完美闪避粒子（音效由 CollisionSystem → EventBus → RunnerAudio）
             if (world.PerfectDodges > lastPerfectDodges)
             {
                 particlePool.EmitBurst(playerPos, new Color(0.4f, 0.85f, 1f), 8, 3f, 0.6f);
-                EventBus.Emit(GameEvents.PerfectDodge);
                 lastPerfectDodges = world.PerfectDodges;
             }
 
-            // 着陆
+            // 着陆粒子（音效由 PlayerMotor → EventBus → RunnerAudio）
             if (motor.Grounded && !wasGroundedLastFrame)
             {
                 var groundPos = new Vector3(playerPos.x, tuning.movement.groundY + 0.02f, playerPos.z);
                 particlePool.Emit(groundPos, new Color(0.8f, 0.95f, 1f), 5, 1.2f, 0.35f, false);
-                EventBus.Emit(GameEvents.PlayerLanded);
             }
             wasGroundedLastFrame = motor.Grounded;
 
-            // 滑铲
+            // 滑铲粒子（音效由 PlayerMotor.ApplyAction → EventBus → RunnerAudio）
             if (motor.SlideTimer > 0f && !wasDodgingLastFrame)
             {
                 var slidePos = new Vector3(playerPos.x, tuning.movement.groundY + 0.02f, playerPos.z - 0.5f);
                 particlePool.Emit(slidePos, new Color(0.6f, 0.9f, 1f), 3, 0.8f, 0.3f, false);
-                EventBus.Emit(GameEvents.PlayerSlid);
             }
             wasDodgingLastFrame = motor.SlideTimer > 0f;
         }
@@ -607,10 +604,9 @@ namespace PenguinRun
                 TriggerScreenFlash(new Color(1f, 0.85f, 0.2f, 0.45f), 0.55f);
                 wasBossDefeated = true;
 
-                // 金色粒子爆发 + 事件
+                // 金色粒子爆发（音效由 BossSystem → EventBus → RunnerAudio）
                 if (player != null)
                     particlePool.EmitBurst(player.transform.position, new Color(1f, 0.85f, 0.2f), 30, 6f, 1.2f);
-                EventBus.Emit(GameEvents.BossDefeated);
             }
             else if (!isDefeated)
             {

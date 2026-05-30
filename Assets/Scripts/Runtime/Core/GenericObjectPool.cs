@@ -111,6 +111,7 @@ namespace PenguinRun.Core
 
     /// <summary>
     /// 纯 GameObject 对象池（无 Component 约束）。
+    /// recycleOnFull=true → VFX 模式（池满回收最旧）；false → 安全模式（池满拒绝+告警）。
     /// </summary>
     public sealed class GameObjectPool
     {
@@ -119,14 +120,17 @@ namespace PenguinRun.Core
         private readonly Func<GameObject> factory;
         private readonly Transform parent;
         private readonly int maxCapacity;
+        private readonly bool recycleOnFull;
 
         public IReadOnlyList<GameObject> Active => active;
 
-        public GameObjectPool(Func<GameObject> factory, Transform parent, int initialCapacity = 32, int maxCapacity = 256)
+        public GameObjectPool(Func<GameObject> factory, Transform parent,
+            int initialCapacity = 32, int maxCapacity = 256, bool recycleOnFull = true)
         {
             this.factory = factory;
             this.parent = parent;
             this.maxCapacity = maxCapacity;
+            this.recycleOnFull = recycleOnFull;
 
             for (var i = 0; i < initialCapacity; i++)
             {
@@ -149,11 +153,16 @@ namespace PenguinRun.Core
                 obj = factory();
                 obj.transform.SetParent(parent, false);
             }
-            else
+            else if (recycleOnFull)
             {
                 obj = active[0];
                 active.RemoveAt(0);
                 obj.SetActive(false);
+            }
+            else
+            {
+                Debug.LogWarning($"GameObjectPool: pool exhausted ({maxCapacity}), refusing to rent.");
+                return null;
             }
 
             obj.SetActive(true);
