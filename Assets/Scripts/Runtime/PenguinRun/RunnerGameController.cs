@@ -5,6 +5,14 @@ using UnityEngine;
 
 namespace PenguinRun
 {
+    /// <summary>开局倒计时 overlay 子阶段（FSM Countdown 内）。</summary>
+    public enum EntrancePhase
+    {
+        None,
+        Numbers,
+        GoText,
+    }
+
     /// <summary>
     /// Owns one run lifecycle: input → simulation → world advance expectations are ordered by <see cref="PenguinRunnerGame"/>.
     /// </summary>
@@ -35,6 +43,10 @@ namespace PenguinRun
         private bool waitingForGuidedReaction;
         private float manualDashCooldownTimer;
         private int lastLifeCount = 3;
+        private bool entranceSkipped;
+        private EntrancePhase entrancePhase;
+        private float entranceTimer;
+        private int countdownNumber;
 
         public RunnerGameController(
             RunnerTuning tuning,
@@ -64,6 +76,7 @@ namespace PenguinRun
             pickups = new PickupSystem(tuning.pickup, tuning.powerUp, config);
             collisions = new CollisionSystem(runnerAudio, tuning.combat);
             bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth, tuning.combat);
+            stateMachine.OnStateChanged += HandleStateChanged;
         }
 
         /// <summary>开局前（Idle / 倒计时 / 加载），未进入跑酷模拟。</summary>
@@ -78,6 +91,12 @@ namespace PenguinRun
         public bool GameOver => stateMachine.IsGameOver;
 
         public bool IsCountdown => stateMachine.Current == GameStateMachine.State.Countdown;
+
+        public EntrancePhase EntrancePhase => entrancePhase;
+
+        public int CountdownNumber => countdownNumber;
+
+        public float EntranceTimer => entranceTimer;
 
         public bool IsThemeTransition => stateMachine.Current == GameStateMachine.State.ThemeTransition;
 
@@ -117,6 +136,10 @@ namespace PenguinRun
             collisions.Reset();
             stateMachine.ForceTransitionTo(start ? GameStateMachine.State.Running : GameStateMachine.State.Idle);
             finishRequested = false;
+            entranceSkipped = false;
+            entrancePhase = EntrancePhase.None;
+            entranceTimer = 0f;
+            countdownNumber = 3;
             feedbackText = "";
             feedbackTimer = 0f;
             waitingForGuidedReaction = false;
@@ -134,23 +157,107 @@ namespace PenguinRun
                 {
                     Random.InitState((int)(Time.realtimeSinceStartup * 1000f) ^ (int)(System.DateTime.UtcNow.Ticks % int.MaxValue));
                 }
-
-                EventBus.Emit(GameEvents.GameStarted);
             }
 
             spawner.SeedInitialObstacles(world.Distance);
+        }
+
+        /// <summary>开局前 tick：自动启动倒计时或 Idle 等待点击。</summary>
+        public void TickPreRun(float rawDt)
+        {
+            if (stateMachine.Current == GameStateMachine.State.Idle)
+            {
+                if (!entranceSkipped)
+                {
+                    BeginEntranceCountdown();
+                }
+
+                if (stateMachine.Current == GameStateMachine.State.Countdown)
+                {
+                    TickEntranceCountdown(rawDt);
+                }
+                else
+                {
+                    TickIdle(rawDt);
+                }
+
+                return;
+            }
+
+            if (stateMachine.Current == GameStateMachine.State.Countdown)
+            {
+                TickEntranceCountdown(rawDt);
+            }
+        }
+
+        private void TickEntranceCountdown(float rawDt)
+        {
+            var action = input.Poll();
+            if (action != RunnerAction.None)
+            {
+                entrancePhase = EntrancePhase.None;
+                entranceTimer = 0f;
+                ResetRun(true);
+                feedbackText = "出发";
+                feedbackTimer = 0.8f;
+                return;
+            }
+
+            var dt = Mathf.Min(rawDt, 0.05f);
+            feedbackTimer = Mathf.Max(0f, feedbackTimer - dt);
+            character.Animate(dt, false, motor.Grounded, false, false, 0f, 0f,
+                world.DashTimer, world.MagnetTimer, world.ShieldTimer, world.HitInvulnerabilityTimer);
+            runnerAudio.UpdateRunState(0f, false, false, false, false);
+
+            if (entrancePhase == EntrancePhase.None)
+            {
+                entrancePhase = EntrancePhase.Numbers;
+                entranceTimer = 0f;
+                countdownNumber = 3;
+            }
+
+            entranceTimer += dt;
+            if (entrancePhase == EntrancePhase.Numbers)
+            {
+                var step = Mathf.FloorToInt(entranceTimer / 0.7f);
+                var num = 3 - step;
+                if (num <= 0)
+                {
+                    entrancePhase = EntrancePhase.GoText;
+                    entranceTimer = 0f;
+                    countdownNumber = 0;
+                }
+                else
+                {
+                    countdownNumber = num;
+                }
+            }
+            else if (entrancePhase == EntrancePhase.GoText && entranceTimer >= 0.6f)
+            {
+                entrancePhase = EntrancePhase.None;
+                entranceTimer = 0f;
+                ResetRun(true);
+                feedbackText = "出发！";
+                feedbackTimer = 0.8f;
+            }
         }
 
         /// <summary>开局 3-2-1 倒计时开始（Idle → Countdown）。</summary>
         public void BeginEntranceCountdown()
         {
             if (stateMachine.Current != GameStateMachine.State.Idle) return;
+            entrancePhase = EntrancePhase.None;
+            entranceTimer = 0f;
+            countdownNumber = 3;
             stateMachine.TransitionTo(GameStateMachine.State.Countdown);
         }
 
         /// <summary>跳过倒计时 overlay，回到 Idle 等待点击开始。</summary>
         public void SkipEntranceCountdown()
         {
+            entranceSkipped = true;
+            entrancePhase = EntrancePhase.None;
+            entranceTimer = 0f;
             if (stateMachine.Current == GameStateMachine.State.Countdown)
             {
                 stateMachine.ForceTransitionTo(GameStateMachine.State.Idle);
@@ -170,7 +277,6 @@ namespace PenguinRun
         {
             if (stateMachine.Current != GameStateMachine.State.ThemeTransition) return;
             stateMachine.TransitionTo(GameStateMachine.State.Running);
-            EventBus.Emit(GameEvents.ThemeChanged);
         }
 
         /// <summary>死亡演出结束，进入结算 overlay（DeathSequence → GameOver）。</summary>
@@ -178,7 +284,6 @@ namespace PenguinRun
         {
             if (stateMachine.Current != GameStateMachine.State.DeathSequence) return;
             stateMachine.TransitionTo(GameStateMachine.State.GameOver);
-            EventBus.Emit(GameEvents.GameOver);
         }
 
         /// <summary>结束本局并把结果回调给 PenguinRunnerGame（再由它走 RunOutcomeRouter + 场景切换）。</summary>
@@ -213,13 +318,11 @@ namespace PenguinRun
             if (world.Paused)
             {
                 stateMachine.TransitionTo(GameStateMachine.State.Paused);
-                EventBus.Emit(GameEvents.GamePaused);
             }
             else
             {
                 stateMachine.TransitionTo(GameStateMachine.State.Running);
                 SyncBossFightState();
-                EventBus.Emit(GameEvents.GameResumed);
             }
         }
 
@@ -566,6 +669,37 @@ namespace PenguinRun
             else if (!bossSystem.BossActive && stateMachine.Current == GameStateMachine.State.BossFight)
             {
                 stateMachine.TransitionTo(GameStateMachine.State.Running);
+            }
+        }
+
+        private void HandleStateChanged(GameStateMachine.State from, GameStateMachine.State to)
+        {
+            switch (to)
+            {
+                case GameStateMachine.State.Running:
+                    switch (from)
+                    {
+                        case GameStateMachine.State.Idle:
+                        case GameStateMachine.State.Countdown:
+                            EventBus.Emit(GameEvents.GameStarted);
+                            break;
+                        case GameStateMachine.State.Paused:
+                            EventBus.Emit(GameEvents.GameResumed);
+                            break;
+                        case GameStateMachine.State.ThemeTransition:
+                            EventBus.Emit(GameEvents.ThemeChanged);
+                            break;
+                    }
+                    break;
+                case GameStateMachine.State.Paused:
+                    EventBus.Emit(GameEvents.GamePaused);
+                    break;
+                case GameStateMachine.State.ThemeTransition:
+                    EventBus.Emit(GameEvents.SceneTransitionStart);
+                    break;
+                case GameStateMachine.State.GameOver:
+                    EventBus.Emit(GameEvents.GameOver);
+                    break;
             }
         }
 

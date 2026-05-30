@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using PenguinRun.Core;
 using PenguinRun.Game;
 using UnityEngine;
 
@@ -185,8 +186,7 @@ namespace PenguinRun
             RunnerHudLayout layout,
             RunnerSessionConfig config,
             WorldDirector world,
-            bool running,
-            bool gameOver,
+            GameStateMachine.State currentState,
             int scoreOverride,
             string feedbackText,
             float feedbackTimer,
@@ -200,6 +200,9 @@ namespace PenguinRun
 
             var lw = layout.LogicalWidth;
             var lh = layout.LogicalHeight;
+            var isSimulating = currentState == GameStateMachine.State.Running
+                               || currentState == GameStateMachine.State.BossFight;
+            var showIdlePrompt = currentState == GameStateMachine.State.Idle;
 
             if (segmentBannerTimer > 0f)
             {
@@ -227,7 +230,7 @@ namespace PenguinRun
 
             // 得分区域
             GUI.Label(new Rect(ix, iy, 100, 16), "得分", scoreLabelStyle);
-            var isNewBest = running && scoreOverride > config.BestScore;
+            var isNewBest = isSimulating && scoreOverride > config.BestScore;
             var scoreStyle = scoreValueStyle;
             if (isNewBest)
             {
@@ -373,7 +376,7 @@ namespace PenguinRun
             }
 
             // ── 低血量告警 ────────────────────────────────────────
-            if (running && world.Lives <= 1 && !gameOver)
+            if (isSimulating && world.Lives <= 1)
             {
                 var pulse = Mathf.Sin(Time.time * 4.5f) * 0.45f + 0.55f;
                 var warnAlpha = 0.08f * pulse;
@@ -399,28 +402,17 @@ namespace PenguinRun
                     "按 P 继续 · 返回退出本局", centerSubStyle);
             }
 
-            // 中央提示（未开始 / 游戏结束）
-            if (!running)
+            // 中央提示（Idle 等待点击；Countdown overlay 由 PenguinRunnerGame 绘制）
+            if (showIdlePrompt)
             {
                 var titleY = lh * 0.42f;
                 var subY = lh * 0.42f + 56f;
 
-                if (gameOver)
-                {
-                    centerStyle.normal.textColor = ColorDanger;
-                    DrawTextShadow(new Rect(0, titleY, lw, 60f), "游戏结束", centerStyle);
-                    centerSubStyle.normal.textColor = ColorTextSecondary;
-                    GUI.Label(new Rect(0, subY, lw, 36f),
-                        "点击屏幕重来  ·  按返回结算", centerSubStyle);
-                }
-                else
-                {
-                    centerStyle.normal.textColor = ColorAccent;
-                    DrawTextShadow(new Rect(0, titleY, lw, 60f), "点击屏幕开始", centerStyle);
-                    centerSubStyle.normal.textColor = ColorTextSecondary;
-                    GUI.Label(new Rect(0, subY, lw, 36f),
-                        "三条生命  ·  P 暂停  ·  屏幕边缘可结算", centerSubStyle);
-                }
+                centerStyle.normal.textColor = ColorAccent;
+                DrawTextShadow(new Rect(0, titleY, lw, 60f), "点击屏幕开始", centerStyle);
+                centerSubStyle.normal.textColor = ColorTextSecondary;
+                GUI.Label(new Rect(0, subY, lw, 36f),
+                    "三条生命  ·  P 暂停  ·  屏幕边缘可结算", centerSubStyle);
             }
 
             return false;

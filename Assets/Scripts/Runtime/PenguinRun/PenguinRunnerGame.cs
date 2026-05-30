@@ -57,13 +57,7 @@ namespace PenguinRun
         private bool bossSpawnFlashPending;
         private float bossSpawnFlashIntensity;
 
-        // ── 开局倒计时 ──────────────────────────────────────────
-        private enum EntranceState { None, Countdown, GoText }
-        private EntranceState entranceState;
-        private float entranceTimer;
-        private int countdownNumber; // 3, 2, 1
-        private bool entranceComplete;
-
+        // ── 开局倒计时 overlay（逻辑在 RunnerGameController FSM Countdown）──
         // ── 死亡序列 ────────────────────────────────────────────
         private enum DeathState { None, Freeze, FadeRed, ShowResult, WaitingTap }
         private DeathState deathState;
@@ -199,15 +193,9 @@ namespace PenguinRun
                 return;
             }
 
-            if (!entranceComplete && (Input.GetKeyDown(KeyCode.Escape) || IsReturnButtonTouch()))
+            if (game.IsCountdown && (Input.GetKeyDown(KeyCode.Escape) || IsReturnButtonTouch()))
             {
-                // 倒计时中允许跳过
-                if (entranceState != EntranceState.None)
-                {
-                    entranceComplete = true;
-                    entranceState = EntranceState.None;
-                    game.SkipEntranceCountdown();
-                }
+                game.SkipEntranceCountdown();
                 return;
             }
 
@@ -219,7 +207,7 @@ namespace PenguinRun
 
             if (!game.Running)
             {
-                TickEntranceOrIdle(Time.deltaTime);
+                game.TickPreRun(Time.deltaTime);
                 var idleDt = Mathf.Min(Time.deltaTime, 0.05f);
                 UpdateCamera(idleDt);
                 UpdateLaneGuides(idleDt);
@@ -268,61 +256,6 @@ namespace PenguinRun
             CheckBossDefeatEffects();
 
             TryStartThemeTransition();
-        }
-
-        // ── 开局倒计时 / 空闲 ────────────────────────────────────
-        private void TickEntranceOrIdle(float rawDt)
-        {
-            var dt = Mathf.Min(rawDt, 0.05f);
-
-            if (!entranceComplete)
-            {
-                if (entranceState == EntranceState.None)
-                {
-                    entranceState = EntranceState.Countdown;
-                    entranceTimer = 0f;
-                    countdownNumber = 3;
-                    game.BeginEntranceCountdown();
-                }
-
-                entranceTimer += dt;
-                if (entranceState == EntranceState.Countdown)
-                {
-                    // 每 0.7s 倒数一个数字
-                    var step = Mathf.FloorToInt(entranceTimer / 0.7f);
-                    var num = 3 - step;
-                    if (num <= 0)
-                    {
-                        entranceState = EntranceState.GoText;
-                        entranceTimer = 0f;
-                        countdownNumber = 0;
-                    }
-                    else
-                    {
-                        countdownNumber = num;
-                    }
-                }
-                else if (entranceState == EntranceState.GoText)
-                {
-                    if (entranceTimer >= 0.6f)
-                    {
-                        entranceComplete = true;
-                        entranceState = EntranceState.None;
-                        game.ResetRun(true);
-                        game.FeedbackText = "出发！";
-                        game.FeedbackTimer = 0.8f;
-                    }
-                }
-            }
-
-            game.TickIdle(rawDt);
-
-            // 玩家提前点击开始时，同步清除倒计时 overlay 状态
-            if (game.Running)
-            {
-                entranceComplete = true;
-                entranceState = EntranceState.None;
-            }
         }
 
         // ── 死亡序列（FSM DeathSequence → GameOver，本地子阶段管 overlay）──
@@ -1914,7 +1847,7 @@ namespace PenguinRun
             {
                 var layout = ApplyRunnerHudGuiMatrix();
                 var world = game.World;
-                if (hud.Draw(layout, config, world, game.Running, game.GameOver, world.Score, game.FeedbackText, game.FeedbackTimer,
+                if (hud.Draw(layout, config, world, game.CurrentState, world.Score, game.FeedbackText, game.FeedbackTimer,
                         currentTheme,
                         game.Boss, game.IsPaused, game.SegmentBannerTimer, game.SegmentBannerKind))
                 {
@@ -1932,18 +1865,18 @@ namespace PenguinRun
 
         private void DrawEntranceOverlay()
         {
-            if (entranceComplete || entranceState == EntranceState.None) return;
+            if (game == null || !game.IsCountdown || game.EntrancePhase == EntrancePhase.None) return;
 
             var cx = Screen.width * 0.5f;
             var cy = Screen.height * 0.4f;
+            var entranceTimer = game.EntranceTimer;
 
-            if (entranceState == EntranceState.Countdown)
+            if (game.EntrancePhase == EntrancePhase.Numbers)
             {
-                // 3-2-1 大字动画
                 var step = Mathf.FloorToInt(entranceTimer / 0.7f);
-                var tInStep = (entranceTimer - step * 0.7f) / 0.7f; // 0..1
-                var scale = 1f + (1f - tInStep) * 0.5f; // 开始大，逐渐缩小
-                var alpha = 1f - tInStep * 0.6f; // 开始亮，逐渐淡
+                var tInStep = (entranceTimer - step * 0.7f) / 0.7f;
+                var scale = 1f + (1f - tInStep) * 0.5f;
+                var alpha = 1f - tInStep * 0.6f;
 
                 var numStyle = new GUIStyle(GUI.skin.label)
                 {
@@ -1952,9 +1885,9 @@ namespace PenguinRun
                     alignment = TextAnchor.MiddleCenter,
                     normal = { textColor = new Color(1f, 1f, 1f, alpha) },
                 };
-                GUI.Label(new Rect(cx - 100f, cy - 80f, 200f, 160f), countdownNumber.ToString(), numStyle);
+                GUI.Label(new Rect(cx - 100f, cy - 80f, 200f, 160f), game.CountdownNumber.ToString(), numStyle);
             }
-            else if (entranceState == EntranceState.GoText)
+            else if (game.EntrancePhase == EntrancePhase.GoText)
             {
                 var t = entranceTimer / 0.6f;
                 var scale = 1f + t * 0.3f;
