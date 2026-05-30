@@ -5,9 +5,12 @@ using UnityEngine;
 namespace PenguinRun.Core
 {
     /// <summary>
-    /// 泛型对象池：T 必须是 Component。统一替代手动 List 管理。
-    /// 用法：var pool = new GenericObjectPool<MyEffect>(prefab, parent, 32);
-    ///       var obj = pool.Rent(); pool.Return(obj);
+    /// 泛型对象池（VFX / 临时效果专用）。
+    ///
+    /// 池满时回收最旧的活跃对象——适合粒子、冲击环等短生命周期效果。
+    /// 不适合仍被游戏逻辑引用的实体（障碍物、敌人等），迁移时注意区分。
+    ///
+    /// 用法：var pool = new GenericObjectPool&lt;MyEffect&gt;(prefab, parent, 32);
     /// </summary>
     public sealed class GenericObjectPool<T> where T : Component
     {
@@ -16,14 +19,17 @@ namespace PenguinRun.Core
         private readonly T prefab;
         private readonly Transform parent;
         private readonly int maxCapacity;
+        private readonly bool recycleOnFull; // true=回收最旧对象(VFX), false=拒绝分配
 
         public IReadOnlyList<T> Active => active;
 
-        public GenericObjectPool(T prefab, Transform parent, int initialCapacity = 32, int maxCapacity = 256)
+        /// <param name="recycleOnFull">true=VFX模式(池满回收最旧); false=安全模式(池满不分配)</param>
+        public GenericObjectPool(T prefab, Transform parent, int initialCapacity = 32, int maxCapacity = 256, bool recycleOnFull = true)
         {
             this.prefab = prefab;
             this.parent = parent;
             this.maxCapacity = maxCapacity;
+            this.recycleOnFull = recycleOnFull;
 
             for (var i = 0; i < initialCapacity; i++)
             {
@@ -44,12 +50,18 @@ namespace PenguinRun.Core
             {
                 obj = UnityEngine.Object.Instantiate(prefab, parent);
             }
-            else
+            else if (recycleOnFull)
             {
-                // 池耗尽：回收最旧的活跃对象
+                // VFX 模式：池耗尽时回收最旧的活跃对象
                 obj = active[0];
                 active.RemoveAt(0);
                 obj.gameObject.SetActive(false);
+            }
+            else
+            {
+                // 安全模式：池满不分配，避免误回收仍被引用的实体
+                Debug.LogWarning($"GenericObjectPool<{typeof(T).Name}>: pool exhausted ({maxCapacity}), refusing to rent.");
+                return null;
             }
 
             obj.gameObject.SetActive(true);

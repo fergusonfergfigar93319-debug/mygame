@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using PenguinRun.Core;
 using PenguinRun.Game.Save;
 using UnityEngine;
 
@@ -17,6 +18,43 @@ namespace PenguinRun
         private string ambienceTrack = PlayerSave.DefaultAmbienceTrack;
         private string sfxStyle = PlayerSave.DefaultSfxStyle;
         private string baseRunClipName;
+        private int lastCoinCombo;
+
+        private void OnEnable()
+        {
+            EventBus.On<int>(GameEvents.CoinCollected, OnCoinCollected);
+            EventBus.On(GameEvents.PlayerHurt, OnPlayerHurt);
+            EventBus.On(GameEvents.PlayerLanded, OnPlayerLanded);
+            EventBus.On(GameEvents.PlayerSlid, OnPlayerSlid);
+            EventBus.On(GameEvents.PerfectDodge, OnPerfectDodge);
+            EventBus.On(GameEvents.BossDefeated, OnBossDefeated);
+        }
+
+        private void OnDisable()
+        {
+            EventBus.Off<int>(GameEvents.CoinCollected, OnCoinCollected);
+            EventBus.Off(GameEvents.PlayerHurt, OnPlayerHurt);
+            EventBus.Off(GameEvents.PlayerLanded, OnPlayerLanded);
+            EventBus.Off(GameEvents.PlayerSlid, OnPlayerSlid);
+            EventBus.Off(GameEvents.PerfectDodge, OnPerfectDodge);
+            EventBus.Off(GameEvents.BossDefeated, OnBossDefeated);
+        }
+
+        private void OnCoinCollected(int count)
+        {
+            lastCoinCombo = Mathf.Min(lastCoinCombo + count, 36);
+            PlayCoin(lastCoinCombo);
+        }
+
+        private void OnPlayerHurt() => PlayPlayerHurt();
+
+        private void OnPlayerLanded() => PlayLand();
+
+        private void OnPlayerSlid() => PlaySlide();
+
+        private void OnPerfectDodge() => PlayPerfectDodge();
+
+        private void OnBossDefeated() => PlayBossDefeat();
 
         public void Initialize(
             bool daily,
