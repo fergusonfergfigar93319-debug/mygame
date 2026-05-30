@@ -82,7 +82,7 @@ namespace PenguinRun
                 feedbackTimer = 0.85f;
                 EventBus.Emit(GameEvents.PowerUpCollected, powerUps[power]);
 
-                Object.Destroy(power);
+                power.SetActive(false); // 池化回收由 SegmentSpawner.Tick 处理
                 powerUps.Remove(power);
             }
         }

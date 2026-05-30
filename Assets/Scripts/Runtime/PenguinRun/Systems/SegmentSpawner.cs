@@ -54,6 +54,7 @@ namespace PenguinRun
         private bool slideGateTutorialPending;
 
         private readonly GameObjectPool coinPool;
+        private readonly GameObjectPool powerUpPool;
 
         public SegmentSpawner(
             RunnerWorldTuning worldTuning,
@@ -72,6 +73,7 @@ namespace PenguinRun
             nextSpawnZ = worldTuning.initialSpawnZ;
 
             coinPool = new GameObjectPool(BuildFishSnackVisual, null, 60, 200, recycleOnFull: true);
+            powerUpPool = new GameObjectPool(BuildPooledPowerUpRoot, null, 24, 80, recycleOnFull: true);
         }
 
         public readonly List<GameObject> obstacles = new();
@@ -200,7 +202,18 @@ namespace PenguinRun
                 }
             }
 
+            // ── 回收被 PickupSystem 设为非活跃的道具 ──────────────
             var powerKeys = new List<GameObject>(powerUps.Keys);
+            foreach (var power in powerKeys)
+            {
+                if (power == null || !power.activeSelf)
+                {
+                    if (power != null) ReturnPowerUp(power);
+                    powerUps.Remove(power);
+                }
+            }
+
+            powerKeys = new List<GameObject>(powerUps.Keys);
             foreach (var power in powerKeys)
             {
                 if (power == null)
@@ -214,7 +227,7 @@ namespace PenguinRun
                 SyncPowerUpHeight(power, runDistance);
                 if (power.transform.position.z < worldTuning.despawnZ)
                 {
-                    Object.Destroy(power);
+                    ReturnPowerUp(power);
                     powerUps.Remove(power);
                 }
             }
@@ -321,7 +334,7 @@ namespace PenguinRun
             foreach (var c in coins) coinPool.Return(c);
             coins.Clear();
 
-            foreach (var power in powerUps.Keys) Object.Destroy(power);
+            foreach (var power in powerUps.Keys) ReturnPowerUp(power);
             powerUps.Clear();
 
             foreach (var gate in speedGates) Object.Destroy(gate);
@@ -1727,6 +1740,10 @@ namespace PenguinRun
             {
                 coinYDelta[coin] = bonusY;
             }
+            else
+            {
+                coinYDelta.Remove(coin);
+            }
         }
 
         private static GameObject BuildFishSnackVisual()
@@ -1904,12 +1921,46 @@ namespace PenguinRun
         /// <summary>道具根节点 + 极小核心光球，几何由 <see cref="AddPowerUpEffects"/> 子件展示。</summary>
         private GameObject CreatePowerUpRoot(string name, Color coreColor, PowerUpKind kind, Color secondaryColor)
         {
-            var root = new GameObject(name);
-            var core = RunnerVisuals.CreatePrimitive("Pickup Core", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.08f, coreColor);
-            core.transform.SetParent(root.transform, false);
-            core.transform.localPosition = Vector3.zero;
+            var root = powerUpPool.Rent();
+            if (root == null) return null;
+            root.name = name;
+
+            // 重设核心球颜色
+            for (var i = root.transform.childCount - 1; i >= 0; i--)
+            {
+                var child = root.transform.GetChild(i);
+                if (child.name == "Pickup Core")
+                {
+                    RunnerVisuals.ApplyColor(child.GetComponent<Renderer>(), coreColor);
+                    break;
+                }
+            }
+
             AddPowerUpEffects(root.transform, kind, coreColor, secondaryColor);
             return root;
+        }
+
+        /// <summary>池工厂：创建一个带核心球和基础环的空白道具根节点。</summary>
+        private static GameObject BuildPooledPowerUpRoot()
+        {
+            var root = new GameObject("PowerUp Pooled");
+            var core = RunnerVisuals.CreatePrimitive("Pickup Core", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.08f, Color.white);
+            core.transform.SetParent(root.transform, false);
+            return root;
+        }
+
+        /// <summary>回收道具到池：销毁子物件、重置位姿。</summary>
+        private void ReturnPowerUp(GameObject power)
+        {
+            // 销毁类型专属子物件（保留核心球）
+            for (var i = power.transform.childCount - 1; i >= 0; i--)
+            {
+                var child = power.transform.GetChild(i);
+                if (child.name == "Pickup Core") continue;
+                Object.Destroy(child.gameObject);
+            }
+            power.transform.localRotation = Quaternion.identity;
+            powerUpPool.Return(power);
         }
 
         private static (Color primary, Color secondary) GetPowerUpColors(PowerUpKind kind)
