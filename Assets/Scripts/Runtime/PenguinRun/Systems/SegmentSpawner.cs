@@ -405,6 +405,7 @@ namespace PenguinRun
             var powerLane = (RunnerLane)Random.Range(-1, 2);
             var (color, secondaryColor) = GetPowerUpColors(kind);
             var power = CreatePowerUpRoot($"PowerUp {kind}", color, kind, secondaryColor);
+            if (power == null) return;
             var laneX = powerLane.ToX(laneWidth);
             var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
             power.transform.position = new Vector3(laneX, surface + PowerUpHoverHeight, z);
@@ -1912,6 +1913,7 @@ namespace PenguinRun
 
             var (color, secondaryColor) = GetPowerUpColors(kind);
             var power = CreatePowerUpRoot($"PowerUp {kind}", color, kind, secondaryColor);
+            if (power == null) return;
             var laneX = powerLane.ToX(laneWidth);
             var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
             power.transform.position = new Vector3(laneX, surface + PowerUpHoverHeight, z);
