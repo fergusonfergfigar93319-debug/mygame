@@ -27,8 +27,7 @@ namespace PenguinRun
         private readonly System.Action<Color, float> onScreenFlash;
         private readonly System.Action<RunnerRunResult> onFinish;
 
-        private bool running;
-        private bool gameOver;
+        private readonly GameStateMachine stateMachine = new();
         private string feedbackText = "";
         private float feedbackTimer;
         private bool finishRequested;
@@ -67,9 +66,12 @@ namespace PenguinRun
             bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth, tuning.combat);
         }
 
-        public bool Running => running;
+        /// <summary>本局已开始（非 Idle），含跑酷、Boss、死亡序列。</summary>
+        public bool Running => stateMachine.Current != GameStateMachine.State.Idle;
 
-        public bool GameOver => gameOver;
+        public bool GameOver => stateMachine.IsGameOver;
+
+        public GameStateMachine.State CurrentState => stateMachine.Current;
 
         public WorldDirector World => world;
 
@@ -94,8 +96,8 @@ namespace PenguinRun
                 world.AddExtraLife();
             bossSystem.Reset();
             collisions.Reset();
-            running = start;
-            gameOver = false;
+            stateMachine.ForceTransitionTo(start ? GameStateMachine.State.Running : GameStateMachine.State.Idle);
+            finishRequested = false;
             feedbackText = "";
             feedbackTimer = 0f;
             waitingForGuidedReaction = false;
@@ -123,6 +125,12 @@ namespace PenguinRun
         {
             if (finishRequested) return;
             finishRequested = true;
+            if (stateMachine.Current == GameStateMachine.State.DeathSequence)
+            {
+                stateMachine.TransitionTo(GameStateMachine.State.GameOver);
+            }
+
+            stateMachine.ForceTransitionTo(GameStateMachine.State.Finished);
             var dist = Mathf.Max(0, Mathf.RoundToInt(world.Distance));
             var result = new RunnerRunResult(world.Score, dist, world.Coins, world.RunTime,
                 world.LastBossSpeedTier, world.LastBossSpeedFishBonus, world.LastBossSpeedScoreBonus);
@@ -131,12 +139,30 @@ namespace PenguinRun
 
         public void TogglePause()
         {
-            if (!running || gameOver) return;
+            if (GameOver || !Running) return;
+            var cur = stateMachine.Current;
+            if (cur != GameStateMachine.State.Running &&
+                cur != GameStateMachine.State.BossFight &&
+                cur != GameStateMachine.State.Paused)
+            {
+                return;
+            }
+
             world.Paused = !world.Paused;
             runnerAudio.PlayPause();
             feedbackText = world.Paused ? "已暂停" : "继续";
             feedbackTimer = 0.7f;
             pauseHoldUI = world.Paused ? 0.3f : 0f;
+
+            if (world.Paused)
+            {
+                stateMachine.TransitionTo(GameStateMachine.State.Paused);
+            }
+            else
+            {
+                stateMachine.TransitionTo(GameStateMachine.State.Running);
+                SyncBossFightState();
+            }
         }
 
         public bool IsPaused => world.Paused;
@@ -149,7 +175,7 @@ namespace PenguinRun
             var action = input.Poll();
             var idleDt = Mathf.Min(rawDt, 0.05f);
             feedbackTimer = Mathf.Max(0f, feedbackTimer - idleDt);
-            character.Animate(idleDt, false, motor.Grounded, false, gameOver, 0f, 0f, world.DashTimer, world.MagnetTimer, world.ShieldTimer, world.HitInvulnerabilityTimer);
+            character.Animate(idleDt, false, motor.Grounded, false, GameOver, 0f, 0f, world.DashTimer, world.MagnetTimer, world.ShieldTimer, world.HitInvulnerabilityTimer);
             runnerAudio.UpdateRunState(0f, false, false, false, false);
 
             if (action != RunnerAction.None)
@@ -175,7 +201,7 @@ namespace PenguinRun
             {
                 pauseHoldUI = Mathf.Max(0f, pauseHoldUI - dt);
                 feedbackTimer = Mathf.Max(0f, feedbackTimer - dt);
-                character.Animate(dt, false, motor.Grounded, false, gameOver, 0f, 0f,
+                character.Animate(dt, false, motor.Grounded, false, GameOver, 0f, 0f,
                     world.DashTimer, world.MagnetTimer, world.ShieldTimer, world.HitInvulnerabilityTimer);
                 runnerAudio.UpdateRunState(0f, false, false, false, false);
                 return 0f;
@@ -201,9 +227,9 @@ namespace PenguinRun
             if (waitingForGuidedReaction)
             {
                 feedbackTimer = Mathf.Max(0f, feedbackTimer - dt);
-                character.Animate(dt, running, motor.Grounded, motor.SlideTimer > 0f, gameOver, 0f, 0f,
+                character.Animate(dt, stateMachine.IsRunning, motor.Grounded, motor.SlideTimer > 0f, GameOver, 0f, 0f,
                     world.DashTimer, world.MagnetTimer, world.ShieldTimer, world.HitInvulnerabilityTimer);
-                runnerAudio.UpdateRunState(0f, running, world.DashTimer > 0f, world.MagnetTimer > 0f, world.ShieldTimer > 0f);
+                runnerAudio.UpdateRunState(0f, stateMachine.IsRunning, world.DashTimer > 0f, world.MagnetTimer > 0f, world.ShieldTimer > 0f);
                 return 0f;
             }
 
@@ -222,17 +248,17 @@ namespace PenguinRun
             var speed01 = world.Speed01();
             character.Animate(
                 dt,
-                running,
+                stateMachine.IsRunning,
                 motor.Grounded,
                 motor.SlideTimer > 0f,
-                gameOver,
+                GameOver,
                 speed01,
                 motor.LaneLean01,
                 world.DashTimer,
                 world.MagnetTimer,
                 world.ShieldTimer,
                 world.HitInvulnerabilityTimer);
-            runnerAudio.UpdateRunState(speed01, running, world.DashTimer > 0f, world.MagnetTimer > 0f, world.ShieldTimer > 0f);
+            runnerAudio.UpdateRunState(speed01, stateMachine.IsRunning, world.DashTimer > 0f, world.MagnetTimer > 0f, world.ShieldTimer > 0f);
 
             return effectiveSpeed;
         }
@@ -338,8 +364,7 @@ namespace PenguinRun
                 else if (outcome.Kind == HitOutcomeKind.GameOver)
                 {
                     EmitRunFeedback(RunFeedbackKind.BossDeath);
-                    running = false;
-                    gameOver = true;
+                    EnterDeathSequence();
                     return;
                 }
                 else if (outcome.Kind == HitOutcomeKind.Damage)
@@ -394,11 +419,12 @@ namespace PenguinRun
                 EmitRunFeedback(RunFeedbackKind.ObstacleDamage);
             }
 
+            SyncBossFightState();
+
             if (gameOverNow)
             {
                 EmitRunFeedback(RunFeedbackKind.ObstacleDeath);
-                running = false;
-                gameOver = true;
+                EnterDeathSequence();
             }
         }
 
@@ -453,6 +479,36 @@ namespace PenguinRun
                 case RunFeedbackKind.SegmentReward:
                     onScreenFlash?.Invoke(new Color(1f, 0.85f, 0.4f, 0.12f), 0.35f);
                     break;
+            }
+        }
+
+        private void EnterDeathSequence()
+        {
+            if (stateMachine.Current == GameStateMachine.State.DeathSequence) return;
+            if (!stateMachine.TransitionTo(GameStateMachine.State.DeathSequence))
+            {
+                stateMachine.ForceTransitionTo(GameStateMachine.State.DeathSequence);
+            }
+
+            EventBus.Emit(GameEvents.GameOver);
+        }
+
+        private void SyncBossFightState()
+        {
+            if (GameOver ||
+                stateMachine.Current == GameStateMachine.State.Paused ||
+                stateMachine.Current == GameStateMachine.State.DeathSequence)
+            {
+                return;
+            }
+
+            if (bossSystem.BossActive && stateMachine.Current == GameStateMachine.State.Running)
+            {
+                stateMachine.TransitionTo(GameStateMachine.State.BossFight);
+            }
+            else if (!bossSystem.BossActive && stateMachine.Current == GameStateMachine.State.BossFight)
+            {
+                stateMachine.TransitionTo(GameStateMachine.State.Running);
             }
         }
 
