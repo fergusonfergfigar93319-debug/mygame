@@ -39,7 +39,6 @@ namespace PenguinRun
         private RunnerMapTheme currentTheme;
         private RunnerMapTheme pendingTheme;
         private float nextThemeSwitchTime;
-        private bool themeTransitionActive;
         private bool themeAppliedInTransition;
         private float themeTransitionTimer;
         private GUIStyle themeTransitionLabelStyle;
@@ -69,7 +68,6 @@ namespace PenguinRun
         private enum DeathState { None, Freeze, FadeRed, ShowResult, WaitingTap }
         private DeathState deathState;
         private float deathStateTimer;
-        private bool deathSequenceActive;
         private GUIStyle deathScoreStyle;
         private GUIStyle deathTitleStyle;
 
@@ -194,10 +192,10 @@ namespace PenguinRun
                 return;
             }
 
-            // ── 死亡序列：接管所有输入和模拟 ──────────────────────────
-            if (deathSequenceActive)
+            // ── 死亡序列：由 FSM DeathSequence / GameOver 驱动 ─────────
+            if (game.IsDeathPresentation)
             {
-                TickDeathSequence(Time.deltaTime);
+                TickDeathPresentation(Time.deltaTime);
                 return;
             }
 
@@ -208,6 +206,7 @@ namespace PenguinRun
                 {
                     entranceComplete = true;
                     entranceState = EntranceState.None;
+                    game.SkipEntranceCountdown();
                 }
                 return;
             }
@@ -228,14 +227,8 @@ namespace PenguinRun
                 return;
             }
 
-            // ── 检测游戏结束 → 启动死亡序列 ──────────────────────────
-            if (game.GameOver && !deathSequenceActive)
-            {
-                StartDeathSequence();
-                return;
-            }
-
-            if (themeTransitionActive)
+            // ── 主题切换（优先于跑酷模拟）──────────────────────────────
+            if (game.IsThemeTransition)
             {
                 TickThemeTransition(Time.deltaTime);
                 var frozenDt = Mathf.Min(Time.deltaTime, 0.05f);
@@ -289,6 +282,7 @@ namespace PenguinRun
                     entranceState = EntranceState.Countdown;
                     entranceTimer = 0f;
                     countdownNumber = 3;
+                    game.BeginEntranceCountdown();
                 }
 
                 entranceTimer += dt;
@@ -322,44 +316,47 @@ namespace PenguinRun
             }
 
             game.TickIdle(rawDt);
+
+            // 玩家提前点击开始时，同步清除倒计时 overlay 状态
+            if (game.Running)
+            {
+                entranceComplete = true;
+                entranceState = EntranceState.None;
+            }
         }
 
-        // ── 死亡序列 ──────────────────────────────────────────────
-        private void StartDeathSequence()
+        // ── 死亡序列（FSM DeathSequence → GameOver，本地子阶段管 overlay）──
+        private void TickDeathPresentation(float rawDt)
         {
-            deathSequenceActive = true;
-            deathState = DeathState.Freeze;
-            deathStateTimer = 0f;
-            TriggerScreenFlash(new Color(0.85f, 0.15f, 0.08f, 0.5f), 0.5f);
-            TriggerCameraShake(0.35f, 0.08f);
-        }
+            if (deathState == DeathState.None)
+            {
+                deathState = DeathState.Freeze;
+                deathStateTimer = 0f;
+                TriggerScreenFlash(new Color(0.85f, 0.15f, 0.08f, 0.5f), 0.5f);
+                TriggerCameraShake(0.35f, 0.08f);
+            }
 
-        private void TickDeathSequence(float rawDt)
-        {
             var dt = Mathf.Min(rawDt, 0.05f);
             deathStateTimer += dt;
 
             switch (deathState)
             {
                 case DeathState.Freeze:
-                    // 冻结 0.4s，角色倒地动画
                     if (deathStateTimer >= 0.4f)
                     {
                         deathState = DeathState.FadeRed;
                         deathStateTimer = 0f;
                     }
-                    // 期间驱动角色动画（gameOver 状态）
                     character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
                     game.RunnerAudio.UpdateRunState(0f, false, false, false, false);
                     UpdateCamera(dt);
                     break;
 
                 case DeathState.FadeRed:
-                    // 红屏渐显 0.6s
                     var redAlpha = Mathf.Clamp01(deathStateTimer / 0.6f) * 0.55f;
                     screenFlashColor = new Color(0.75f, 0.08f, 0.02f, redAlpha);
                     screenFlashCurrent = screenFlashColor;
-                    screenFlashTimer = 0.02f; // 持续渲染
+                    screenFlashTimer = 0.02f;
                     screenFlashDuration = 0.02f;
 
                     character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
@@ -369,11 +366,11 @@ namespace PenguinRun
                     {
                         deathState = DeathState.ShowResult;
                         deathStateTimer = 0f;
+                        game.AdvanceDeathToResult();
                     }
                     break;
 
                 case DeathState.ShowResult:
-                    // 显示结算 1.5s
                     character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
                     UpdateCamera(dt);
 
@@ -385,22 +382,21 @@ namespace PenguinRun
                     break;
 
                 case DeathState.WaitingTap:
-                    // 等待点击
                     character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
                     UpdateCamera(dt);
 
                     if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
                     {
-                        FinishDeathSequence();
+                        FinishDeathPresentation();
                     }
                     break;
             }
         }
 
-        private void FinishDeathSequence()
+        private void FinishDeathPresentation()
         {
-            deathSequenceActive = false;
             deathState = DeathState.None;
+            deathStateTimer = 0f;
 
             if (!exiting)
             {
@@ -410,7 +406,7 @@ namespace PenguinRun
 
         private void DrawDeathOverlay()
         {
-            if (!deathSequenceActive) return;
+            if (!game.IsDeathPresentation) return;
 
             if (deathState == DeathState.ShowResult || deathState == DeathState.WaitingTap)
             {
@@ -2010,7 +2006,7 @@ namespace PenguinRun
 
         private void TryStartThemeTransition()
         {
-            if (themeTransitionActive || game == null || !game.Running) return;
+            if (game == null || game.IsThemeTransition || !game.Running) return;
             if (game.Boss != null && game.Boss.BossActive) return;
             if (game.World.RunTime < nextThemeSwitchTime) return;
 
@@ -2021,7 +2017,8 @@ namespace PenguinRun
                 return;
             }
 
-            themeTransitionActive = true;
+            if (!game.TryBeginThemeTransition()) return;
+
             themeAppliedInTransition = false;
             themeTransitionTimer = 0f;
             nextThemeSwitchTime += ThemeSwitchIntervalSeconds;
@@ -2041,7 +2038,7 @@ namespace PenguinRun
             var total = ThemeTransitionFadeOutSeconds + ThemeTransitionHoldSeconds + ThemeTransitionFadeInSeconds;
             if (themeTransitionTimer >= total)
             {
-                themeTransitionActive = false;
+                game.CompleteThemeTransition();
                 themeAppliedInTransition = false;
                 themeTransitionTimer = 0f;
             }
@@ -2083,7 +2080,7 @@ namespace PenguinRun
 
         private void DrawThemeTransitionOverlay()
         {
-            if (!themeTransitionActive) return;
+            if (game == null || !game.IsThemeTransition) return;
 
             var total = ThemeTransitionFadeOutSeconds + ThemeTransitionHoldSeconds + ThemeTransitionFadeInSeconds;
             var t = Mathf.Clamp(themeTransitionTimer, 0f, total);

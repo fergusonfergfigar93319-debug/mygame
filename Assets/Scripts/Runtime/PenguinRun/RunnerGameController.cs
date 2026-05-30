@@ -66,10 +66,29 @@ namespace PenguinRun
             bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth, tuning.combat);
         }
 
-        /// <summary>本局已开始（非 Idle），含跑酷、Boss、死亡序列。</summary>
-        public bool Running => stateMachine.Current != GameStateMachine.State.Idle;
+        /// <summary>开局前（Idle / 倒计时 / 加载），未进入跑酷模拟。</summary>
+        public bool IsPreRun =>
+            stateMachine.Current == GameStateMachine.State.Idle ||
+            stateMachine.Current == GameStateMachine.State.Countdown ||
+            stateMachine.Current == GameStateMachine.State.Loading;
+
+        /// <summary>本局跑酷会话进行中（含 Boss、暂停、主题过渡、死亡序列）。</summary>
+        public bool Running => !IsPreRun && stateMachine.Current != GameStateMachine.State.Finished;
 
         public bool GameOver => stateMachine.IsGameOver;
+
+        public bool IsCountdown => stateMachine.Current == GameStateMachine.State.Countdown;
+
+        public bool IsThemeTransition => stateMachine.Current == GameStateMachine.State.ThemeTransition;
+
+        /// <summary>死亡演出：冻结 + 红屏（FSM DeathSequence）。</summary>
+        public bool IsDeathSequence => stateMachine.Current == GameStateMachine.State.DeathSequence;
+
+        /// <summary>死亡结算 overlay（FSM GameOver，等待点击）。</summary>
+        public bool IsDeathResult => stateMachine.Current == GameStateMachine.State.GameOver;
+
+        /// <summary>任意死亡呈现阶段（DeathSequence 或 GameOver）。</summary>
+        public bool IsDeathPresentation => IsDeathSequence || IsDeathResult;
 
         public GameStateMachine.State CurrentState => stateMachine.Current;
 
@@ -115,9 +134,51 @@ namespace PenguinRun
                 {
                     Random.InitState((int)(Time.realtimeSinceStartup * 1000f) ^ (int)(System.DateTime.UtcNow.Ticks % int.MaxValue));
                 }
+
+                EventBus.Emit(GameEvents.GameStarted);
             }
 
             spawner.SeedInitialObstacles(world.Distance);
+        }
+
+        /// <summary>开局 3-2-1 倒计时开始（Idle → Countdown）。</summary>
+        public void BeginEntranceCountdown()
+        {
+            if (stateMachine.Current != GameStateMachine.State.Idle) return;
+            stateMachine.TransitionTo(GameStateMachine.State.Countdown);
+        }
+
+        /// <summary>跳过倒计时 overlay，回到 Idle 等待点击开始。</summary>
+        public void SkipEntranceCountdown()
+        {
+            if (stateMachine.Current == GameStateMachine.State.Countdown)
+            {
+                stateMachine.ForceTransitionTo(GameStateMachine.State.Idle);
+            }
+        }
+
+        /// <summary>尝试进入主题切换过渡（Running → ThemeTransition）。</summary>
+        public bool TryBeginThemeTransition()
+        {
+            if (stateMachine.Current != GameStateMachine.State.Running) return false;
+            if (bossSystem.BossActive) return false;
+            return stateMachine.TransitionTo(GameStateMachine.State.ThemeTransition);
+        }
+
+        /// <summary>主题切换完成，恢复跑酷（ThemeTransition → Running）。</summary>
+        public void CompleteThemeTransition()
+        {
+            if (stateMachine.Current != GameStateMachine.State.ThemeTransition) return;
+            stateMachine.TransitionTo(GameStateMachine.State.Running);
+            EventBus.Emit(GameEvents.ThemeChanged);
+        }
+
+        /// <summary>死亡演出结束，进入结算 overlay（DeathSequence → GameOver）。</summary>
+        public void AdvanceDeathToResult()
+        {
+            if (stateMachine.Current != GameStateMachine.State.DeathSequence) return;
+            stateMachine.TransitionTo(GameStateMachine.State.GameOver);
+            EventBus.Emit(GameEvents.GameOver);
         }
 
         /// <summary>结束本局并把结果回调给 PenguinRunnerGame（再由它走 RunOutcomeRouter + 场景切换）。</summary>
@@ -125,11 +186,6 @@ namespace PenguinRun
         {
             if (finishRequested) return;
             finishRequested = true;
-            if (stateMachine.Current == GameStateMachine.State.DeathSequence)
-            {
-                stateMachine.TransitionTo(GameStateMachine.State.GameOver);
-            }
-
             stateMachine.ForceTransitionTo(GameStateMachine.State.Finished);
             var dist = Mathf.Max(0, Mathf.RoundToInt(world.Distance));
             var result = new RunnerRunResult(world.Score, dist, world.Coins, world.RunTime,
@@ -139,7 +195,7 @@ namespace PenguinRun
 
         public void TogglePause()
         {
-            if (GameOver || !Running) return;
+            if (GameOver || !Running || IsThemeTransition) return;
             var cur = stateMachine.Current;
             if (cur != GameStateMachine.State.Running &&
                 cur != GameStateMachine.State.BossFight &&
@@ -157,11 +213,13 @@ namespace PenguinRun
             if (world.Paused)
             {
                 stateMachine.TransitionTo(GameStateMachine.State.Paused);
+                EventBus.Emit(GameEvents.GamePaused);
             }
             else
             {
                 stateMachine.TransitionTo(GameStateMachine.State.Running);
                 SyncBossFightState();
+                EventBus.Emit(GameEvents.GameResumed);
             }
         }
 
@@ -489,15 +547,14 @@ namespace PenguinRun
             {
                 stateMachine.ForceTransitionTo(GameStateMachine.State.DeathSequence);
             }
-
-            EventBus.Emit(GameEvents.GameOver);
         }
 
         private void SyncBossFightState()
         {
             if (GameOver ||
                 stateMachine.Current == GameStateMachine.State.Paused ||
-                stateMachine.Current == GameStateMachine.State.DeathSequence)
+                stateMachine.Current == GameStateMachine.State.DeathSequence ||
+                stateMachine.Current == GameStateMachine.State.ThemeTransition)
             {
                 return;
             }
