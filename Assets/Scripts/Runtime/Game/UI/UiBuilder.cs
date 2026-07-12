@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -11,25 +12,25 @@ namespace PenguinRun.Game.UI
     {
         // ── 主色（Primary Palette）─────────────────────────────────────────────
         /// <summary>主强调色：明亮青色，用于活动状态、关键操作。</summary>
-        public static readonly Color AccentCyan = new(0.0f, 0.85f, 0.95f, 1f);
+        public static readonly Color AccentCyan = UiTheme.AccentCyan;
         /// <summary>次要强调色：柔和金色，用于奖励、货币。</summary>
-        public static readonly Color WarmGold = new(1f, 0.85f, 0.4f, 1f);
+        public static readonly Color WarmGold = UiTheme.CoralAction;
         /// <summary>成功/已完成色。</summary>
-        public static readonly Color Success = new(0.35f, 0.95f, 0.6f, 1f);
+        public static readonly Color Success = UiTheme.Success;
         /// <summary>警告/危险色。</summary>
-        public static readonly Color Warning = new(1f, 0.55f, 0.35f, 1f);
+        public static readonly Color Warning = UiTheme.Warning;
         /// <summary>错误/提示红色。</summary>
-        public static readonly Color Danger = new(1f, 0.35f, 0.45f, 1f);
+        public static readonly Color Danger = UiTheme.Danger;
 
         // ── 背景色（Surface Palette）──────────────────────────────────────────
         /// <summary>最深的应用底色（场景背景）。</summary>
-        public static readonly Color SurfaceBase = new(0.04f, 0.09f, 0.16f, 1f);
+        public static readonly Color SurfaceBase = UiTheme.PaperBase;
         /// <summary>第一层卡片/面板背景。</summary>
-        public static readonly Color Surface1 = new(0.07f, 0.14f, 0.24f, 1f);
+        public static readonly Color Surface1 = UiTheme.PaperWarm;
         /// <summary>第二层（悬浮卡片、Tab容器）。</summary>
-        public static readonly Color Surface2 = new(0.1f, 0.18f, 0.3f, 1f);
+        public static readonly Color Surface2 = Color.Lerp(UiTheme.PaperWarm, UiTheme.MistBlue, 0.28f);
         /// <summary>高亮 surface（hover/选中态）。</summary>
-        public static readonly Color SurfaceElevated = new(0.13f, 0.22f, 0.36f, 1f);
+        public static readonly Color SurfaceElevated = Color.white;
 
         // ── 兼容旧字段 ────────────────────────────────────────────────────────
         public static readonly Color PanelBg = new(0.024f, 0.078f, 0.137f, 0.85f);
@@ -40,11 +41,11 @@ namespace PenguinRun.Game.UI
         public static readonly Color PanelStroke = new(0.0f, 0.85f, 0.95f, 0.3f);
 
         // ── 文字色（Text Palette）─────────────────────────────────────────────
-        public static readonly Color TextPrimary = new(1f, 1f, 1f, 0.96f);
-        public static readonly Color TextSecondary = new(0.78f, 0.86f, 0.94f, 0.78f);
-        public static readonly Color TextTertiary = new(0.6f, 0.7f, 0.82f, 0.55f);
+        public static readonly Color TextPrimary = UiTheme.InkPrimary;
+        public static readonly Color TextSecondary = UiTheme.InkSecondary;
+        public static readonly Color TextTertiary = UiTheme.TextTertiary;
         /// <summary>反向文字色（用于亮色按钮上的文字）。</summary>
-        public static readonly Color TextOnAccent = new(0.04f, 0.08f, 0.14f, 1f);
+        public static readonly Color TextOnAccent = Color.white;
 
         // ── 边框色 ─────────────────────────────────────────────────────────────
         public static readonly Color BorderSubtle = new(0.25f, 0.5f, 0.7f, 0.2f);
@@ -52,12 +53,12 @@ namespace PenguinRun.Game.UI
         public static readonly Color BorderAccent = new(0.0f, 0.85f, 0.95f, 0.55f);
 
         // ── 间距规范（8px grid）───────────────────────────────────────────────
-        public const float Spacing1 = 4f;
-        public const float Spacing2 = 8f;
-        public const float Spacing3 = 12f;
-        public const float Spacing4 = 16f;
-        public const float Spacing5 = 24f;
-        public const float Spacing6 = 32f;
+        public const float Spacing1 = UiTheme.Spacing1;
+        public const float Spacing2 = UiTheme.Spacing2;
+        public const float Spacing3 = UiTheme.Spacing3;
+        public const float Spacing4 = UiTheme.Spacing4;
+        public const float Spacing5 = UiTheme.Spacing5;
+        public const float Spacing6 = UiTheme.Spacing6;
 
         /// <summary>与 <see cref="PanelHeader"/> 高度一致；列表区域用 <see cref="PanelScrollListTopInset"/>。</summary>
         public const float PanelHeaderHeightPixels = 188f;
@@ -399,7 +400,7 @@ namespace PenguinRun.Game.UI
             return rt;
         }
 
-        public static Text CreateText(string name, Transform parent, string content, int fontSize = 28, FontStyle style = FontStyle.Normal, TextAnchor anchor = TextAnchor.MiddleLeft, Color? color = null)
+        public static Text CreateText(string name, Transform parent, string content, int fontSize = UiTheme.Body, FontStyle style = FontStyle.Normal, TextAnchor anchor = TextAnchor.MiddleLeft, Color? color = null)
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
             go.transform.SetParent(parent, false);
@@ -409,15 +410,50 @@ namespace PenguinRun.Game.UI
             text.fontStyle = style;
             text.alignment = anchor;
             text.color = color ?? TextPrimary;
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.font = UiTheme.FallbackFont;
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             text.raycastTarget = false;
             return text;
         }
 
+        /// <summary>Creates a dynamic CJK-capable TMP label for newly migrated UI surfaces.</summary>
+        public static TextMeshProUGUI CreateTmpText(string name, Transform parent, string content, int fontSize = UiTheme.Body, FontStyle style = FontStyle.Normal, TextAnchor anchor = TextAnchor.MiddleLeft, Color? color = null)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+            go.transform.SetParent(parent, false);
+            var text = go.GetComponent<TextMeshProUGUI>();
+            text.text = content;
+            text.font = UiTheme.TmpFont;
+            text.fontSize = fontSize;
+            text.fontStyle = style == FontStyle.Bold ? FontStyles.Bold : FontStyles.Normal;
+            text.alignment = ToTmpAlignment(anchor);
+            text.color = color ?? TextPrimary;
+            text.enableWordWrapping = true;
+            text.overflowMode = TextOverflowModes.Overflow;
+            text.raycastTarget = false;
+            return text;
+        }
+
+        private static TextAlignmentOptions ToTmpAlignment(TextAnchor anchor)
+        {
+            return anchor switch
+            {
+                TextAnchor.UpperLeft => TextAlignmentOptions.TopLeft,
+                TextAnchor.UpperCenter => TextAlignmentOptions.Top,
+                TextAnchor.UpperRight => TextAlignmentOptions.TopRight,
+                TextAnchor.MiddleLeft => TextAlignmentOptions.Left,
+                TextAnchor.MiddleCenter => TextAlignmentOptions.Center,
+                TextAnchor.MiddleRight => TextAlignmentOptions.Right,
+                TextAnchor.LowerLeft => TextAlignmentOptions.BottomLeft,
+                TextAnchor.LowerCenter => TextAlignmentOptions.Bottom,
+                TextAnchor.LowerRight => TextAlignmentOptions.BottomRight,
+                _ => TextAlignmentOptions.Left,
+            };
+        }
+
         /// <summary>支持富文本的标题等（如 &lt;color&gt;、&lt;size&gt;）。</summary>
-        public static Text CreateRichText(string name, Transform parent, string content, int fontSize = 28, FontStyle style = FontStyle.Normal, TextAnchor anchor = TextAnchor.MiddleLeft, Color? color = null)
+        public static Text CreateRichText(string name, Transform parent, string content, int fontSize = UiTheme.Body, FontStyle style = FontStyle.Normal, TextAnchor anchor = TextAnchor.MiddleLeft, Color? color = null)
         {
             var text = CreateText(name, parent, content, fontSize, style, anchor, color);
             text.supportRichText = true;
@@ -475,7 +511,7 @@ namespace PenguinRun.Game.UI
             t.fontStyle = FontStyle.Bold;
             t.alignment = TextAnchor.MiddleCenter;
             t.color = fg;
-            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            t.font = UiTheme.FallbackFont;
             t.raycastTarget = false;
             WireClickFeedback(btn);
             return btn;
