@@ -16,6 +16,7 @@ namespace PenguinRun.Game.UI
     {
         public static void Show(Transform parent, RunOutcomeRouter.Result r, System.Action onDismiss)
         {
+            var model = JourneyResultViewModel.FromRunResult(r);
             // 全屏背景遮罩（新纪录时稍微降低透明度让金色更突出）
             var bgAlpha = r.NewBest ? 0.82f : 0.88f;
             var root = UiBuilder.CreateRect(
@@ -42,7 +43,7 @@ namespace PenguinRun.Game.UI
                 new Vector2(920f, 920f), Vector2.zero,  // 加高一点给破纪录徽章留空间
                 UiBuilder.Surface1, rounded: true);
             UiBuilder.AddOutline(panel.gameObject,
-                r.NewBest ? new Color(1f, 0.84f, 0.32f, 0.75f) : new Color(0f, 0.85f, 0.95f, 0.55f),
+                r.NewBest ? new Color(UiTheme.CoralAction.r, UiTheme.CoralAction.g, UiTheme.CoralAction.b, 0.75f) : UiTheme.StitchBorder,
                 new Vector2(3f, -3f));
             UiBuilder.AddShadow(panel.gameObject, new Color(0f, 0f, 0f, 0.7f), new Vector2(0f, -10f));
 #if DOTWEEN
@@ -59,7 +60,7 @@ namespace PenguinRun.Game.UI
                 new Vector2(0f, topGlowHeight), new Vector2(0f, -topGlowHeight * 0.5f),
                 r.NewBest
                     ? new Color(1f, 0.7f, 0.2f, topGlowAlpha)
-                    : new Color(0f, 0.85f, 0.95f, 0.16f),
+                    : new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.20f),
                 rounded: true);
             topGlow.GetComponent<Image>().raycastTarget = false;
 
@@ -69,7 +70,7 @@ namespace PenguinRun.Game.UI
                 "TopAccent", panel,
                 new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(0f, topLineHeight), new Vector2(0f, -2f),
-                r.NewBest ? UiBuilder.WarmGold : UiBuilder.AccentCyan, rounded: true);
+                r.NewBest ? UiTheme.CoralAction : UiTheme.PineGreen, rounded: true);
             topAccent.GetComponent<Image>().raycastTarget = false;
 
             // 新纪录：顶部闪烁星星装饰
@@ -105,9 +106,9 @@ namespace PenguinRun.Game.UI
             // 主标题
             var headlineSize = r.NewBest ? 62 : 52;
             var headline = UiBuilder.CreateText("Headline", panel,
-                r.NewBest ? "\u2605 新纪录！ \u2605" : "本局完成",
+                model.Headline,
                 headlineSize, FontStyle.Bold, TextAnchor.MiddleCenter,
-                r.NewBest ? UiBuilder.WarmGold : Color.white);
+                r.NewBest ? UiTheme.CoralAction : UiTheme.InkPrimary);
             var hrt = (RectTransform)headline.transform;
             hrt.anchorMin = new Vector2(0f, 1f);
             hrt.anchorMax = new Vector2(1f, 1f);
@@ -123,13 +124,11 @@ namespace PenguinRun.Game.UI
             }
 
             // 副标题
-            var sublineText = r.NewBest
-                ? $"超越前纪录 {PlayerSave.BestScore - r.BonusScore:N0} 分！"
-                : "再来一局，挑战新纪录";
+            var sublineText = model.BestComparison;
             var subline = UiBuilder.CreateText("Subline", panel,
                 sublineText,
                 22, FontStyle.Bold, TextAnchor.MiddleCenter,
-                r.NewBest ? new Color(1f, 0.85f, 0.4f, 0.9f) : UiBuilder.TextSecondary);
+                r.NewBest ? UiTheme.CoralAction : UiTheme.InkSecondary);
             var sublRt = (RectTransform)subline.transform;
             sublRt.anchorMin = new Vector2(0f, 1f);
             sublRt.anchorMax = new Vector2(1f, 1f);
@@ -141,7 +140,7 @@ namespace PenguinRun.Game.UI
             var scoreCard = UiBuilder.CreateRect("ScoreCard", panel,
                 new Vector2(0.08f, 0.5f), new Vector2(0.92f, 0.5f),
                 new Vector2(0f, 220f), new Vector2(0f, 60f),
-                new Color(0.04f, 0.09f, 0.16f, 1f), rounded: true);
+                UiTheme.PaperBase, rounded: true);
             UiBuilder.AddOutline(scoreCard.gameObject, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
 
             var scoreLabel = UiBuilder.CreateText("ScoreLabel", scoreCard.transform,
@@ -154,8 +153,8 @@ namespace PenguinRun.Game.UI
             slrt.anchoredPosition = new Vector2(0f, -20f);
 
             var score = UiBuilder.CreateText("Score", scoreCard.transform,
-                r.Score.ToString("N0"), 110, FontStyle.Bold, TextAnchor.MiddleCenter,
-                r.NewBest ? UiBuilder.WarmGold : Color.white);
+                model.Score.ToString("N0"), 110, FontStyle.Bold, TextAnchor.MiddleCenter,
+                r.NewBest ? UiTheme.CoralAction : UiTheme.InkPrimary);
             var srt = (RectTransform)score.transform;
             srt.anchorMin = Vector2.zero;
             srt.anchorMax = Vector2.one;
@@ -166,9 +165,9 @@ namespace PenguinRun.Game.UI
 
             // 排名信息（在得分下方）
             var rank = UiBuilder.CreateText("Rank", scoreCard.transform,
-                BuildRankLabel(r), 22, FontStyle.Bold,
+                $"{BuildRankLabel(r)} · {model.ReviewHint}", 22, FontStyle.Bold,
                 TextAnchor.LowerCenter,
-                r.NewBest ? UiBuilder.WarmGold : UiBuilder.AccentCyan);
+                r.NewBest ? UiTheme.CoralAction : UiTheme.PineGreen);
             var rrt = (RectTransform)rank.transform;
             rrt.anchorMin = new Vector2(0f, 0f);
             rrt.anchorMax = new Vector2(1f, 0f);
@@ -184,17 +183,17 @@ namespace PenguinRun.Game.UI
             var spacing = 0.01f;
 
             BuildStatCell(panel, gridStartX + spacing, gridStartX + cellWidth - spacing, gridY,
-                "\u279E", "距离", $"{r.DistanceMeters}m", new Color(0.55f, 0.85f, 1f, 1f));
+                "\u279E", "距离", $"{model.DistanceMeters}m", UiTheme.MistBlue);
             BuildStatCell(panel, gridStartX + cellWidth + spacing, gridStartX + 2 * cellWidth - spacing, gridY,
-                "\u2740", "鱼干", $"{r.Coins}", UiBuilder.WarmGold);
+                "\u2740", "鱼干", $"{model.Fish}", UiTheme.CoralAction);
             BuildStatCell(panel, gridStartX + 2 * cellWidth + spacing, gridEndX - spacing, gridY,
                 "\u231B", "存活", $"{Mathf.RoundToInt(r.SurvivalSeconds)}s", new Color(0.4f, 0.95f, 0.7f, 1f));
 
-            BuildBonusBanner(panel, r);
+            BuildBonusBanner(panel, r, model);
 
             // 主操作按钮：返回主菜单（青色 CTA）
             var dismiss = UiBuilder.CreatePrimaryButton(
-                "Dismiss", panel.transform, "返回主菜单", 32, null);
+                "Dismiss", panel.transform, "回到营地", 32, null);
             var brt = (RectTransform)dismiss.transform;
             brt.anchorMin = new Vector2(0.1f, 0f);
             brt.anchorMax = new Vector2(0.9f, 0f);
@@ -215,7 +214,7 @@ namespace PenguinRun.Game.UI
             var cell = UiBuilder.CreateRect("Stat_" + label, parent,
                 new Vector2(anchorXMin, 0.5f), new Vector2(anchorXMax, 0.5f),
                 new Vector2(0f, 130f), new Vector2(0f, anchoredY),
-                new Color(0.04f, 0.09f, 0.16f, 1f), rounded: true);
+                UiTheme.PaperBase, rounded: true);
             UiBuilder.AddOutline(cell.gameObject,
                 new Color(color.r, color.g, color.b, 0.35f), new Vector2(1f, -1f));
 
@@ -231,7 +230,7 @@ namespace PenguinRun.Game.UI
 
             // 数值
             var valueText = UiBuilder.CreateText("Value", cell.transform, value,
-                28, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+                28, FontStyle.Bold, TextAnchor.MiddleCenter, UiTheme.InkPrimary);
             var vrt = (RectTransform)valueText.transform;
             vrt.anchorMin = new Vector2(0f, 0f);
             vrt.anchorMax = new Vector2(1f, 1f);
@@ -251,15 +250,12 @@ namespace PenguinRun.Game.UI
         }
 
         /// <summary>显示本局来自营地强化与消耗券的额外奖励，让玩家直观看到养成的价值。</summary>
-        private static void BuildBonusBanner(RectTransform panel, RunOutcomeRouter.Result r)
+        private static void BuildBonusBanner(RectTransform panel, RunOutcomeRouter.Result r,
+            JourneyResultViewModel model)
         {
             var hasBossSpeed = r.LastBossSpeedFishBonus > 0 || r.LastBossSpeedScoreBonus > 0;
-            if (r.BonusCoins <= 0 && r.BonusScore <= 0
-                && !r.ConsumedDoubleFishTicket && !r.ConsumedScoreBoostTicket
-                && !hasBossSpeed) return;
-
             var sb = new System.Text.StringBuilder("\u2728  ");
-            var parts = new System.Collections.Generic.List<string>();
+            var parts = new System.Collections.Generic.List<string> { model.ProgressionPreview };
             if (r.BonusCoins > 0) parts.Add($"鱼干 +{r.BonusCoins}");
             if (r.BonusScore > 0) parts.Add($"得分 +{r.BonusScore}");
             if (r.ConsumedDoubleFishTicket) parts.Add("双倍鱼干券");

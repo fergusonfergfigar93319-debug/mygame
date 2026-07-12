@@ -114,6 +114,17 @@ if (Test-Path -LiteralPath (Join-Path $ProjectRoot 'Assets/Scripts/Runtime/Pengu
     $failures.Add('Legacy IMGUI RunnerHud.cs still exists after retained-HUD migration')
 }
 
+$journeyModel = Require-File 'Assets/Scripts/Runtime/Game/UI/JourneyResultViewModel.cs'
+foreach ($field in 'Headline', 'Score', 'DistanceMeters', 'Fish', 'BestComparison', 'ReviewHint', 'ProgressionPreview') {
+    Require-Pattern $journeyModel "\b$field\b" "JourneyResultViewModel.$field"
+}
+$deathResult = Require-File 'Assets/Scripts/Runtime/Game/UI/RunnerDeathOverlay.cs'
+$runResult = Require-File 'Assets/Scripts/Runtime/Game/UI/RunResultOverlay.cs'
+Require-Pattern $deathResult 'JourneyResultViewModel' 'death result uses the unified journey model'
+Require-Pattern $runResult 'JourneyResultViewModel' 'completed run uses the unified journey model'
+Require-Pattern $deathResult 'CreatePrimaryButton\("Retry"' 'death result preserves direct retry'
+Require-Pattern $deathResult 'CreateSecondaryButton\("ReturnToLobby"' 'death result preserves return to camp'
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1
