@@ -86,6 +86,19 @@ if ($mainMenu -match 'DrawPenguinMascot') {
     $failures.Add('MainMenuBootstrap still contains the legacy procedural mascot')
 }
 
+$panelHeader = Require-File 'Assets/Scripts/Runtime/Game/UI/PanelHeader.cs'
+Require-Pattern $panelHeader 'UiTheme\.PaperWarm' 'panel header uses paper surface'
+Require-Pattern $panelHeader 'UiTheme\.InkPrimary' 'panel header uses ink text'
+Require-Pattern $panelHeader 'StorybookUi\.CreateSectionDivider' 'panel header uses stitched divider'
+foreach ($panelFile in 'MissionPanel.cs', 'CodexPanel.cs', 'CampShopPanel.cs', 'SettingsPanel.cs') {
+    $panelText = Require-File "Assets/Scripts/Runtime/Game/UI/$panelFile"
+    Require-Pattern $panelText 'PanelHeader\.Create\(' "$panelFile uses the shared chapter header"
+    Require-Pattern $panelText 'UiTheme\.PaperBase' "$panelFile uses the storybook page surface"
+    if ($panelText -match 'UiBuilder\.MenuPanelSolidBg') {
+        $failures.Add("$panelFile still uses the legacy dark menu background")
+    }
+}
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1

@@ -27,7 +27,7 @@ namespace PenguinRun.Game.UI
                 "CodexPanel", parent,
                 Vector2.zero, Vector2.one,
                 Vector2.zero, Vector2.zero,
-                UiBuilder.MenuPanelSolidBg);
+                UiTheme.PaperBase);
             var script = rootRt.gameObject.AddComponent<CodexPanel>();
             script.dispatch = dispatch;
             script.BuildLayout(rootRt);
@@ -52,7 +52,7 @@ namespace PenguinRun.Game.UI
             // 左侧：进度文本
             progressText = UiBuilder.CreateText("ProgressText", progressContainer.transform,
                 string.Empty, 22, FontStyle.Bold,
-                TextAnchor.UpperLeft, Color.white);
+                TextAnchor.UpperLeft, UiTheme.InkPrimary);
             var ptrt = (RectTransform)progressText.transform;
             ptrt.anchorMin = new Vector2(0f, 0.5f);
             ptrt.anchorMax = new Vector2(1f, 1f);
@@ -64,7 +64,7 @@ namespace PenguinRun.Game.UI
             var trackRt = UiBuilder.CreateRect("Track", progressContainer.transform,
                 new Vector2(0f, 0f), new Vector2(1f, 0f),
                 new Vector2(0f, 12f), new Vector2(0f, 18f),
-                new Color(0.04f, 0.09f, 0.16f, 1f), rounded: true);
+                new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.48f), rounded: true);
             trackRt.offsetMin = new Vector2(24f, trackRt.offsetMin.y);
             trackRt.offsetMax = new Vector2(-24f, trackRt.offsetMax.y);
             UiBuilder.AddOutline(trackRt.gameObject, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
@@ -72,7 +72,7 @@ namespace PenguinRun.Game.UI
             progressFill = UiBuilder.CreateRect("Fill", trackRt,
                 new Vector2(0f, 0f), new Vector2(0f, 1f),
                 Vector2.zero, Vector2.zero,
-                UiBuilder.AccentCyan, rounded: true).GetComponent<Image>();
+                UiTheme.CoralAction, rounded: true).GetComponent<Image>();
             progressFill.raycastTarget = false;
 
             UiBuilder.CreatePanelScrollList(parent, out var content,

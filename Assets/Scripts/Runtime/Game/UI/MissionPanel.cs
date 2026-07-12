@@ -25,18 +25,18 @@ namespace PenguinRun.Game.UI
         private Button tabAchBtn;
         
         // 现代化配色方案
-        private static readonly Color TabInactive = new(0.12f, 0.25f, 0.4f, 0.6f);
-        private static readonly Color TabActive = new(0.0f, 0.75f, 0.85f, 1f);
-        private static readonly Color CardBg = new(0.08f, 0.18f, 0.32f, 0.9f);
-        private static readonly Color CardBgCompleted = new(0.06f, 0.22f, 0.28f, 0.95f);
-        private static readonly Color CardBgClaimed = new(0.08f, 0.14f, 0.22f, 0.7f);
-        private static readonly Color ProgressBarBg = new(0.15f, 0.3f, 0.45f, 0.5f);
-        private static readonly Color ProgressBarFill = new(0.0f, 0.85f, 0.95f, 1f);
-        private static readonly Color ProgressBarFillCompleted = new(0.3f, 0.95f, 0.6f, 1f);
-        private static readonly Color RewardGold = new(1f, 0.85f, 0.35f, 1f);
-        private static readonly Color StatusTextActive = new(0.0f, 0.85f, 0.95f, 1f);
-        private static readonly Color StatusTextCompleted = new(0.35f, 0.95f, 0.65f, 1f);
-        private static readonly Color StatusTextClaimed = new(0.5f, 0.6f, 0.7f, 0.8f);
+        private static readonly Color TabInactive = new(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.55f);
+        private static readonly Color TabActive = UiTheme.CoralAction;
+        private static readonly Color CardBg = UiTheme.PaperWarm;
+        private static readonly Color CardBgCompleted = new(0.82f, 0.92f, 0.82f, 1f);
+        private static readonly Color CardBgClaimed = new(UiTheme.PaperBase.r, UiTheme.PaperBase.g, UiTheme.PaperBase.b, 0.72f);
+        private static readonly Color ProgressBarBg = new(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.5f);
+        private static readonly Color ProgressBarFill = UiTheme.CoralAction;
+        private static readonly Color ProgressBarFillCompleted = UiTheme.PineGreen;
+        private static readonly Color RewardGold = UiTheme.CoralAction;
+        private static readonly Color StatusTextActive = UiTheme.CoralAction;
+        private static readonly Color StatusTextCompleted = UiTheme.PineGreen;
+        private static readonly Color StatusTextClaimed = UiTheme.InkSecondary;
 
         public static GameObject Build(Transform parent, System.Action<MainMenuBootstrap.PanelEvent, string> dispatch)
         {
@@ -44,7 +44,7 @@ namespace PenguinRun.Game.UI
                 "MissionPanel", parent,
                 Vector2.zero, Vector2.one,
                 Vector2.zero, Vector2.zero,
-                new Color(0.04f, 0.12f, 0.22f, 1f));
+                UiTheme.PaperBase);
             var root = rootRt.gameObject;
 
             var script = root.AddComponent<MissionPanel>();

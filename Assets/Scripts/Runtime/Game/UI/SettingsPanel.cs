@@ -29,7 +29,7 @@ namespace PenguinRun.Game.UI
                 "SettingsPanel", parent,
                 Vector2.zero, Vector2.one,
                 Vector2.zero, Vector2.zero,
-                UiBuilder.MenuPanelSolidBg);
+                UiTheme.PaperBase);
             var script = rootRt.gameObject.AddComponent<SettingsPanel>();
             script.dispatch = dispatch;
             script.BuildLayout(rootRt);
@@ -111,7 +111,7 @@ namespace PenguinRun.Game.UI
             t.color = Color.white;
             t.fontSize = 26;
             t.fontStyle = FontStyle.Bold;
-            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            t.font = UiTheme.FallbackFont;
             t.supportRichText = false;
 
             var input = fieldGo.GetComponent<InputField>();

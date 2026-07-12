@@ -44,7 +44,7 @@ namespace PenguinRun.Game.UI
                 "CampShopPanel", parent,
                 Vector2.zero, Vector2.one,
                 Vector2.zero, Vector2.zero,
-                UiBuilder.MenuPanelSolidBg);
+                UiTheme.PaperBase);
             var script = rootRt.gameObject.AddComponent<CampShopPanel>();
             script.dispatch = dispatch;
             script.BuildLayout(rootRt);
@@ -73,7 +73,7 @@ namespace PenguinRun.Game.UI
             var tabsContainer = UiBuilder.CreateRect("MainTabs", parent,
                 new Vector2(0.04f, 1f), new Vector2(0.96f, 1f),
                 new Vector2(0f, TabsHeight), new Vector2(0f, -top),
-                new Color(0.05f, 0.11f, 0.2f, 0.92f), rounded: true);
+                Color.Lerp(UiTheme.PaperWarm, UiTheme.MistBlue, 0.22f), rounded: true);
             tabsContainer.pivot = new Vector2(0.5f, 1f);
             UiBuilder.AddOutline(tabsContainer.gameObject, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
             UiBuilder.AddShadow(tabsContainer.gameObject, new Color(0f, 0f, 0f, 0.35f), new Vector2(0f, -4f));
