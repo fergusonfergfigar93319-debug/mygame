@@ -26,6 +26,14 @@ namespace PenguinRun.Game.UI.Storybook
         {
             var button = UiBuilder.CreateButton(name, parent, text, UiTheme.CoralAction,
                 Color.white, UiTheme.Body, rounded: true);
+            var legacyLabel = button.GetComponentInChildren<Text>();
+            if (legacyLabel != null) Object.Destroy(legacyLabel.gameObject);
+            var storyLabel = UiBuilder.CreateTmpText("StoryLabel", button.transform, text, UiTheme.Body,
+                FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+            storyLabel.rectTransform.anchorMin = Vector2.zero;
+            storyLabel.rectTransform.anchorMax = Vector2.one;
+            storyLabel.rectTransform.offsetMin = Vector2.zero;
+            storyLabel.rectTransform.offsetMax = Vector2.zero;
             UiBuilder.AddOutline(button.gameObject, UiTheme.StitchBorder, new Vector2(2f, -2f));
             UiBuilder.AddShadow(button.gameObject, UiTheme.ShadowWarm, new Vector2(0f, -5f));
             return button;

@@ -43,6 +43,7 @@ $storybook = Require-File 'Assets/Scripts/Runtime/Game/UI/Storybook/StorybookUi.
 foreach ($primitive in 'CreatePaperCard', 'CreateStoryLabel', 'CreatePrimaryAction', 'CreateSectionDivider', 'AddStitchedOutline', 'PlayPageTurnIn') {
     Require-Pattern $storybook "\b$primitive\b" "StorybookUi.$primitive"
 }
+Require-Pattern $storybook 'CreateTmpText\("StoryLabel"' 'storybook primary action uses a TMP label'
 
 $lobbyModel = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyViewModel.cs'
 Require-Pattern $lobbyModel 'readonly\s+struct\s+LobbyViewModel' 'immutable lobby view model'
@@ -58,6 +59,32 @@ Require-Pattern $panelRouter 'currentPanel' 'panel router owns the active panel'
 $mainMenu = Require-File 'Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs'
 Require-Pattern $mainMenu 'panelRouter\.Open\(' 'main menu delegates panel opening'
 Require-Pattern $mainMenu 'panelRouter\.Close\(' 'main menu delegates panel closing'
+
+foreach ($component in @(
+    'LobbyBackground',
+    'LobbyStoryCard',
+    'LobbyCompanionCorner',
+    'LobbyDock'
+)) {
+    $componentText = Require-File "Assets/Scripts/Runtime/Game/UI/Lobby/$component.cs"
+    Require-Pattern $componentText "class\s+$component" "lobby component $component"
+}
+$storyCard = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyStoryCard.cs'
+Require-Pattern $storyCard 'void\s+Bind\s*\(' 'LobbyStoryCard.Bind'
+$companionCorner = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyCompanionCorner.cs'
+Require-Pattern $companionCorner 'void\s+Bind\s*\(' 'LobbyCompanionCorner.Bind'
+$lobbyDock = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyDock.cs'
+Require-Pattern $lobbyDock 'void\s+SetSelected\s*\(' 'LobbyDock.SetSelected'
+Require-Pattern $mainMenu 'LobbyBackground\.Build\(' 'main menu delegates lobby background'
+Require-Pattern $mainMenu 'LobbyStoryCard\.Build\(' 'main menu delegates lobby story card'
+Require-Pattern $mainMenu 'LobbyCompanionCorner\.Build\(' 'main menu delegates companion corner'
+Require-Pattern $mainMenu 'LobbyDock\.Build\(' 'main menu delegates lobby dock'
+if ((Get-Content -Encoding utf8 -LiteralPath (Join-Path $ProjectRoot 'Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs')).Count -gt 1900) {
+    $failures.Add('MainMenuBootstrap still exceeds the phase-one 1900-line composition boundary')
+}
+if ($mainMenu -match 'DrawPenguinMascot') {
+    $failures.Add('MainMenuBootstrap still contains the legacy procedural mascot')
+}
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
