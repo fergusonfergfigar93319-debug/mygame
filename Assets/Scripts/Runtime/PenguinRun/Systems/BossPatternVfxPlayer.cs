@@ -5,6 +5,7 @@ namespace PenguinRun
 {
   internal sealed class BossPatternVfxPlayer
   {
+    private const int MaxShardBurstCount = 6;
     private readonly BossPatternFxPool pool = new();
     private readonly List<GameObject> persistentFx = new();
     private readonly List<GameObject> bossAttachedFx = new();
@@ -163,7 +164,30 @@ namespace PenguinRun
 		
 		  // 击发瞬间：Boss 周身冲击波扩散环
 		  SpawnShockwavePulse(def.GlowColor, profile.ImpactBurstScale);
+
+      if (def.Silhouette == BossSilhouette.SnowKing)
+        SpawnSnowKingIceStrike();
 		}
+
+    /// <summary>雪王击发只从现有 FX 池租用冰核脉冲和碎冰，绝不参与碰撞。</summary>
+    private void SpawnSnowKingIceStrike()
+    {
+      var core = RentBossFx("SnowKingIceCoreBurst", PrimitiveType.Sphere,
+        new Vector3(0f, 0.42f, -0.98f), Vector3.one * 0.72f,
+        new Color(0.35f, 0.92f, 1f, 0.72f));
+      if (core != null) bossAttachedFx.Add(core);
+
+      for (var i = 0; i < 4; i++)
+      {
+        var angle = i * 90f * Mathf.Deg2Rad;
+        var shard = RentBossFx($"SnowKingIceShard{i}", PrimitiveType.Cube,
+          new Vector3(Mathf.Cos(angle) * 0.72f, 0.72f, Mathf.Sin(angle) * 0.38f - 0.65f),
+          new Vector3(0.14f, 0.48f, 0.14f), new Color(0.58f, 0.9f, 1f, 0.7f));
+        if (shard == null) continue;
+        shard.transform.localRotation = Quaternion.Euler(0f, i * 90f, 28f);
+        bossAttachedFx.Add(shard);
+      }
+    }
 
 		/// <summary>击发瞬间 Boss 周身冲击波扩散环</summary>
 		private void SpawnShockwavePulse(Color baseColor, float scaleMul)
@@ -514,6 +538,7 @@ namespace PenguinRun
 
     private void SpawnShardBurst(float x, float z, int count, float scaleMul, Color? overrideColor = null)
     {
+      count = Mathf.Min(count, MaxShardBurstCount);
       var col = overrideColor ?? HostGlow(0.7f);
       for (var i = 0; i < count; i++)
       {

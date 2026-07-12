@@ -74,7 +74,6 @@ namespace PenguinRun.Game.UI
                 if (tmpFont != null) return tmpFont;
                 tmpFont = TMP_FontAsset.CreateFontAsset(FallbackFont);
                 tmpFont.atlasPopulationMode = AtlasPopulationMode.Dynamic;
-                tmpFont.enableMultiAtlasSupport = true;
                 return tmpFont;
             }
         }

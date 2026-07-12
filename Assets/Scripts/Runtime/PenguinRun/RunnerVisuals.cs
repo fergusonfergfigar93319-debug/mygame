@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace PenguinRun
@@ -8,6 +9,26 @@ namespace PenguinRun
         private static Mesh sphereMesh;
         private static Mesh cylinderMesh;
         private static Mesh capsuleMesh;
+        private static readonly Dictionary<MaterialKey, Material> materialCache = new();
+        private static readonly MaterialPropertyBlock colorBlock = new();
+
+        private readonly struct MaterialKey : System.IEquatable<MaterialKey>
+        {
+            private readonly string shaderName;
+            private readonly Color32 color;
+            private readonly bool transparent;
+
+            public MaterialKey(Shader shader, Color value, bool isTransparent)
+            {
+                shaderName = shader != null ? shader.name : string.Empty;
+                color = value;
+                transparent = isTransparent;
+            }
+
+            public bool Equals(MaterialKey other) => shaderName == other.shaderName && color.Equals(other.color) && transparent == other.transparent;
+            public override bool Equals(object obj) => obj is MaterialKey other && Equals(other);
+            public override int GetHashCode() => System.HashCode.Combine(shaderName, color, transparent);
+        }
 
         public static GameObject CreatePrimitive(string name, PrimitiveType type, Vector3 position, Vector3 scale, Color color, bool transparent = false)
         {
@@ -24,6 +45,7 @@ namespace PenguinRun
 
         public static void ApplyColor(Renderer renderer, Color color, bool transparent = false)
         {
+            if (renderer == null) return;
             renderer.sharedMaterial = CreateMaterial(color, transparent);
         }
 
@@ -36,13 +58,24 @@ namespace PenguinRun
                 Shader.Find("Sprites/Default") ??
                 Shader.Find("Standard");
 
-            var material = new Material(shader);
+            if (shader == null)
+            {
+                Debug.LogError("PenguinRun could not find a supported runtime material shader.");
+                return null;
+            }
+
+            var isTransparent = transparent || color.a < 0.99f;
+            var key = new MaterialKey(shader, color, isTransparent);
+            if (materialCache.TryGetValue(key, out var cached) && cached != null)
+                return cached;
+
+            var material = new Material(shader) { name = $"Runner Shared {shader.name} {color}" };
             SetColor(material, color);
-            if (transparent || color.a < 0.99f)
+            if (isTransparent)
             {
                 MakeTransparent(material);
             }
-
+            materialCache[key] = material;
             return material;
         }
 
@@ -71,13 +104,16 @@ namespace PenguinRun
         {
             if (renderer == null) return;
             var material = renderer.sharedMaterial;
-            var color = GetColor(material);
+            if (material == null) return;
+            renderer.GetPropertyBlock(colorBlock);
+            var hasOverride = !colorBlock.isEmpty;
+            var color = material.HasProperty("_BaseColor")
+                ? (hasOverride ? colorBlock.GetColor("_BaseColor") : material.GetColor("_BaseColor"))
+                : (hasOverride ? colorBlock.GetColor("_Color") : GetColor(material));
             color.a = Mathf.Clamp01(alpha);
-            SetColor(material, color);
-            if (color.a < 0.99f)
-            {
-                MakeTransparent(material);
-            }
+            if (material.HasProperty("_BaseColor")) colorBlock.SetColor("_BaseColor", color);
+            if (material.HasProperty("_Color")) colorBlock.SetColor("_Color", color);
+            renderer.SetPropertyBlock(colorBlock);
         }
 
         private static void MakeTransparent(Material material)

@@ -1,4 +1,8 @@
-# 项目架构说明
+# 项目架构说明（历史稿）
+
+> 状态：历史参考。本文描述的是早期 Android/Kotlin 原生横版原型结构。当前跑酷主流程已经迁移到 Unity，现行入口见 [CURRENT_DESIGN.md](./CURRENT_DESIGN.md)、[UNITY_INTEGRATION.md](./UNITY_INTEGRATION.md) 和根目录 `CONTEXT.md`。
+>
+> 本文只用于理解早期演进，不再作为新增 Unity 跑酷玩法、UI、相机或工程分层的依据。
 
 ## 目标
 

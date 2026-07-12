@@ -11,9 +11,14 @@
 
 ## 设计文档
 
-- [企鹅快跑重构方案](./docs/PENGUIN_RUN_RESTRUCTURE.md)
+- [当前设计基准](./docs/CURRENT_DESIGN.md)
+- [跑酷重构记录](./docs/PENGUIN_RUN_RESTRUCTURE.md)
+- [术语与领域规则](./CONTEXT.md)
+- [背景剧情说明](./docs/STORY.md)
 - [优化执行方案](./docs/GAME_OPTIMIZATION_PLAN.md)
-- [项目结构说明](./docs/ARCHITECTURE.md)
+- [页面设计与美术优化方案](./docs/UI_ART_REVAMP_PLAN.md)
+- [Unity 集成说明](./docs/UNITY_INTEGRATION.md)
+- [旧 Android 架构历史稿](./docs/ARCHITECTURE.md)
 - [开发协作指南](./docs/DEVELOPMENT_GUIDE.md)
 
 ## 构建

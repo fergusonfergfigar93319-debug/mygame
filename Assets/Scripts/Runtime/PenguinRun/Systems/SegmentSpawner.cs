@@ -1926,6 +1926,9 @@ namespace PenguinRun
             var root = powerUpPool.Rent();
             if (root == null) return null;
             root.name = name;
+            var visualProfile = PowerUpVisualProfile.For(kind, config.MapTheme);
+            coreColor = visualProfile.CoreColor;
+            secondaryColor = visualProfile.HaloColor;
 
             // 重设核心球颜色
             for (var i = root.transform.childCount - 1; i >= 0; i--)
@@ -1939,6 +1942,9 @@ namespace PenguinRun
             }
 
             AddPowerUpEffects(root.transform, kind, coreColor, secondaryColor);
+            var pulse = root.GetComponent<PowerUpPulse>();
+            if (pulse == null) pulse = root.AddComponent<PowerUpPulse>();
+            pulse.Configure(visualProfile.PulseScale);
             return root;
         }
 
@@ -2173,6 +2179,18 @@ namespace PenguinRun
             child.transform.localPosition = localPosition;
             child.transform.localScale = localScale;
             return child;
+        }
+
+        private sealed class PowerUpPulse : MonoBehaviour
+        {
+            private float scale = 1.1f;
+            private float phase;
+            public void Configure(float pulseScale) { scale = pulseScale; phase = Random.value * Mathf.PI * 2f; }
+            private void Update()
+            {
+                var pulse = 1f + (scale - 1f) * (0.5f + 0.5f * Mathf.Sin(Time.time * 4f + phase));
+                transform.localScale = Vector3.one * pulse;
+            }
         }
     }
 }

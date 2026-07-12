@@ -429,7 +429,7 @@ namespace PenguinRun.Game.UI
             text.fontStyle = style == FontStyle.Bold ? FontStyles.Bold : FontStyles.Normal;
             text.alignment = ToTmpAlignment(anchor);
             text.color = color ?? TextPrimary;
-            text.enableWordWrapping = true;
+            text.textWrappingMode = TextWrappingModes.Normal;
             text.overflowMode = TextOverflowModes.Overflow;
             text.raycastTarget = false;
             return text;

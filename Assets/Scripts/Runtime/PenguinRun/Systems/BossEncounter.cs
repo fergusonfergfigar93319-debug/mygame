@@ -205,7 +205,7 @@ namespace PenguinRun
             minPatternDangerDelay = Mathf.Max(0.35f, minDangerDelay);
             ConfigurePatternIntervalByStyle();
             Phase = BossPhase.Spawning;
-            spawnTimer = 1.4f;
+            spawnTimer = 1.8f;
             spawnDuration = spawnTimer;
 
             Root = new GameObject($"Boss_{def.DisplayName}");
@@ -1139,6 +1139,19 @@ namespace PenguinRun
                 new Vector3(1.65f, 1.4f, 0.4f), new Color(0.92f, 0.97f, 1f));
             belly.transform.SetParent(root, false);
 
+            // 冰核和肩甲建立远距离可辨的冰王剪影；仅为表现件，不参与命中判定。
+            var iceCore = AddPrimChild(root, "SnowKingIceCore", PrimitiveType.Sphere,
+                new Vector3(0f, 0.38f, -0.96f), Vector3.one * 0.42f, new Color(0.3f, 0.9f, 1f, 0.72f), true);
+            var coreRenderer = iceCore.GetComponent<Renderer>();
+            if (coreRenderer != null) tintRenderers.Add(coreRenderer);
+            for (var side = -1; side <= 1; side += 2)
+            {
+                var shoulder = AddPrimChild(root, $"SnowKingShoulderIce{side}", PrimitiveType.Cube,
+                    new Vector3(side * 1.18f, 1.08f, 0.12f), new Vector3(0.48f, 0.82f, 0.62f),
+                    new Color(0.5f, 0.86f, 1f, 0.82f), true);
+                shoulder.transform.localRotation = Quaternion.Euler(0f, 0f, -side * 22f);
+            }
+
             var headGo = AddPrim("Head", PrimitiveType.Sphere, new Vector3(0f, 1.6f, 0f),
                 new Vector3(1.6f, 1.4f, 1.5f), def.BodyColor);
             headGo.transform.SetParent(root, false);
@@ -1179,6 +1192,17 @@ namespace PenguinRun
             mainRenderer = torso.GetComponent<Renderer>();
             tintRenderers.Add(mainRenderer);
             AddPrimChild(root, "Plate", PrimitiveType.Cube, new Vector3(0f, 0.3f, -0.78f), new Vector3(1.95f, 1.65f, 0.18f), def.TrimColor);
+            var heartCore = AddPrimChild(root, "CedarHeartCore", PrimitiveType.Sphere,
+                new Vector3(0f, 0.48f, -0.93f), Vector3.one * 0.34f, new Color(0.95f, 0.7f, 0.28f, 0.8f), true);
+            var heartRenderer = heartCore.GetComponent<Renderer>();
+            if (heartRenderer != null) tintRenderers.Add(heartRenderer);
+            for (var side = -1; side <= 1; side += 2)
+            {
+                var rootShoulder = AddPrimChild(root, $"CedarRootShoulder{side}", PrimitiveType.Capsule,
+                    new Vector3(side * 1.18f, 1.16f, 0.12f), new Vector3(0.36f, 0.78f, 0.36f),
+                    new Color(0.32f, 0.22f, 0.12f));
+                rootShoulder.transform.localRotation = Quaternion.Euler(0f, 0f, side * 28f);
+            }
             AddPrimChild(root, "BarkSpine", PrimitiveType.Cube, new Vector3(0f, 1.2f, 0.9f), new Vector3(0.34f, 1.45f, 0.3f), new Color(0.35f, 0.24f, 0.14f));
             var headGo = AddPrimChild(root, "Head", PrimitiveType.Cube, new Vector3(0f, 1.7f, 0f), new Vector3(1.4f, 1.0f, 1.3f), def.BodyColor);
             tintRenderers.Add(headGo.GetComponent<Renderer>());
@@ -1217,6 +1241,15 @@ namespace PenguinRun
             tintRenderers.Add(headGo.GetComponent<Renderer>());
             AddPrimChild(root, "EyeL", PrimitiveType.Sphere, new Vector3(-0.4f, 1.55f, -0.4f), Vector3.one * 0.2f, def.TrimColor);
             AddPrimChild(root, "EyeR", PrimitiveType.Sphere, new Vector3(0.4f, 1.55f, -0.4f), Vector3.one * 0.2f, def.TrimColor);
+            AddPrimChild(root, "AuroraMagnetCore", PrimitiveType.Sphere, new Vector3(0f, 0.75f, -0.94f),
+                Vector3.one * 0.42f, new Color(0.3f, 1f, 0.82f, 0.72f), true);
+            for (var side = -1; side <= 1; side += 2)
+            {
+                var fin = AddPrimChild(root, $"AuroraFin{side}", PrimitiveType.Cube,
+                    new Vector3(side * 1.02f, 1.26f, -0.1f), new Vector3(0.18f, 0.72f, 0.68f),
+                    new Color(0.58f, 0.36f, 1f, 0.68f), true);
+                fin.transform.localRotation = Quaternion.Euler(0f, 0f, -side * 34f);
+            }
 
             // "翅膀"代替手臂
             armL = AddPrimChild(root, "WingL", PrimitiveType.Cube, new Vector3(-1.2f, 0.8f, 0f), new Vector3(1.4f, 0.18f, 0.85f), def.GlowColor, true).transform;
@@ -1248,6 +1281,13 @@ namespace PenguinRun
                     new Vector3(0.16f, 0.55f, 0.16f),
                     new Color(def.TrimColor.r, def.TrimColor.g, def.TrimColor.b, 0.42f), true);
             }
+            for (var side = -1; side <= 1; side += 2)
+            {
+                var horn = AddPrimChild(root, $"MistCrownHorn{side}", PrimitiveType.Cylinder,
+                    new Vector3(side * 0.72f, 2.08f, 0.08f), new Vector3(0.32f, 0.72f, 0.32f),
+                    new Color(0.5f, 0.62f, 0.7f, 0.72f), true);
+                horn.transform.localRotation = Quaternion.Euler(0f, 0f, -side * 18f);
+            }
             AddPrimChild(root, "EyeL", PrimitiveType.Sphere, new Vector3(-0.55f, 1.5f, -0.85f), Vector3.one * 0.28f, def.GlowColor);
             AddPrimChild(root, "EyeR", PrimitiveType.Sphere, new Vector3(0.55f, 1.5f, -0.85f), Vector3.one * 0.28f, def.GlowColor);
 
@@ -1263,6 +1303,15 @@ namespace PenguinRun
             mainRenderer = torso.GetComponent<Renderer>();
             tintRenderers.Add(mainRenderer);
             AddPrimChild(root, "CoralCrown", PrimitiveType.Cylinder, new Vector3(0f, 2.1f, 0f), new Vector3(1.7f, 0.16f, 1.7f), new Color(1f, 0.78f, 0.5f, 0.45f), true);
+            AddPrimChild(root, "CoralHeartCore", PrimitiveType.Sphere, new Vector3(0f, 0.72f, -1.08f),
+                Vector3.one * 0.46f, new Color(1f, 0.42f, 0.62f, 0.75f), true);
+            for (var side = -1; side <= 1; side += 2)
+            {
+                var crest = AddPrimChild(root, $"CoralCrest{side}", PrimitiveType.Cylinder,
+                    new Vector3(side * 1.05f, 1.8f, -0.1f), new Vector3(0.18f, 0.62f, 0.18f),
+                    new Color(1f, 0.64f, 0.34f, 0.82f), true);
+                crest.transform.localRotation = Quaternion.Euler(0f, 0f, -side * 26f);
+            }
 
             var headGo = new GameObject("Head");
             headGo.transform.SetParent(root, false);
@@ -1304,6 +1353,15 @@ namespace PenguinRun
             AddPrimChild(root, "Beak", PrimitiveType.Cube, new Vector3(0f, 1.45f, -1.2f), new Vector3(0.5f, 0.32f, 0.6f), def.TrimColor);
             AddPrimChild(root, "EyeL", PrimitiveType.Sphere, new Vector3(-0.35f, 1.75f, -0.95f), Vector3.one * 0.16f, new Color(1f, 0.4f, 0.2f));
             AddPrimChild(root, "EyeR", PrimitiveType.Sphere, new Vector3(0.35f, 1.75f, -0.95f), Vector3.one * 0.16f, new Color(1f, 0.4f, 0.2f));
+            AddPrimChild(root, "StormCore", PrimitiveType.Sphere, new Vector3(0f, 0.72f, -0.84f),
+                Vector3.one * 0.34f, new Color(1f, 0.94f, 0.3f, 0.78f), true);
+            for (var side = -1; side <= 1; side += 2)
+            {
+                var tail = AddPrimChild(root, $"StormTailFeather{side}", PrimitiveType.Cube,
+                    new Vector3(side * 0.56f, 0.52f, 1.38f), new Vector3(0.22f, 0.18f, 1.05f),
+                    new Color(0.65f, 0.84f, 1f, 0.76f), true);
+                tail.transform.localRotation = Quaternion.Euler(0f, side * 16f, side * 12f);
+            }
 
             // 大翅膀
             armL = AddPrimChild(root, "WingL", PrimitiveType.Cube, new Vector3(-1.7f, 0.7f, 0f), new Vector3(2.4f, 0.18f, 1.4f), def.BodyColor).transform;

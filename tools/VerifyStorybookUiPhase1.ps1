@@ -125,6 +125,14 @@ Require-Pattern $runResult 'JourneyResultViewModel' 'completed run uses the unif
 Require-Pattern $deathResult 'CreatePrimaryButton\("Retry"' 'death result preserves direct retry'
 Require-Pattern $deathResult 'CreateSecondaryButton\("ReturnToLobby"' 'death result preserves return to camp'
 
+$transition = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/SceneTransitionManager.cs'
+foreach ($contract in 'CanvasGroup', 'StorybookArtCatalog\.Mascot', 'progressFill', 'loadingHint') {
+    Require-Pattern $transition $contract "retained loading overlay contains $contract"
+}
+if ($transition -match 'void\s+OnGUI\s*\(') {
+    $failures.Add('SceneTransitionManager still renders loading through IMGUI')
+}
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1

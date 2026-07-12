@@ -45,7 +45,7 @@ namespace PenguinRun.Game.UI.Lobby
 
             var body = UiBuilder.CreateTmpText("StoryBody", card, string.Empty, UiTheme.Body,
                 FontStyle.Normal, TextAnchor.UpperLeft, UiTheme.InkSecondary);
-            body.enableWordWrapping = true;
+            body.textWrappingMode = TextWrappingModes.Normal;
             Place(body.rectTransform, new Vector2(0.07f, 0.35f), new Vector2(0.93f, 0.59f));
 
             var progressTrack = UiBuilder.CreateRect("StoryProgress", card, new Vector2(0.07f, 0.28f),

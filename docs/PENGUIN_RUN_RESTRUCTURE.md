@@ -1,5 +1,7 @@
 # 企鹅快跑重构方案
 
+> 状态：重构记录。本文记录项目从早期横版动作冒险转向跑酷的过程和已执行内容。当前设计入口见 [CURRENT_DESIGN.md](./CURRENT_DESIGN.md)；新增玩法和 UI 决策优先参考当前设计基准与 `CONTEXT.md`。
+
 ## 参考结论
 
 结合 Subway Surfers、Temple Run 等移动跑酷游戏，可以抽象出几条稳定模式：

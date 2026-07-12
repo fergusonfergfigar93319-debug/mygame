@@ -1702,7 +1702,7 @@ namespace PenguinRun
 
             foreach (var renderer in renderers)
             {
-                var id = renderer.GetInstanceID();
+                var id = renderer.GetEntityId().GetHashCode();
                 if (!sceneryRendererBaseEnabled.TryGetValue(id, out var baseEnabled))
                 {
                     baseEnabled = renderer.enabled;

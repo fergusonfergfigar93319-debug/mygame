@@ -12,7 +12,7 @@ namespace PenguinRun
         private sealed class Particle
         {
             public GameObject Go;
-            public Renderer Renderer;
+            public ParticleSystem System;
             public Vector3 Velocity;
             public float Life;
             public float MaxLife;
@@ -38,21 +38,22 @@ namespace PenguinRun
 
             for (var i = 0; i < capacity; i++)
             {
-                var go = RunnerVisuals.CreatePrimitive(
-                    $"Particle {i}",
-                    PrimitiveType.Cube,
-                    Vector3.zero,
-                    Vector3.one * 0.06f,
-                    Color.white,
-                    true);
+                var go = new GameObject($"Particle System {i}", typeof(ParticleSystem));
                 go.transform.SetParent(parent, true);
                 go.SetActive(false);
                 go.hideFlags = HideFlags.HideAndDontSave;
+                var system = go.GetComponent<ParticleSystem>();
+                var main = system.main;
+                main.playOnAwake = false;
+                main.simulationSpace = ParticleSystemSimulationSpace.World;
+                main.maxParticles = 256;
+                var emission = system.emission;
+                emission.enabled = false;
 
                 pool.Add(new Particle
                 {
                     Go = go,
-                    Renderer = go.GetComponent<Renderer>(),
+                    System = system,
                     Alive = false,
                 });
             }
@@ -83,6 +84,7 @@ namespace PenguinRun
                 p.UseGravity = useGravity;
                 p.Alive = true;
                 p.Go.SetActive(true);
+                EmitParticle(p);
 
                 active.Add(p);
             }
@@ -109,6 +111,7 @@ namespace PenguinRun
                 p.UseGravity = false;
                 p.Alive = true;
                 p.Go.SetActive(true);
+                EmitParticle(p);
 
                 active.Add(p);
             }
@@ -139,6 +142,7 @@ namespace PenguinRun
                 p.UseGravity = true;
                 p.Alive = true;
                 p.Go.SetActive(true);
+                EmitParticle(p);
 
                 active.Add(p);
             }
@@ -174,12 +178,6 @@ namespace PenguinRun
                 var scale = Mathf.Lerp(p.StartScale, 0.01f, t);
                 p.Go.transform.localScale = Vector3.one * scale;
 
-                // 透明度衰减
-                var alpha = 1f - t * t;
-                var col = p.StartColor;
-                col.a *= alpha;
-                RunnerVisuals.ApplyColor(p.Renderer, col);
-
                 // 低于地面则回收
                 if (p.Go.transform.position.y < groundY - 0.5f)
                 {
@@ -200,9 +198,23 @@ namespace PenguinRun
             return null; // 池耗尽
         }
 
+        private static void EmitParticle(Particle p)
+        {
+            var emitParams = new ParticleSystem.EmitParams
+            {
+                position = p.Go.transform.position,
+                velocity = p.Velocity,
+                startColor = p.StartColor,
+                startSize = p.StartScale,
+                startLifetime = p.MaxLife,
+            };
+            p.System.Emit(emitParams, 1);
+        }
+
         private void Return(Particle p, int activeIdx)
         {
             p.Alive = false;
+            p.System.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             p.Go.SetActive(false);
             p.Go.transform.position = Vector3.zero;
             active.RemoveAt(activeIdx);
@@ -214,6 +226,7 @@ namespace PenguinRun
             for (var i = active.Count - 1; i >= 0; i--)
             {
                 active[i].Alive = false;
+                active[i].System.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
                 active[i].Go.SetActive(false);
             }
             active.Clear();
