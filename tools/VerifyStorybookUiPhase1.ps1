@@ -99,6 +99,21 @@ foreach ($panelFile in 'MissionPanel.cs', 'CodexPanel.cs', 'CampShopPanel.cs', '
     }
 }
 
+$hudCanvas = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RunnerHudCanvas.cs'
+foreach ($method in 'BindStatic', 'RefreshDynamic', 'SetBossMode', 'SetPaused', 'SetFeedback', 'Dispose') {
+    Require-Pattern $hudCanvas "\b$method\b" "RunnerHudCanvas.$method"
+}
+Require-Pattern $hudCanvas 'EnsureEventSystem' 'retained HUD supports direct runner-scene launch'
+$runnerGame = Require-File 'Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs'
+Require-Pattern $runnerGame 'RunnerHudCanvas' 'runner game owns the retained HUD canvas'
+Require-Pattern $runnerGame 'hudCanvas\.RefreshDynamic' 'runner game refreshes the retained HUD'
+if ($runnerGame -match 'hud\.Draw\(') {
+    $failures.Add('PenguinRunnerGame still draws runtime HUD statistics through IMGUI')
+}
+if (Test-Path -LiteralPath (Join-Path $ProjectRoot 'Assets/Scripts/Runtime/PenguinRun/Systems/RunnerHud.cs')) {
+    $failures.Add('Legacy IMGUI RunnerHud.cs still exists after retained-HUD migration')
+}
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1

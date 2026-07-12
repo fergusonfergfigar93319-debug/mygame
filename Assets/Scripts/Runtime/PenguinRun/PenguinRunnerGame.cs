@@ -28,10 +28,12 @@ namespace PenguinRun
         private PenguinCharacter character;
         private RunnerAudio runnerAudio;
         private Camera runnerCamera;
+        private Material gradientSkyboxMaterial;
+        private GameObject deathOverlay;
         private Vector3 cameraVelocity;
         private float cameraYawSmoothed;
         private float cameraYawVel;
-        private RunnerHud hud;
+        private RunnerHudCanvas hudCanvas;
         private ParticleEffectPool particlePool;
         private WorldEventScheduler worldEvents;
         private bool exiting;
@@ -62,8 +64,6 @@ namespace PenguinRun
         private enum DeathState { None, Freeze, FadeRed, ShowResult, WaitingTap }
         private DeathState deathState;
         private float deathStateTimer;
-        private GUIStyle deathScoreStyle;
-        private GUIStyle deathTitleStyle;
 
         private const float ThemeSwitchIntervalSeconds = 52f;
         private const float ThemeTransitionFadeOutSeconds = 0.45f;
@@ -88,15 +88,6 @@ namespace PenguinRun
         /// <summary>IMGUI HUD：按屏幕高度对齐到 1080p 基准，供边缘触控阈值使用。</summary>
         private static float RunnerHudLayoutScale => Mathf.Max(Screen.height / RunnerHudReferenceHeight, 1e-4f);
 
-        private static RunnerHudLayout ApplyRunnerHudGuiMatrix()
-        {
-            var safe = Screen.safeArea;
-            var s = RunnerHudLayoutScale;
-            var guiTop = Screen.height - safe.y - safe.height;
-            GUI.matrix = Matrix4x4.TRS(new Vector3(safe.x, guiTop, 0f), Quaternion.identity, new Vector3(s, s, 1f));
-            return new RunnerHudLayout(safe.width / s, safe.height / s);
-        }
-
         private void ApplyRunnerCameraViewport169()
         {
             if (runnerCamera == null) return;
@@ -119,6 +110,7 @@ namespace PenguinRun
 
             tuning = RunnerTuning.FromConfig(tuningConfig);
             ConfigureRuntimePerformance(true);
+            ApplyMobileQualityBudget();
             config = RunnerSessionConfig.Snapshot();
             currentTheme = config.MapTheme;
             nextThemeSwitchTime = ThemeSwitchIntervalSeconds;
@@ -130,13 +122,13 @@ namespace PenguinRun
             tuning.world.speedPerDistance = diff.SpeedRampPerMeter;
             runnerAudio = gameObject.AddComponent<RunnerAudio>();
             runnerAudio.Initialize(config.Daily, config.SfxEnabled, config.BgmEnabled, config.RunBgmTrack, config.AmbienceTrack, config.SfxStyle);
-            hud = new RunnerHud();
             BuildScene();
             particlePool = new ParticleEffectPool(transform, tuning.movement.groundY);
             worldEvents = new WorldEventScheduler();
             ApplyMapThemeVisuals(currentTheme);
             game = new RunnerGameController(tuning, config, runnerAudio, player.transform, character, transform, PulseHaptic, TriggerScreenFlash, OnRunFinished);
             game.ResetRun(false);
+            hudCanvas = RunnerHudCanvas.Create(config, RequestFinishRunFromHud);
             lastLives = game.World.Lives;
 
             // ── 注册核心服务 ──────────────────────────────────────
@@ -159,6 +151,14 @@ namespace PenguinRun
 
         private void OnDestroy()
         {
+            hudCanvas?.Dispose();
+            hudCanvas = null;
+            if (deathOverlay != null)
+                Destroy(deathOverlay);
+            if (RenderSettings.skybox == gradientSkyboxMaterial)
+                RenderSettings.skybox = null;
+            if (gradientSkyboxMaterial != null)
+                Destroy(gradientSkyboxMaterial);
             EventBus.Clear();
             ServiceLocator.Clear();
         }
@@ -258,6 +258,20 @@ namespace PenguinRun
             TryStartThemeTransition();
         }
 
+        private void LateUpdate()
+        {
+            if (game == null || hudCanvas == null) return;
+            var world = game.World;
+            hudCanvas.RefreshDynamic(world, world.Score, game.FeedbackText, game.FeedbackTimer);
+            hudCanvas.SetBossMode(game.Boss);
+            hudCanvas.SetPaused(game.IsPaused);
+        }
+
+        private void RequestFinishRunFromHud()
+        {
+            if (game != null && !exiting) game.FinishRun();
+        }
+
         // ── 死亡序列（FSM DeathSequence → GameOver，本地子阶段管 overlay）──
         private void TickDeathPresentation(float rawDt)
         {
@@ -300,28 +314,19 @@ namespace PenguinRun
                         deathState = DeathState.ShowResult;
                         deathStateTimer = 0f;
                         game.AdvanceDeathToResult();
+                        ShowDeathOverlay();
                     }
                     break;
 
                 case DeathState.ShowResult:
                     character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
                     UpdateCamera(dt);
-
-                    if (deathStateTimer >= 1.5f)
-                    {
-                        deathState = DeathState.WaitingTap;
-                        deathStateTimer = 0f;
-                    }
                     break;
 
                 case DeathState.WaitingTap:
                     character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
                     UpdateCamera(dt);
 
-                    if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
-                    {
-                        FinishDeathPresentation();
-                    }
                     break;
             }
         }
@@ -337,56 +342,28 @@ namespace PenguinRun
             }
         }
 
+        private void ShowDeathOverlay()
+        {
+            if (deathOverlay != null || game == null) return;
+            var world = game.World;
+            deathOverlay = RunnerDeathOverlay.Show(world.Score, Mathf.RoundToInt(world.Distance), world.Coins,
+                RestartRunFromDeathOverlay, FinishDeathPresentation);
+        }
+
+        private void RestartRunFromDeathOverlay()
+        {
+            deathOverlay = null;
+            deathState = DeathState.None;
+            deathStateTimer = 0f;
+            game.ResetRun(true);
+            lastLives = game.World.Lives;
+            lastCoinCount = game.World.Coins;
+            lastPerfectDodges = game.World.PerfectDodges;
+        }
+
         private void DrawDeathOverlay()
         {
             if (!game.IsDeathPresentation) return;
-
-            if (deathState == DeathState.ShowResult || deathState == DeathState.WaitingTap)
-            {
-                // 结算摘要
-                var world = game.World;
-                var cx = Screen.width * 0.5f;
-                var cy = Screen.height * 0.38f;
-
-                if (deathTitleStyle == null)
-                {
-                    deathTitleStyle = new GUIStyle(GUI.skin.label)
-                    {
-                        fontSize = 56,
-                        fontStyle = FontStyle.Bold,
-                        alignment = TextAnchor.MiddleCenter,
-                        normal = { textColor = Color.white },
-                    };
-                    deathScoreStyle = new GUIStyle(GUI.skin.label)
-                    {
-                        fontSize = 36,
-                        alignment = TextAnchor.MiddleCenter,
-                        normal = { textColor = new Color(1f, 0.92f, 0.55f) },
-                    };
-                }
-
-                GUI.Label(new Rect(cx - 200f, cy, 400f, 70f), "游戏结束", deathTitleStyle);
-                GUI.Label(new Rect(cx - 200f, cy + 72f, 400f, 50f), $"得分 {world.Score}", deathScoreStyle);
-                GUI.Label(new Rect(cx - 200f, cy + 122f, 400f, 36f), $"距离 {Mathf.RoundToInt(world.Distance)}m · 鱼干 {world.Coins}", new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = 22,
-                    alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = new Color(0.8f, 0.9f, 1f) },
-                });
-
-                if (deathState == DeathState.WaitingTap)
-                {
-                    var pulse = Mathf.Sin(Time.time * 3f) * 0.3f + 0.7f;
-                    var tapColor = new Color(1f, 1f, 1f, pulse);
-                    var tapStyle = new GUIStyle(GUI.skin.label)
-                    {
-                        fontSize = 26,
-                        alignment = TextAnchor.MiddleCenter,
-                        normal = { textColor = tapColor },
-                    };
-                    GUI.Label(new Rect(cx - 200f, cy + 190f, 400f, 40f), "点击返回", tapStyle);
-                }
-            }
 
             // 红屏覆盖
             if (deathState == DeathState.FadeRed)
@@ -649,6 +626,34 @@ namespace PenguinRun
                         runnerCamera.backgroundColor = new Color(0.54f, 0.77f, 0.95f);
                     break;
             }
+
+            ApplyThemeSkybox(theme);
+        }
+
+        private void SetupGradientSkybox()
+        {
+            var shader = Shader.Find("PenguinRun/GradientSkybox");
+            if (shader == null)
+            {
+                Debug.LogWarning("Gradient skybox shader is unavailable; keeping the current camera background.");
+                return;
+            }
+
+            gradientSkyboxMaterial ??= new Material(shader) { name = "PenguinRun Gradient Skybox" };
+            RenderSettings.skybox = gradientSkyboxMaterial;
+            if (runnerCamera != null)
+                runnerCamera.clearFlags = CameraClearFlags.Skybox;
+        }
+
+        private void ApplyThemeSkybox(RunnerMapTheme theme)
+        {
+            if (gradientSkyboxMaterial == null) return;
+            var profile = ThemePresentationProfile.For(theme);
+            gradientSkyboxMaterial.SetColor("_HorizonColor", profile.HorizonColor);
+            gradientSkyboxMaterial.SetColor("_ZenithColor", profile.ZenithColor);
+            gradientSkyboxMaterial.SetColor("_AuroraColor", profile.AccentColor);
+            gradientSkyboxMaterial.SetFloat("_StarIntensity", theme == RunnerMapTheme.SkyFlight ? 0.04f : 0.38f);
+            DynamicGI.UpdateEnvironment();
         }
 
         private static void EnsureLandscape()
@@ -706,6 +711,7 @@ namespace PenguinRun
             runnerCamera.farClipPlane = 260f; // 增加远裁剪面，让后方跑道显示更远
             runnerCamera.clearFlags = CameraClearFlags.SolidColor;
             runnerCamera.backgroundColor = new Color(0.54f, 0.77f, 0.95f);
+            SetupGradientSkybox();
             ApplyRunnerCameraViewport169();
 
             RenderSettings.ambientLight = new Color(0.42f, 0.58f, 0.68f);
@@ -1155,6 +1161,52 @@ namespace PenguinRun
                         new Color(0.82f, 0.9f, 1f));
                     break;
             }
+
+            var profile = ThemePresentationProfile.For(theme);
+            AddProfileLandmark(profile.PrimaryLandmark, -10.8f, z + 13f, index, profile.AccentColor);
+            if (index % 2 == 0)
+                AddProfileLandmark(profile.SecondaryLandmark, 10.8f, z + 17f, index + 1, profile.AccentColor);
+        }
+
+        private void AddProfileLandmark(ThemeLandmarkKind kind, float x, float z, int index, Color accent)
+        {
+            switch (kind)
+            {
+                case ThemeLandmarkKind.IceCrystal:
+                    AddCrystalCluster(x, z);
+                    break;
+                case ThemeLandmarkKind.CedarRuin:
+                    AddCedarRuin(x, z, index);
+                    break;
+                case ThemeLandmarkKind.SnowPine:
+                    AddOpenNatureProp("tree_pineTallA", x, z, Vector3.one * 1.15f, accent);
+                    break;
+                case ThemeLandmarkKind.AuroraBeacon:
+                case ThemeLandmarkKind.MagneticCrystal:
+                    AddAuroraBeacon(x, z, index);
+                    break;
+                case ThemeLandmarkKind.MistVeil:
+                    AddMistVeil(x, z, index);
+                    break;
+                case ThemeLandmarkKind.FogStone:
+                    AddOpenNatureProp("stone_2", x, z, Vector3.one * 1.3f, accent);
+                    break;
+                case ThemeLandmarkKind.CoralReef:
+                    AddCoralReef(x, z, index);
+                    break;
+                case ThemeLandmarkKind.ShellCluster:
+                    AddTreasureChest(x, z);
+                    break;
+                case ThemeLandmarkKind.SkyArch:
+                    AddSkyArch(x, z, index);
+                    break;
+                case ThemeLandmarkKind.CloudIsland:
+                    AddFloatingCloud(x, z, 1.5f);
+                    break;
+                case ThemeLandmarkKind.IceArch:
+                    AddIceCrack(x, z, 2.8f);
+                    break;
+            }
         }
 
         private void AddCoralReef(float x, float z, int index)
@@ -1426,16 +1478,34 @@ namespace PenguinRun
         {
             var group = new GameObject("Distant Ice Ridge");
             group.transform.position = new Vector3(x, 0f, z);
-            var ridge = RunnerVisuals.CreatePrimitive("Blue Ridge", PrimitiveType.Cube, group.transform.position + new Vector3(0f, height * 0.42f, 0f), new Vector3(height * 1.45f, height, height * 0.8f), new Color(0.18f, 0.42f, 0.68f));
-            ridge.transform.rotation = Quaternion.Euler(0f, 0f, x < 0f ? -18f : 18f);
-            ridge.transform.SetParent(group.transform, true);
-            var cap = RunnerVisuals.CreatePrimitive("Ridge Snow Cap", PrimitiveType.Cube, group.transform.position + new Vector3(0f, height * 0.84f, -0.06f), new Vector3(height * 0.76f, height * 0.2f, height * 0.66f), new Color(0.84f, 0.96f, 1f));
-            cap.transform.rotation = ridge.transform.rotation;
-            cap.transform.SetParent(group.transform, true);
-            var shadow = RunnerVisuals.CreatePrimitive("Ridge Cool Shadow", PrimitiveType.Cube, group.transform.position + new Vector3(x < 0f ? 0.46f : -0.46f, height * 0.4f, -0.2f), new Vector3(height * 0.42f, height * 0.72f, height * 0.64f), new Color(0.1f, 0.25f, 0.46f, 0.35f), true);
-            shadow.transform.rotation = ridge.transform.rotation;
-            shadow.transform.SetParent(group.transform, true);
+            var ridge = new GameObject("Low Poly Ridge", typeof(MeshFilter), typeof(MeshRenderer));
+            ridge.transform.SetParent(group.transform, false);
+            ridge.GetComponent<MeshFilter>().sharedMesh = CreateRidgeSilhouetteMesh(height, x < 0f);
+            ridge.GetComponent<MeshRenderer>().sharedMaterial = RunnerVisuals.CreateMaterial(new Color(0.16f, 0.36f, 0.62f));
+            var cap = new GameObject("Ridge Snow Cap", typeof(MeshFilter), typeof(MeshRenderer));
+            cap.transform.SetParent(group.transform, false);
+            cap.transform.localPosition = new Vector3(0f, height * 0.06f, -0.04f);
+            cap.GetComponent<MeshFilter>().sharedMesh = CreateRidgeSilhouetteMesh(height * 0.62f, x < 0f);
+            cap.GetComponent<MeshRenderer>().sharedMaterial = RunnerVisuals.CreateMaterial(new Color(0.78f, 0.93f, 1f));
             RegisterSceneryProp(group, x, z);
+        }
+
+        private static Mesh CreateRidgeSilhouetteMesh(float height, bool facesRight)
+        {
+            var width = height * 1.15f;
+            var peakX = facesRight ? width * 0.16f : -width * 0.16f;
+            var mesh = new Mesh { name = "Distant Ridge Silhouette" };
+            mesh.vertices = new[]
+            {
+                new Vector3(-width, 0f, 0f), new Vector3(-width * 0.45f, height * 0.52f, 0f),
+                new Vector3(peakX, height, 0f), new Vector3(width * 0.5f, height * 0.34f, 0f), new Vector3(width, 0f, 0f),
+                new Vector3(-width, 0f, 0.35f), new Vector3(-width * 0.45f, height * 0.52f, 0.35f),
+                new Vector3(peakX, height, 0.35f), new Vector3(width * 0.5f, height * 0.34f, 0.35f), new Vector3(width, 0f, 0.35f),
+            };
+            mesh.triangles = new[] { 0, 1, 6, 0, 6, 5, 1, 2, 7, 1, 7, 6, 2, 3, 8, 2, 8, 7, 3, 4, 9, 3, 9, 8 };
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         private void AnimateScenery(float dt, float effectiveSpeed)
@@ -1825,15 +1895,23 @@ namespace PenguinRun
 
         private static void ConfigureRuntimePerformance(bool active)
         {
-            QualitySettings.vSyncCount = active ? 1 : 0;
+            QualitySettings.vSyncCount = Application.isMobilePlatform ? 0 : (active ? 1 : 0);
             Application.targetFrameRate = active ? 60 : 15;
             Screen.sleepTimeout = active ? SleepTimeout.NeverSleep : SleepTimeout.SystemSetting;
             Input.gyro.enabled = false;
         }
 
+        private static void ApplyMobileQualityBudget()
+        {
+            if (!Application.isMobilePlatform) return;
+            QualitySettings.particleRaycastBudget = 64;
+            QualitySettings.shadowDistance = Mathf.Min(QualitySettings.shadowDistance, 45f);
+            QualitySettings.asyncUploadTimeSlice = Mathf.Max(QualitySettings.asyncUploadTimeSlice, 4);
+        }
+
         private void OnGUI()
         {
-            if (game == null || hud == null)
+            if (game == null)
                 return;
 
             // ── 倒计时覆盖层 ──────────────────────────────────────────
@@ -1841,23 +1919,6 @@ namespace PenguinRun
 
             // ── 死亡序列覆盖层 ────────────────────────────────────────
             DrawDeathOverlay();
-
-            var prevMatrix = GUI.matrix;
-            try
-            {
-                var layout = ApplyRunnerHudGuiMatrix();
-                var world = game.World;
-                if (hud.Draw(layout, config, world, game.CurrentState, world.Score, game.FeedbackText, game.FeedbackTimer,
-                        currentTheme,
-                        game.Boss, game.IsPaused, game.SegmentBannerTimer, game.SegmentBannerKind))
-                {
-                    game.FinishRun();
-                }
-            }
-            finally
-            {
-                GUI.matrix = prevMatrix;
-            }
 
             DrawThemeTransitionOverlay();
             DrawScreenFlashOverlay();
