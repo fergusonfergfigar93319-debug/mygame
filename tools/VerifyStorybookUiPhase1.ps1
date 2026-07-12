@@ -44,6 +44,21 @@ foreach ($primitive in 'CreatePaperCard', 'CreateStoryLabel', 'CreatePrimaryActi
     Require-Pattern $storybook "\b$primitive\b" "StorybookUi.$primitive"
 }
 
+$lobbyModel = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyViewModel.cs'
+Require-Pattern $lobbyModel 'readonly\s+struct\s+LobbyViewModel' 'immutable lobby view model'
+foreach ($field in 'CurrentStoryTitle', 'PrimaryActionLabel', 'CompanionHint') {
+    Require-Pattern $lobbyModel "\b$field\b" "LobbyViewModel.$field"
+}
+
+$panelRouter = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyPanelRouter.cs'
+Require-Pattern $panelRouter 'void\s+Open\s*\(' 'panel router open command'
+Require-Pattern $panelRouter 'void\s+Close\s*\(' 'panel router close command'
+Require-Pattern $panelRouter 'currentPanel' 'panel router owns the active panel'
+
+$mainMenu = Require-File 'Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs'
+Require-Pattern $mainMenu 'panelRouter\.Open\(' 'main menu delegates panel opening'
+Require-Pattern $mainMenu 'panelRouter\.Close\(' 'main menu delegates panel closing'
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1

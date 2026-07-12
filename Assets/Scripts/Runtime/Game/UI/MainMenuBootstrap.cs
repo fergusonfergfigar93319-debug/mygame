@@ -3,6 +3,7 @@ using PenguinRun.Game.Save;
 using PenguinRun.Game.Shop;
 using PenguinRun.Game.Leaderboard;
 using PenguinRun.Game;
+using PenguinRun.Game.UI.Lobby;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
@@ -43,8 +44,7 @@ namespace PenguinRun.Game.UI
         private Button difficultyChipButton;
         private GameObject profileStatsOverlay;
         private Transform panelLayer;
-        private GameObject currentPanel;
-        private string currentPanelName;
+        private LobbyPanelRouter panelRouter;
         private RectTransform dockWrap;
 
         /// <summary>「开始游戏」：归入 MenuPrimaryCtaStrip，避免叠层顺序导致点击被吞。</summary>
@@ -245,7 +245,7 @@ namespace PenguinRun.Game.UI
         {
             if (Input.GetKeyDown(KeyCode.Escape))
             {
-                if (currentPanel != null)
+                if (panelRouter != null && panelRouter.HasOpenPanel)
                 {
                     ClosePanel();
                 }
@@ -437,6 +437,7 @@ namespace PenguinRun.Game.UI
             prt.anchorMax = Vector2.one;
             prt.sizeDelta = Vector2.zero;
             prt.anchoredPosition = Vector2.zero;
+            panelRouter = new LobbyPanelRouter(panelLayer, OnPanelRouterChanged, BringLobbyUiToFront);
         }
 
         /// <summary>四角软暗角：使用大圆，alpha 自然衰减替代硬边矩形 vignette。</summary>
@@ -1700,6 +1701,40 @@ namespace PenguinRun.Game.UI
             SetRaycastTargets(parent, false);
         }
 
+        private static LobbyViewModel BuildLobbyViewModel()
+        {
+            var claimableMissions = MissionStore.CountClaimableMissions();
+            var affordableUpgrades = CampUpgrades.CountAffordableUpgrades();
+
+            string title;
+            string body;
+            string action;
+            if (claimableMissions > 0)
+            {
+                title = "营地来信";
+                body = $"有 {claimableMissions} 份旅程奖励正在等你领取。";
+                action = "领取任务奖励";
+            }
+            else if (affordableUpgrades > 0)
+            {
+                title = "让营火更亮一些";
+                body = $"现有鱼干可以完成 {affordableUpgrades} 项营地修复。";
+                action = "修复营地";
+            }
+            else
+            {
+                title = "风雪后的第一束光";
+                body = "带上伙伴，继续寻找散落在六片雪原里的故事残页。";
+                action = "翻开新旅程";
+            }
+
+            var companionHint = PlayerSave.CompanionDrorUnlocked
+                ? "团团已整装，准备同行"
+                : "再完成几次旅程，新的伙伴会来到营地";
+            return new LobbyViewModel(title, body, action, PlayerSave.PlayerLevelProgress,
+                companionHint, PlayerSave.TotalFishSnacks, claimableMissions);
+        }
+
         private void RefreshHeader()
         {
             PlayerSave.EnsureTotalRunsSynced();
@@ -2341,39 +2376,28 @@ namespace PenguinRun.Game.UI
         private void OpenCodex() => OpenPanel(CodexPanel.Build(panelLayer, OnPanelEvent), "Codex");
         private void OpenSettings() => OpenPanel(SettingsPanel.Build(panelLayer, OnPanelEvent), "Settings");
 
-        private void OpenPanel(GameObject go, string panelName)
+        private void OpenPanel(GameObject go, string panelName) => panelRouter.Open(go, panelName);
+
+        private void ClosePanel() => panelRouter.Close();
+
+        private void OnPanelRouterChanged()
         {
-            ClosePanel();
-            currentPanel = go;
-            currentPanelName = panelName;
-
-            if (go != null && go.TryGetComponent<RectTransform>(out var panelRt))
-                panelRt.PlayPanelPopIn();
-
-            if (panelLayer != null) panelLayer.SetAsLastSibling();
-            if (dockWrap != null) dockWrap.SetAsLastSibling();
-            if (snackbar != null) snackbar.transform.SetAsLastSibling();
-            
+            RefreshHeader();
             RefreshDockState();
         }
 
-        private void ClosePanel()
+        private void BringLobbyUiToFront()
         {
-            if (currentPanel != null)
-            {
-                Destroy(currentPanel);
-                currentPanel = null;
-                currentPanelName = null;
-                RefreshHeader();
-                RefreshDockState();
-            }
+            if (panelLayer != null) panelLayer.SetAsLastSibling();
+            if (dockWrap != null) dockWrap.SetAsLastSibling();
+            if (snackbar != null) snackbar.transform.SetAsLastSibling();
         }
 
         private void RefreshDockState()
         {
             foreach (var item in dockItems)
             {
-                bool isSelected = (item.panelName == currentPanelName);
+                bool isSelected = item.panelName == panelRouter?.CurrentPanelName;
 
                 // 顶部指示条
                 if (item.activeLine != null)
