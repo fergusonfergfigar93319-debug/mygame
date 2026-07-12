@@ -39,6 +39,11 @@ foreach ($asset in @(
     }
 }
 
+$storybook = Require-File 'Assets/Scripts/Runtime/Game/UI/Storybook/StorybookUi.cs'
+foreach ($primitive in 'CreatePaperCard', 'CreateStoryLabel', 'CreatePrimaryAction', 'CreateSectionDivider', 'AddStitchedOutline', 'PlayPageTurnIn') {
+    Require-Pattern $storybook "\b$primitive\b" "StorybookUi.$primitive"
+}
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1
