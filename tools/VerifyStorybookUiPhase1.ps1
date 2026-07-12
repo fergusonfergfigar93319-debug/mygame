@@ -26,6 +26,19 @@ foreach ($token in 'PaperBase', 'PaperWarm', 'InkPrimary', 'InkSecondary', 'Pine
 Require-Pattern $theme 'StorybookCardRadius' 'storybook card radius token'
 Require-Pattern $theme 'StorybookPageTurnDuration' 'storybook page-turn duration token'
 
+$art = Require-File 'Assets/Scripts/Runtime/Game/UI/Storybook/StorybookArtCatalog.cs'
+Require-Pattern $art 'LobbyPanoramaPath' 'lobby panorama resource path'
+Require-Pattern $art 'MascotPath' 'mascot resource path'
+Require-Pattern $art 'CreateFallbackMascot' 'mascot fallback'
+foreach ($asset in @(
+    'Assets/Resources/PenguinRun/StorybookUI/lobby_panorama.png',
+    'Assets/Resources/PenguinRun/StorybookUI/mascot_gugugaga.png'
+)) {
+    if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot $asset))) {
+        $failures.Add("Missing storybook art: $asset")
+    }
+}
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1
