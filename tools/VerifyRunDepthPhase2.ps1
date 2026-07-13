@@ -1,0 +1,55 @@
+param([string]$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path)
+
+$ErrorActionPreference = 'Stop'
+$failures = [System.Collections.Generic.List[string]]::new()
+
+function Require-File([string]$relativePath) {
+    $path = Join-Path $ProjectRoot $relativePath
+    if (-not (Test-Path -LiteralPath $path)) {
+        $failures.Add("Missing required file: $relativePath")
+        return $null
+    }
+
+    return Get-Content -Raw -Encoding utf8 -LiteralPath $path
+}
+
+function Require-Pattern([string]$content, [string]$pattern, [string]$description) {
+    if ($null -eq $content -or $content -notmatch $pattern) {
+        $failures.Add("Missing contract: $description")
+    }
+}
+
+$routeDirector = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RouteEventDirector.cs'
+Require-Pattern $routeDirector '\bTick\s*\(' 'RouteEventDirector.Tick'
+Require-Pattern $routeDirector '\bChoose\s*\(' 'RouteEventDirector.Choose'
+
+$upgradeState = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RunUpgradeState.cs'
+Require-Pattern $upgradeState '\bBuildOffer\s*\(' 'RunUpgradeState.BuildOffer'
+Require-Pattern $upgradeState '\bSelect\s*\(' 'RunUpgradeState.Select'
+
+$skillTracker = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/SkillScoreTracker.cs'
+Require-Pattern $skillTracker '\bRecord\s*\(' 'SkillScoreTracker.Record'
+
+$traitCatalog = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/BossThemeTraitCatalog.cs'
+Require-Pattern $traitCatalog '\bFor\s*\(' 'BossThemeTraitCatalog.For'
+
+$bossSystem = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/BossSystem.cs'
+Require-Pattern $bossSystem '\bCheckPatternHit\s*\(' 'BossSystem.CheckPatternHit damage authority'
+Require-Pattern $bossSystem 'RunnerHitResolver\.IsBossPatternHit\s*\(' 'BossSystem delegates pattern hits to RunnerHitResolver'
+
+$hitResolver = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RunnerHitResolver.cs'
+Require-Pattern $hitResolver '\bIsBossPatternHit\s*\(' 'RunnerHitResolver.IsBossPatternHit'
+Require-Pattern $bossSystem '\bIsPatternDangerous\b' 'boss dangerous-window authority'
+
+$fxPool = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/BossPatternFxPool.cs'
+Require-Pattern $fxPool 'MaxPoolSize\s*=\s*48\b' 'BossPatternFxPool capacity remains 48'
+
+$vfxPlayer = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/BossPatternVfxPlayer.cs'
+Require-Pattern $vfxPlayer 'MaxShardBurstCount\s*=\s*6\b' 'Boss pattern shard burst remains capped at six'
+
+if ($failures.Count -gt 0) {
+    $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
+    exit 1
+}
+
+Write-Output 'Run-depth phase-two static contracts passed.'
