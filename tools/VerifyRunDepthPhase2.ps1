@@ -73,6 +73,19 @@ if ($upgradeCatalog -match 'PlayerPrefs|PlayerSave') {
     $failures.Add('RunUpgradeCatalog must not write or read permanent save data')
 }
 
+$upgradeOverlay = Require-File 'Assets/Scripts/Runtime/Game/UI/RunUpgradeChoiceOverlay.cs'
+Require-Pattern $upgradeOverlay 'CardCount\s*=\s*3\b' 'upgrade overlay renders exactly three cards'
+foreach ($field in 'Category', 'Description', 'Stack') {
+    Require-Pattern $upgradeOverlay "\b$field\b" "upgrade card displays $field text"
+}
+Require-Pattern $upgradeOverlay 'Action<RunUpgradeId>' 'upgrade overlay exposes one selection callback'
+Require-Pattern $upgradeOverlay 'AutoSelectSeconds\s*=\s*12f' 'upgrade overlay auto-selects after 12 seconds'
+Require-Pattern $upgradeOverlay 'unscaledDeltaTime' 'upgrade overlay uses unscaled UI time'
+Require-Pattern $runnerController '\bTryBuildUpgradeOffer\s*\(' 'controller triggers route-completion upgrade offers'
+Require-Pattern $runnerController '\bSelectRunUpgrade\s*\(' 'controller applies one selected upgrade'
+Require-Pattern $runnerController 'CompletedCount\s*==\s*1' 'first completed route event triggers an upgrade offer'
+Require-Pattern $runnerController '\(routeEventDirector\.CompletedCount\s*-\s*1\)\s*%\s*2' 'later upgrade offers are spaced by two completed route events'
+
 $skillTracker = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/SkillScoreTracker.cs'
 Require-Pattern $skillTracker '\bRecord\s*\(' 'SkillScoreTracker.Record'
 

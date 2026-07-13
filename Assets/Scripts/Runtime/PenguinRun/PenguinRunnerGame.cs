@@ -34,6 +34,7 @@ namespace PenguinRun
         private float cameraYawSmoothed;
         private float cameraYawVel;
         private RunnerHudCanvas hudCanvas;
+        private RunUpgradeChoiceOverlay upgradeOverlay;
         private ParticleEffectPool particlePool;
         private WorldEventScheduler worldEvents;
         private bool exiting;
@@ -153,6 +154,8 @@ namespace PenguinRun
         {
             hudCanvas?.Dispose();
             hudCanvas = null;
+            if (upgradeOverlay != null)
+                Destroy(upgradeOverlay.gameObject);
             if (deathOverlay != null)
                 Destroy(deathOverlay);
             if (RenderSettings.skybox == gradientSkyboxMaterial)
@@ -190,6 +193,11 @@ namespace PenguinRun
             if (game.IsDeathPresentation)
             {
                 TickDeathPresentation(Time.deltaTime);
+                return;
+            }
+
+            if (upgradeOverlay != null)
+            {
                 return;
             }
 
@@ -233,6 +241,7 @@ namespace PenguinRun
             {
                 AnimateScenery(dt, effectiveSpeed);
                 game.TickRunningWorld(dt, effectiveSpeed);
+                TryShowRunUpgradeChoice();
                 TickParticleEvents(dt);
             }
 
@@ -256,6 +265,32 @@ namespace PenguinRun
             CheckBossDefeatEffects();
 
             TryStartThemeTransition();
+        }
+
+        private void TryShowRunUpgradeChoice()
+        {
+            if (upgradeOverlay != null || game == null || game.IsPaused) return;
+            if (!game.TryBuildUpgradeOffer(out var offer)) return;
+
+            game.TogglePause();
+            upgradeOverlay = RunUpgradeChoiceOverlay.Show(
+                offer,
+                id => game.RunUpgrades.GetStack(id),
+                OnRunUpgradeSelected);
+            if (upgradeOverlay == null && game.IsPaused)
+            {
+                game.TogglePause();
+            }
+        }
+
+        private void OnRunUpgradeSelected(RunUpgradeId id)
+        {
+            game?.SelectRunUpgrade(id);
+            upgradeOverlay = null;
+            if (game != null && game.IsPaused)
+            {
+                game.TogglePause();
+            }
         }
 
         private void LateUpdate()

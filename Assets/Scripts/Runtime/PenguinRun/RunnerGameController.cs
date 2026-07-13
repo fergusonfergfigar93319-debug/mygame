@@ -47,6 +47,7 @@ namespace PenguinRun
         private float manualDashCooldownTimer;
         private int lastLifeCount = 3;
         private bool entranceSkipped;
+        private bool upgradeOfferPending;
         private EntrancePhase entrancePhase;
         private float entranceTimer;
         private int countdownNumber;
@@ -147,6 +148,7 @@ namespace PenguinRun
             collisions.Reset();
             stateMachine.ForceTransitionTo(start ? GameStateMachine.State.Running : GameStateMachine.State.Idle);
             finishRequested = false;
+            upgradeOfferPending = false;
             entranceSkipped = false;
             entrancePhase = EntrancePhase.None;
             entranceTimer = 0f;
@@ -634,6 +636,36 @@ namespace PenguinRun
                 : $"安心路线 · {resolution.Outcome.Label}  +{resolution.Outcome.FishReward}鱼干";
             feedbackTimer = 1.5f;
             runnerAudio.PlayCheckpoint();
+
+            if (runUpgradeState.CanSelect &&
+                (routeEventDirector.CompletedCount == 1 ||
+                 (routeEventDirector.CompletedCount - 1) % 2 == 0))
+            {
+                upgradeOfferPending = true;
+            }
+        }
+
+        public bool TryBuildUpgradeOffer(out RunUpgradeOffer offer)
+        {
+            if (!upgradeOfferPending)
+            {
+                offer = RunUpgradeOffer.Empty;
+                return false;
+            }
+
+            offer = runUpgradeState.BuildOffer();
+            upgradeOfferPending = false;
+            return offer.Count == 3;
+        }
+
+        public bool SelectRunUpgrade(RunUpgradeId id)
+        {
+            if (!runUpgradeState.Select(id)) return false;
+
+            var definition = RunUpgradeCatalog.For(id);
+            feedbackText = $"札记生效 · {definition.Title}  {runUpgradeState.GetStack(id)}/{definition.MaxStacks}层";
+            feedbackTimer = 1.8f;
+            return true;
         }
 
         public float SegmentBannerTimer => segmentBannerTimer;
