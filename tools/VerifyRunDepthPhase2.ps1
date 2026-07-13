@@ -54,6 +54,24 @@ Require-Pattern $worldDirector '\bAddRouteEventReward\s*\(' 'WorldDirector.AddRo
 $upgradeState = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RunUpgradeState.cs'
 Require-Pattern $upgradeState '\bBuildOffer\s*\(' 'RunUpgradeState.BuildOffer'
 Require-Pattern $upgradeState '\bSelect\s*\(' 'RunUpgradeState.Select'
+Require-Pattern $upgradeState 'MaxSelections\s*=\s*6\b' 'run upgrade selection cap is six'
+Require-Pattern $upgradeState 'MaxStacksPerUpgrade\s*=\s*3\b' 'run upgrade stack cap is three'
+foreach ($query in 'DashDurationMultiplier', 'MagnetRadiusMultiplier', 'PerfectDodgeScoreMultiplier', 'ShieldGraceSeconds') {
+    Require-Pattern $upgradeState "\b$query\b" "RunUpgradeState.$query"
+}
+Require-Pattern $runnerController 'runUpgradeState\.Reset\s*\(' 'controller resets in-run upgrades per run'
+
+$upgradeModels = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RunUpgradeModels.cs'
+foreach ($category in 'Movement', 'Collection', 'Defense', 'Companion') {
+    Require-Pattern $upgradeModels "\b$category\b" "RunUpgradeCategory.$category"
+}
+Require-Pattern $upgradeModels '\bMaxStacks\b' 'upgrade definition carries a stack cap'
+
+$upgradeCatalog = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RunUpgradeCatalog.cs'
+Require-Pattern $upgradeCatalog '\bAll\b' 'run upgrade catalog exposes data definitions'
+if ($upgradeCatalog -match 'PlayerPrefs|PlayerSave') {
+    $failures.Add('RunUpgradeCatalog must not write or read permanent save data')
+}
 
 $skillTracker = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/SkillScoreTracker.cs'
 Require-Pattern $skillTracker '\bRecord\s*\(' 'SkillScoreTracker.Record'

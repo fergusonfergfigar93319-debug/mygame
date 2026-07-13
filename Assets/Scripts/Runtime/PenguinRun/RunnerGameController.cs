@@ -32,6 +32,7 @@ namespace PenguinRun
         private readonly CollisionSystem collisions;
         private readonly BossSystem bossSystem;
         private readonly RouteEventDirector routeEventDirector;
+        private readonly RunUpgradeState runUpgradeState;
         private readonly Transform sceneRoot;
         private readonly System.Action pulseHaptic;
         private readonly System.Action<Color, float> onScreenFlash;
@@ -79,6 +80,7 @@ namespace PenguinRun
             collisions = new CollisionSystem(runnerAudio, tuning.combat);
             bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth, tuning.combat);
             routeEventDirector = new RouteEventDirector(config.MapTheme, config.Daily, PlayerSave.TotalRuns);
+            runUpgradeState = new RunUpgradeState(config.MapTheme, config.Daily, PlayerSave.TotalRuns);
             stateMachine.OnStateChanged += HandleStateChanged;
         }
 
@@ -124,6 +126,8 @@ namespace PenguinRun
 
         public RouteEventSnapshot RouteEvent => routeEventDirector.Snapshot;
 
+        public RunUpgradeState RunUpgrades => runUpgradeState;
+
         public RunnerAudio RunnerAudio => runnerAudio;
 
         public string FeedbackText { get => feedbackText; set => feedbackText = value; }
@@ -139,6 +143,7 @@ namespace PenguinRun
                 world.AddExtraLife();
             bossSystem.Reset();
             routeEventDirector.Reset();
+            runUpgradeState.Reset();
             collisions.Reset();
             stateMachine.ForceTransitionTo(start ? GameStateMachine.State.Running : GameStateMachine.State.Idle);
             finishRequested = false;
