@@ -22,6 +22,21 @@ function Require-Pattern([string]$content, [string]$pattern, [string]$descriptio
 $routeDirector = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RouteEventDirector.cs'
 Require-Pattern $routeDirector '\bTick\s*\(' 'RouteEventDirector.Tick'
 Require-Pattern $routeDirector '\bChoose\s*\(' 'RouteEventDirector.Choose'
+Require-Pattern $routeDirector 'FirstEventDistance\s*=\s*220f' 'route events start no earlier than 220m'
+Require-Pattern $routeDirector 'MinimumEventSpacing\s*=\s*280f' 'route events keep at least 280m spacing'
+
+$routeModels = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RouteEventModels.cs'
+foreach ($kind in 'RiskFork', 'CompanionRescue', 'RelicCache', 'WeatherTrial', 'BossChase', 'SafeExit') {
+    Require-Pattern $routeModels "\b$kind\b" "RouteEventKind.$kind"
+}
+foreach ($field in 'SafeOutcome', 'RiskOutcome', 'ScoreReward', 'FishReward', 'SegmentPattern') {
+    Require-Pattern $routeModels "\b$field\b" "route event definition includes $field"
+}
+
+$routeCatalog = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RouteEventCatalog.cs'
+foreach ($theme in 'IceLakeEcho', 'CedarRuins', 'AuroraField', 'MistDike', 'OceanReef', 'SkyFlight') {
+    Require-Pattern $routeCatalog "RunnerMapTheme\.$theme" "route catalog covers $theme"
+}
 
 $upgradeState = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RunUpgradeState.cs'
 Require-Pattern $upgradeState '\bBuildOffer\s*\(' 'RunUpgradeState.BuildOffer'
