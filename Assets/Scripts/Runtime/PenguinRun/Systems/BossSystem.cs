@@ -86,6 +86,8 @@ namespace PenguinRun
         private BossDefinition lastDefeatedBoss;
         private BossDefinition nextBossDef; // 预计算的下一个 Boss
         private bool counterPending;
+        private BossThemeTrait currentThemeTrait;
+        private string lastThemedRelicId = string.Empty;
 
         // 反馈（音频等）
         private readonly RunnerAudio audio;
@@ -113,6 +115,8 @@ namespace PenguinRun
         {
             CleanupBoss();
             counterPending = false;
+            currentThemeTrait = default;
+            lastThemedRelicId = string.Empty;
             BossesDefeated = 0;
             nextBossDistance = firstBossDistance;
             explainedPatterns.Clear();
@@ -197,6 +201,8 @@ namespace PenguinRun
                 bossPatternMinSeconds, bossPatternMaxSeconds,
                 bossDangerWindowRatio, bossTelegraphLifetimeRatio, bossVulnerableChance,
                 minPatternDangerDelay);
+            currentThemeTrait = BossThemeTraitCatalog.For(config.MapTheme);
+            CurrentBoss.SetThemeTrait(currentThemeTrait);
             CurrentBoss.SetStrikeCallback(HandleBossPatternStrike);
             CurrentBoss.Root.transform.SetParent(sceneRoot, false);
             audio.EnterBossMusic(def);
@@ -329,6 +335,7 @@ namespace PenguinRun
                 BossesDefeated += 1;
                 PlayerSave.MarkBossDefeated(boss.Definition.BossId);
                 lastDefeatedBoss = boss.Definition; // 记录本场击败的 Boss
+                lastThemedRelicId = currentThemeTrait.ThemedRelicId;
                 ComputePendingDefeatReward(currentBossElapsed, out var fishReward, out var scoreReward,
                     out var speedTier, out var speedFish, out var speedScore);
                 feedbackText = speedScore > 0 || speedFish > 0
@@ -412,6 +419,10 @@ namespace PenguinRun
 
         /// <summary>上一场被击败的 Boss（用于生成奖励段）。</summary>
         public BossDefinition LastDefeatedBoss => lastDefeatedBoss;
+
+        public BossThemeTrait CurrentThemeTrait => currentThemeTrait;
+
+        public string LastThemedRelicId => lastThemedRelicId;
 
         /// <summary>下一场即将出现的 Boss（用于生成前奏段）。</summary>
         public BossDefinition NextBossDefinition => nextBossDef;

@@ -150,6 +150,7 @@ namespace PenguinRun
         private readonly List<TelegraphMarker> telegraphs = new();
         private readonly BossPatternVfxPlayer patternVfxPlayer = new();
         private readonly BossBodyAnimator bodyAnimator = new();
+        private BossThemeTrait themeTrait;
         private static readonly Dictionary<string, Texture2D> textureCache = new();
         private int patternDiveLaneIdx;
         private int patternSweepSafeLaneIdx = int.MinValue;
@@ -173,6 +174,8 @@ namespace PenguinRun
 
         public void SetStrikeCallback(System.Action<BossPattern, BossPatternVfxProfile> callback) =>
             strikeCallback = callback;
+
+        public void SetThemeTrait(BossThemeTrait trait) => themeTrait = trait;
 
         private struct TelegraphMarker
         {
@@ -546,6 +549,7 @@ namespace PenguinRun
             quickRecoverAfterHit = true;
             patternTimer = 0f;
             vulnerableTimer = 0f;
+            patternVfxPlayer.PlayThemePhaseCue(this, themeTrait, BossPhase.Active);
         }
 
         private void BeginAttackInterval(bool afterBreak = false)
@@ -554,6 +558,11 @@ namespace PenguinRun
             // afterBreak：玩家刚打破 boss 护盾，给一段较短的喘息（仍保持节奏）
             var lo = afterBreak ? patternIntervalMin * 0.82f : patternIntervalMin;
             var hi = afterBreak ? patternIntervalMax * 0.90f : patternIntervalMax;
+            var intervalMultiplier = themeTrait.AttackIntervalMultiplier > 0f
+                ? themeTrait.AttackIntervalMultiplier
+                : 1f;
+            lo *= intervalMultiplier;
+            hi *= intervalMultiplier;
             patternIntervalDuration = Random.Range(lo, Mathf.Max(lo + 0.25f, hi));
             patternIntervalTimer = patternIntervalDuration;
         }
@@ -651,6 +660,7 @@ namespace PenguinRun
         {
             PatternStrikeCameraShakeAmp = prof.CameraShakeAmp * Definition.VfxShakeMultiplier;
             PatternStrikeCameraShakeDuration = prof.CameraShakeDuration;
+            patternVfxPlayer.PlayThemeStrikeCue(themeTrait);
             strikeCallback?.Invoke(p, prof);
         }
 
@@ -1031,10 +1041,14 @@ namespace PenguinRun
         {
             Phase = BossPhase.Vulnerable;
             Pattern = BossPattern.Vulnerable;
-            vulnerableTimer = BossSystem.VulnerableSeconds;
+            var windowMultiplier = themeTrait.VulnerableWindowMultiplier > 0f
+                ? themeTrait.VulnerableWindowMultiplier
+                : 1f;
+            vulnerableTimer = BossSystem.VulnerableSeconds * windowMultiplier;
             breakReactionTimer = BreakReactionDuration;
             patternVfxPlayer.End();
-            CreateTelegraph(WorldX, BossSystem.VulnerableSeconds, 2.4f, new Color(0.4f, 1f, 0.55f, 0.9f));
+            patternVfxPlayer.PlayThemePhaseCue(this, themeTrait, BossPhase.Vulnerable);
+            CreateTelegraph(WorldX, vulnerableTimer, 2.4f, new Color(0.4f, 1f, 0.55f, 0.9f));
         }
 
         private void EvaluateReactionOffsets(out Vector3 positionOffset, out Vector3 rotationOffset)

@@ -108,9 +108,15 @@ Require-Pattern $collisionSystem 'ShieldGraceSeconds' 'collision defense consume
 
 $traitCatalog = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/BossThemeTraitCatalog.cs'
 Require-Pattern $traitCatalog '\bFor\s*\(' 'BossThemeTraitCatalog.For'
+foreach ($trait in 'IceFracture', 'CedarRootGuard', 'AuroraPolarity', 'MistDecoy', 'CoralRebound', 'StormDraft') {
+    Require-Pattern $traitCatalog "\b$trait\b" "BossThemeTraitKind.$trait"
+}
+Require-Pattern $traitCatalog '\bThemedRelicId\b' 'boss traits carry a themed relic result id'
 
 $bossSystem = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/BossSystem.cs'
 Require-Pattern $bossSystem '\bTryConsumeCounter\s*\(' 'BossSystem exposes real counter events'
+Require-Pattern $bossSystem 'BossThemeTraitCatalog\.For\s*\(' 'BossSystem resolves the active theme trait'
+Require-Pattern $bossSystem '\bLastThemedRelicId\b' 'BossSystem exposes the defeated themed relic flag'
 Require-Pattern $bossSystem '\bCheckPatternHit\s*\(' 'BossSystem.CheckPatternHit damage authority'
 Require-Pattern $bossSystem 'RunnerHitResolver\.IsBossPatternHit\s*\(' 'BossSystem delegates pattern hits to RunnerHitResolver'
 
@@ -123,6 +129,11 @@ Require-Pattern $fxPool 'MaxPoolSize\s*=\s*48\b' 'BossPatternFxPool capacity rem
 
 $vfxPlayer = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/BossPatternVfxPlayer.cs'
 Require-Pattern $vfxPlayer 'MaxShardBurstCount\s*=\s*6\b' 'Boss pattern shard burst remains capped at six'
+Require-Pattern $vfxPlayer '\bPlayThemePhaseCue\s*\(' 'boss VFX plays phase trait cues'
+Require-Pattern $vfxPlayer '\bPlayThemeStrikeCue\s*\(' 'boss VFX plays strike trait cues'
+Require-Pattern $vfxPlayer 'MistDecoy.*visual-only|visual-only.*MistDecoy' 'mist decoys remain visual-only'
+Require-Pattern $vfxPlayer '\bpool\.Rent\s*\(' 'theme strike VFX remain pool-rented'
+Require-Pattern $bossSystem 'CheckPatternHit[\s\S]*RunnerHitResolver\.IsBossPatternHit' 'boss damage path remains CheckPatternHit to RunnerHitResolver'
 
 $hudCanvas = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RunnerHudCanvas.cs'
 foreach ($method in 'SetRouteEvent', 'SetUpgradeSummary', 'SetSkillSnapshot') {

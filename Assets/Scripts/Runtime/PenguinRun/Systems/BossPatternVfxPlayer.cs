@@ -103,6 +103,132 @@ namespace PenguinRun
       onStrike?.Invoke(BossPattern.RangedSalvo, profile);
     }
 
+    public void PlayThemePhaseCue(
+      BossEncounter encounter,
+      BossThemeTrait trait,
+      BossPhase bossPhase)
+    {
+      if (encounter == null) return;
+      host = encounter;
+      var accent = trait.AccentColor;
+
+      switch (trait.Kind)
+      {
+        case BossThemeTraitKind.CedarRootGuard:
+          for (var i = -1; i <= 1; i++)
+          {
+            var root = RentBossFx($"CedarRootGuard{i}", PrimitiveType.Cube,
+              new Vector3(i * 0.72f, -0.58f, -0.15f),
+              new Vector3(0.22f, 0.65f, 0.28f), accent);
+            if (root != null)
+            {
+              root.transform.localRotation = Quaternion.Euler(0f, 0f, i * 18f);
+              bossAttachedFx.Add(root);
+            }
+          }
+          break;
+        case BossThemeTraitKind.CoralRebound:
+          SpawnTraitRing("CoralRebound", 2.8f, accent);
+          SpawnTraitRing("CoralReboundOuter", 4.2f,
+            new Color(accent.r, accent.g, accent.b, accent.a * 0.55f));
+          break;
+        case BossThemeTraitKind.AuroraPolarity:
+          AddTraitOrb("AuroraPolarityL", -1.05f, accent);
+          AddTraitOrb("AuroraPolarityR", 1.05f,
+            new Color(0.72f, 0.38f, 1f, accent.a));
+          break;
+        case BossThemeTraitKind.StormDraft:
+          for (var i = 0; i < 3; i++)
+          {
+            var draft = RentBossFx($"StormDraft{i}", PrimitiveType.Cube,
+              new Vector3((i - 1) * 0.62f, -0.25f + i * 0.32f, -0.45f),
+              new Vector3(0.08f, 0.7f + i * 0.25f, 0.08f), accent);
+            if (draft != null) bossAttachedFx.Add(draft);
+          }
+          break;
+        default:
+          if (bossPhase == BossPhase.Vulnerable)
+          {
+            SpawnTraitRing($"{trait.Kind}Vulnerable", 3.2f, accent);
+          }
+          break;
+      }
+    }
+
+    public void PlayThemeStrikeCue(BossThemeTrait trait)
+    {
+      if (host == null) return;
+      var accent = trait.AccentColor;
+      switch (trait.Kind)
+      {
+        case BossThemeTraitKind.IceFracture:
+          SpawnShardBurst(host.WorldX, BossSystem.PlayerTelegraphZ - 0.25f,
+            trait.StrikeBurstCount, 1.15f, accent);
+          break;
+        case BossThemeTraitKind.CedarRootGuard:
+          SpawnTraitRing("CedarRootStrike", 3.4f, accent);
+          break;
+        case BossThemeTraitKind.AuroraPolarity:
+          SpawnTraitRing("AuroraPositive", 2.4f, accent);
+          SpawnTraitRing("AuroraNegative", 4f, new Color(0.7f, 0.35f, 1f, 0.62f));
+          break;
+        case BossThemeTraitKind.MistDecoy:
+          // MistDecoy is visual-only: pooled meshes never participate in collision or damage checks.
+          SpawnMistDecoyVisualOnly(accent);
+          break;
+        case BossThemeTraitKind.CoralRebound:
+          SpawnTraitRing("CoralStrikeRebound", 4.6f, accent);
+          break;
+        case BossThemeTraitKind.StormDraft:
+          SpawnStormDraftTrails(accent, trait.StrikeBurstCount);
+          break;
+      }
+    }
+
+    private void SpawnMistDecoyVisualOnly(Color color)
+    {
+      for (var i = -1; i <= 1; i += 2)
+      {
+        var decoy = RentBossFx($"MistDecoyVisual{i}", PrimitiveType.Capsule,
+          new Vector3(i * 1.35f, 0.2f, 0.4f),
+          new Vector3(0.65f, 1.25f, 0.55f),
+          new Color(color.r, color.g, color.b, 0.24f));
+        if (decoy != null) bossAttachedFx.Add(decoy);
+      }
+    }
+
+    private void SpawnStormDraftTrails(Color color, int count)
+    {
+      count = Mathf.Min(MaxShardBurstCount, Mathf.Max(1, count));
+      for (var i = 0; i < count; i++)
+      {
+        var t = count <= 1 ? 0.5f : i / (float)(count - 1);
+        var x = Mathf.Lerp(-host.LaneWidthInternal, host.LaneWidthInternal, t);
+        var z = BossSystem.PlayerTelegraphZ + (i % 2) * 0.45f;
+        var trail = RentWorldFx($"StormDraftTrail{i}", PrimitiveType.Cube,
+          new Vector3(x, TrackY(z) + 0.55f, z),
+          new Vector3(0.1f, 1.2f, 0.12f), color, 0.55f);
+        if (trail != null) persistentFx.Add(trail);
+      }
+    }
+
+    private void SpawnTraitRing(string name, float radius, Color color)
+    {
+      if (host == null) return;
+      var z = BossSystem.PlayerTelegraphZ;
+      var ring = RentWorldFx(name, PrimitiveType.Cylinder,
+        new Vector3(host.WorldX, TrackY(z) + 0.08f, z),
+        new Vector3(radius, 0.05f, radius), color, 0.08f);
+      if (ring != null) persistentFx.Add(ring);
+    }
+
+    private void AddTraitOrb(string name, float localX, Color color)
+    {
+      var orb = RentBossFx(name, PrimitiveType.Sphere,
+        new Vector3(localX, 0.55f, -0.3f), Vector3.one * 0.42f, color);
+      if (orb != null) bossAttachedFx.Add(orb);
+    }
+
     private BossAttackPhase ResolvePhase()
     {
       if (host.PatternTimer <= 0f) return BossAttackPhase.Recovery;
