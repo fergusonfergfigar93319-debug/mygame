@@ -19,7 +19,16 @@ namespace PenguinRun.Game.Growth
             RouteEventsCompleted = Math.Max(0, routeEventsCompleted);
             RiskyRoutesCompleted = Math.Max(0, riskyRoutesCompleted);
             SkillScore = Math.Max(0, skillScore);
-            CompletedRouteEventIds = completedRouteEventIds ?? Array.AsReadOnly(Array.Empty<string>());
+            if (completedRouteEventIds == null || completedRouteEventIds.Count == 0)
+            {
+                CompletedRouteEventIds = Array.AsReadOnly(Array.Empty<string>());
+            }
+            else
+            {
+                var copy = new string[completedRouteEventIds.Count];
+                for (var i = 0; i < copy.Length; i++) copy[i] = completedRouteEventIds[i] ?? string.Empty;
+                CompletedRouteEventIds = Array.AsReadOnly(copy);
+            }
             ThemedRelicId = themedRelicId ?? string.Empty;
         }
         public int Score { get; }

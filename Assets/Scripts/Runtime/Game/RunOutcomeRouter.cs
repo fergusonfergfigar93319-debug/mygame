@@ -45,6 +45,8 @@ namespace PenguinRun.Game
             public IReadOnlyList<string> CompletedRouteEventIds;
             public string ThemedRelicId;
             public GrowthTransactionResult Growth;
+            public bool CompanionHelperTriggered;
+            public int CompanionHelperFishBonus;
         }
 
         /// <summary>
@@ -70,13 +72,18 @@ namespace PenguinRun.Game
             var consumedScoreBoost = ticketScoreMul > 1.001f;
 
             // 2) 叠加营地的全局乘数（鱼干收益 / 得分加成）与难度得分倍率。
-            var fishMul = CampUpgrades.GetFishGainMultiplier() * ticketFishMul;
+            var bondFishMul = 1f + CompanionBondStore.GetPassiveHelperBonus(CompanionId.TuanTuan);
+            var fishMul = CampUpgrades.GetFishGainMultiplier() * ticketFishMul * bondFishMul;
             var difficultyScoreMul = Mathf.Max(0.01f, DifficultyPreset.ForKind(difficulty).ScoreMultiplier);
             var scoreMul = CampUpgrades.GetScoreMultiplier() * ticketScoreMul * difficultyScoreMul;
+            var helperTriggered = riskyRoutesCompleted > 0 && ShouldTriggerCompanionHelp(
+                CompanionBondStore.GetConditionalHelperChance(CompanionId.Dror), score, distanceMeters);
+            var helperFishBonus = helperTriggered ? 4 + Math.Min(12, riskyRoutesCompleted * 2) : 0;
 
             var baseCoins = coins;
             var baseScore = score;
             coins = Mathf.Max(coins, Mathf.RoundToInt(baseCoins * fishMul));
+            coins += helperFishBonus;
             score = Mathf.Max(score, Mathf.RoundToInt(baseScore * scoreMul));
 
             var prevBest = PlayerSave.BestScore;
@@ -144,6 +151,8 @@ namespace PenguinRun.Game
                 CompletedRouteEventIds = CopyStrings(completedRouteEventIds),
                 ThemedRelicId = themedRelicId ?? string.Empty,
                 Growth = growth,
+                CompanionHelperTriggered = helperTriggered,
+                CompanionHelperFishBonus = helperFishBonus,
             };
         }
 
@@ -164,6 +173,17 @@ namespace PenguinRun.Game
             var copy = new string[source.Count];
             for (var i = 0; i < source.Count; i++) copy[i] = source[i] ?? string.Empty;
             return Array.AsReadOnly(copy);
+        }
+
+        private static bool ShouldTriggerCompanionHelp(float chance, int score, int distanceMeters)
+        {
+            if (chance <= 0f) return false;
+            unchecked
+            {
+                var hash = score * 73856093 ^ distanceMeters * 19349663 ^ PlayerSave.TotalRuns * 83492791;
+                var roll = (uint)hash % 10000u;
+                return roll < (uint)Mathf.RoundToInt(Mathf.Clamp01(chance) * 10000f);
+            }
         }
     }
 }

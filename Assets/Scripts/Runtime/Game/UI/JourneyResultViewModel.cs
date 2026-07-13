@@ -74,6 +74,10 @@ namespace PenguinRun.Game.UI
             {
                 highlight = $"Boss 速胜 {result.LastBossSpeedTier} · 额外鱼干 {result.LastBossSpeedFishBonus}";
             }
+            else if (result.CompanionHelperTriggered)
+            {
+                highlight = $"伙伴援助：Dror 带回 {result.CompanionHelperFishBonus} 鱼干";
+            }
             else
             {
                 highlight = "这次旅程已记录到营地手记";

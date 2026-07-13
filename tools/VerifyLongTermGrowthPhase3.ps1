@@ -88,6 +88,8 @@ foreach ($integration in 'MissionStore\.RecordAfterRun', 'CodexUnlocks\.ApplyAft
 $outcomeRouter = Require-File 'Assets/Scripts/Runtime/Game/RunOutcomeRouter.cs'
 Require-Pattern $outcomeRouter 'GrowthTransaction\.Apply\s*\(' 'run outcome invokes one growth transaction'
 Require-Pattern $outcomeRouter '\bGrowth\b' 'run result carries growth result'
+Require-Pattern $outcomeRouter 'CompanionBondStore\.GetPassiveHelperBonus' 'run rewards consume the capped passive helper query'
+Require-Pattern $outcomeRouter 'CompanionBondStore\.GetConditionalHelperChance' 'run rewards consume the conditional companion help query'
 $flushCount = if ($null -eq $outcomeRouter) { 0 } else { ([regex]::Matches($outcomeRouter, 'PlayerSave\.Flush\s*\(')).Count }
 if ($flushCount -ne 1) { $failures.Add("RunOutcomeRouter must contain exactly one PlayerSave.Flush call; found $flushCount") }
 
@@ -105,6 +107,9 @@ Require-Pattern $recommendation '\bBuild\s*\(' 'single lobby recommendation buil
 $campPanel = Require-File 'Assets/Scripts/Runtime/Game/UI/CampPanel.cs'
 Require-Pattern $campPanel '\bBuildReconstructionSection\s*\(' 'camp panel reconstruction section'
 Require-Pattern $campPanel 'CampRebuildStore\.TryPurchase' 'camp panel routes rebuild purchases through store'
+$campShopPanel = Require-File 'Assets/Scripts/Runtime/Game/UI/CampShopPanel.cs'
+Require-Pattern $campShopPanel '\bBuildReconstructionSection\s*\(' 'active camp/shop panel reconstruction section'
+Require-Pattern $campShopPanel 'CampRebuildStore\.TryPurchase' 'active camp/shop panel routes rebuild purchases through store'
 
 $codexPanel = Require-File 'Assets/Scripts/Runtime/Game/UI/CodexPanel.cs'
 Require-Pattern $codexPanel '\bBuildDiscoverySection\s*\(' 'codex grouped discovery section'

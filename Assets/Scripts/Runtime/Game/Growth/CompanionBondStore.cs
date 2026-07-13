@@ -77,8 +77,8 @@ namespace PenguinRun.Game.Growth
                 CompanionId.TuanTuan when level >= 5 => "暖意回响 · 收藏帮助 8%",
                 CompanionId.TuanTuan when level >= 3 => "鱼干嗅觉 · 收藏帮助提升",
                 CompanionId.TuanTuan => "营火问候 · 解锁同行对话",
-                CompanionId.Dror when level >= 5 => "极光领航 · 路线提示 10%",
-                CompanionId.Dror when level >= 3 => "风雪直觉 · 路线提示提升",
+                CompanionId.Dror when level >= 5 => "极光补给 · 冒险援助 10%",
+                CompanionId.Dror when level >= 3 => "风雪直觉 · 冒险援助提升",
                 _ => "冰湖来信 · 解锁同行对话",
             };
         }

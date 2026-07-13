@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using PenguinRun.Game.Save;
+using PenguinRun.Game.Growth;
 using PenguinRun.Game.Shop;
 using UnityEngine;
 using UnityEngine.UI;
@@ -224,6 +225,8 @@ namespace PenguinRun.Game.UI
         // ─────────────────────────────────────────────────────────────────────────
         private void BuildCampTab()
         {
+            BuildReconstructionSection();
+
             // 子 Tab（分类筛选）
             BuildCampSubTabs();
 
@@ -250,6 +253,84 @@ namespace PenguinRun.Game.UI
                     BuildCampRow(k);
                 }
             }
+        }
+
+        private void BuildReconstructionSection()
+        {
+            var snapshot = CampRebuildStore.Snapshot();
+            var summary = UiBuilder.CreateScrollListRow("ReconstructionSummary", contentRoot, 82f,
+                Color.Lerp(UiTheme.PaperWarm, UiTheme.MistBlue, 0.12f));
+            UiBuilder.AddOutline(summary.gameObject, new Color(UiTheme.PineGreen.r, UiTheme.PineGreen.g,
+                UiTheme.PineGreen.b, 0.4f), new Vector2(1f, -1f));
+            var summaryText = UiBuilder.CreateText("Summary", summary,
+                $"营地重建  {snapshot.TotalLevels}/{snapshot.MaxTotalLevels}    可修复 {snapshot.AffordableNodes}",
+                24, FontStyle.Bold, TextAnchor.MiddleLeft, UiTheme.InkPrimary);
+            var summaryRt = (RectTransform)summaryText.transform;
+            summaryRt.anchorMin = Vector2.zero;
+            summaryRt.anchorMax = Vector2.one;
+            summaryRt.offsetMin = new Vector2(24f, 0f);
+            summaryRt.offsetMax = new Vector2(-24f, 0f);
+
+            foreach (var definition in CampBuildingCatalog.All)
+                BuildReconstructionNode(CampRebuildStore.Snapshot(definition.Id));
+        }
+
+        private void BuildReconstructionNode(CampBuildingSnapshot node)
+        {
+            var locked = node.VisibleState == CampBuildingVisibleState.Locked;
+            var affordable = node.VisibleState == CampBuildingVisibleState.Affordable;
+            var color = node.Id switch
+            {
+                CampBuildingId.Bonfire => UiTheme.CoralAction,
+                CampBuildingId.Workshop => UiTheme.PineGreen,
+                CampBuildingId.CompanionHut => UiTheme.BerryDanger,
+                CampBuildingId.LibraryTent => UiTheme.MistBlue,
+                _ => UiTheme.WarmGold,
+            };
+            var row = UiBuilder.CreateScrollListRow("Rebuild_" + node.Id, contentRoot, 154f,
+                locked ? Color.Lerp(UiTheme.PaperBase, UiTheme.MistBlue, 0.35f) : UiTheme.PaperWarm);
+            UiBuilder.AddOutline(row.gameObject, new Color(color.r, color.g, color.b, locked ? 0.18f : 0.45f),
+                new Vector2(1f, -1f));
+
+            var title = UiBuilder.CreateText("Title", row,
+                $"{node.Definition.Title}  Lv {node.Level}/{CampBuildingCatalog.MaxLevel}",
+                25, FontStyle.Bold, TextAnchor.UpperLeft, UiTheme.InkPrimary);
+            var titleRt = (RectTransform)title.transform;
+            titleRt.anchorMin = new Vector2(0f, 1f);
+            titleRt.anchorMax = new Vector2(0.72f, 1f);
+            titleRt.pivot = new Vector2(0f, 1f);
+            titleRt.sizeDelta = new Vector2(0f, 36f);
+            titleRt.anchoredPosition = new Vector2(26f, -18f);
+
+            var description = locked && node.Definition.Prerequisite.HasValue
+                ? $"先将{CampBuildingCatalog.For(node.Definition.Prerequisite.Value).Title}修复到 Lv {node.Definition.PrerequisiteLevel}"
+                : $"{node.Definition.Story}  ·  {node.Definition.UnlockEffect}";
+            var body = UiBuilder.CreateText("Description", row, description, 18, FontStyle.Normal,
+                TextAnchor.UpperLeft, locked ? UiTheme.TextTertiary : UiTheme.InkSecondary);
+            var bodyRt = (RectTransform)body.transform;
+            bodyRt.anchorMin = new Vector2(0f, 0f);
+            bodyRt.anchorMax = new Vector2(0.72f, 1f);
+            bodyRt.offsetMin = new Vector2(26f, 16f);
+            bodyRt.offsetMax = new Vector2(-10f, -58f);
+
+            var label = node.IsMaxLevel ? "重建完成" : affordable ? $"修复 {node.NextCost} 鱼干" :
+                locked ? "前置未完成" : $"还差 {Mathf.Max(0, node.NextCost - PlayerSave.TotalFishSnacks)} 鱼干";
+            var button = UiBuilder.CreateButton("Rebuild", row, label,
+                affordable ? color : Color.Lerp(UiTheme.PaperBase, UiTheme.MistBlue, 0.45f),
+                affordable ? UiTheme.InkPrimary : UiTheme.TextTertiary, 19, rounded: true);
+            var buttonRt = (RectTransform)button.transform;
+            buttonRt.anchorMin = new Vector2(1f, 0.5f);
+            buttonRt.anchorMax = new Vector2(1f, 0.5f);
+            buttonRt.pivot = new Vector2(1f, 0.5f);
+            buttonRt.sizeDelta = new Vector2(205f, 66f);
+            buttonRt.anchoredPosition = new Vector2(-22f, 0f);
+            button.interactable = affordable;
+            button.onClick.AddListener(() =>
+            {
+                if (!CampRebuildStore.TryPurchase(node.Id)) return;
+                dispatch(MainMenuBootstrap.PanelEvent.Toast, $"{node.Definition.Title}完成一阶段重建");
+                Refresh();
+            });
         }
 
         private void BuildCampSubTabs()
