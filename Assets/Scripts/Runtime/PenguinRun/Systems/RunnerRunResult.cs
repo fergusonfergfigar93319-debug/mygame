@@ -1,9 +1,16 @@
+using System;
+using System.Collections.Generic;
+
 namespace PenguinRun
 {
     public readonly struct RunnerRunResult
     {
         public RunnerRunResult(int score, int distanceMeters, int coins, float survivalSeconds,
-            string lastBossSpeedTier = "C", int lastBossSpeedFishBonus = 0, int lastBossSpeedScoreBonus = 0)
+            string lastBossSpeedTier = "C", int lastBossSpeedFishBonus = 0, int lastBossSpeedScoreBonus = 0,
+            int routeEventsCompleted = 0, int riskyRoutesCompleted = 0,
+            int skillScore = 0, int peakSkillChain = 0,
+            IReadOnlyList<RunUpgradeId> selectedUpgradeIds = null,
+            string themedRelicId = "")
         {
             Score = score;
             DistanceMeters = distanceMeters;
@@ -12,6 +19,15 @@ namespace PenguinRun
             LastBossSpeedTier = string.IsNullOrEmpty(lastBossSpeedTier) ? "C" : lastBossSpeedTier;
             LastBossSpeedFishBonus = lastBossSpeedFishBonus;
             LastBossSpeedScoreBonus = lastBossSpeedScoreBonus;
+            RouteEventsCompleted = Math.Max(0, routeEventsCompleted);
+            RiskyRoutesCompleted = Math.Max(0, riskyRoutesCompleted);
+            SkillScore = Math.Max(0, skillScore);
+            PeakSkillChain = Math.Max(0, peakSkillChain);
+            var copiedIds = selectedUpgradeIds == null
+                ? Array.Empty<RunUpgradeId>()
+                : CopyIds(selectedUpgradeIds);
+            SelectedUpgradeIds = Array.AsReadOnly(copiedIds);
+            ThemedRelicId = themedRelicId ?? string.Empty;
         }
 
         public int Score { get; }
@@ -21,6 +37,18 @@ namespace PenguinRun
         public string LastBossSpeedTier { get; }
         public int LastBossSpeedFishBonus { get; }
         public int LastBossSpeedScoreBonus { get; }
+        public int RouteEventsCompleted { get; }
+        public int RiskyRoutesCompleted { get; }
+        public int SkillScore { get; }
+        public int PeakSkillChain { get; }
+        public IReadOnlyList<RunUpgradeId> SelectedUpgradeIds { get; }
+        public string ThemedRelicId { get; }
+
+        private static RunUpgradeId[] CopyIds(IReadOnlyList<RunUpgradeId> source)
+        {
+            var copy = new RunUpgradeId[source.Count];
+            for (var i = 0; i < source.Count; i++) copy[i] = source[i];
+            return copy;
+        }
     }
 }
-

@@ -10,7 +10,7 @@ namespace PenguinRun
         Companion,
     }
 
-    internal enum RunUpgradeId
+    public enum RunUpgradeId
     {
         LongDash,
         QuickSteps,

@@ -145,7 +145,10 @@ namespace PenguinRun
             var applied = RunOutcomeRouter.Apply(
                 result.Score, result.DistanceMeters, result.Coins, result.SurvivalSeconds, config.Daily,
                 config.Difficulty,
-                result.LastBossSpeedTier, result.LastBossSpeedFishBonus, result.LastBossSpeedScoreBonus);
+                result.LastBossSpeedTier, result.LastBossSpeedFishBonus, result.LastBossSpeedScoreBonus,
+                result.RouteEventsCompleted, result.RiskyRoutesCompleted,
+                result.SkillScore, result.PeakSkillChain,
+                result.SelectedUpgradeIds, result.ThemedRelicId);
             RunSession.LastResult = applied;
             SceneTransitionManager.Instance.TransitionTo("MainMenu");
         }

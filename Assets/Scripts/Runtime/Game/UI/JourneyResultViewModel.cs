@@ -40,14 +40,60 @@ namespace PenguinRun.Game.UI
             var comparison = result.NewBest
                 ? "新的个人最佳纪录"
                 : $"本地排名第 {result.RankByScore} 名";
-            var review = result.LastBossSpeedFishBonus > 0
-                ? $"Boss 速胜 {result.LastBossSpeedTier} · 额外鱼干 {result.LastBossSpeedFishBonus}"
-                : "这次旅程已记录到营地手记";
+            var review = BuildRunDepthReview(result);
             var progression = result.BonusCoins > 0 || result.BonusScore > 0
                 ? $"成长加成：鱼干 +{result.BonusCoins} · 得分 +{result.BonusScore}"
                 : "任务、图鉴与营地状态已同步";
             return new JourneyResultViewModel(result.NewBest ? "新纪录写入旅程册" : "旅程完成",
                 result.Score, result.DistanceMeters, result.Coins, comparison, review, progression);
         }
+
+        private static string BuildRunDepthReview(RunOutcomeRouter.Result result)
+        {
+            var selectedCount = result.SelectedUpgradeIds?.Count ?? 0;
+            var skillStrength = result.SkillScore + result.PeakSkillChain * 80;
+            var routeStrength = result.RiskyRoutesCompleted * 260 + result.RouteEventsCompleted * 45;
+            var buildStrength = selectedCount * 170;
+
+            string highlight;
+            if (skillStrength >= routeStrength && skillStrength >= buildStrength && result.SkillScore > 0)
+            {
+                highlight = $"技巧高光：{result.SkillScore:N0} 分 · 峰值连段 ×{result.PeakSkillChain}";
+            }
+            else if (routeStrength >= buildStrength && result.RouteEventsCompleted > 0)
+            {
+                highlight = $"路线高光：完成 {result.RouteEventsCompleted} 次 · 冒险 {result.RiskyRoutesCompleted} 次";
+            }
+            else if (selectedCount > 0)
+            {
+                var first = RunUpgradeCatalog.For(result.SelectedUpgradeIds[0]);
+                highlight = $"构筑高光：{first.Title} 等 {selectedCount} 张札记";
+            }
+            else if (result.LastBossSpeedFishBonus > 0)
+            {
+                highlight = $"Boss 速胜 {result.LastBossSpeedTier} · 额外鱼干 {result.LastBossSpeedFishBonus}";
+            }
+            else
+            {
+                highlight = "这次旅程已记录到营地手记";
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.ThemedRelicId))
+            {
+                highlight += $" · 发现{RelicLabel(result.ThemedRelicId)}";
+            }
+            return highlight;
+        }
+
+        private static string RelicLabel(string relicId) => relicId switch
+        {
+            "relic_ice_fracture" => "冰裂遗物",
+            "relic_cedar_root" => "雪松根徽",
+            "relic_aurora_polarity" => "极光极芯",
+            "relic_mist_decoy" => "雾影铃",
+            "relic_coral_rebound" => "回弹珊瑚",
+            "relic_storm_draft" => "风暴羽片",
+            _ => "主题遗物",
+        };
     }
 }

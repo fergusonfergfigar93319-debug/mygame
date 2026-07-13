@@ -314,8 +314,12 @@ namespace PenguinRun
             finishRequested = true;
             stateMachine.ForceTransitionTo(GameStateMachine.State.Finished);
             var dist = Mathf.Max(0, Mathf.RoundToInt(world.Distance));
+            var skill = skillScoreTracker.Snapshot;
             var result = new RunnerRunResult(world.Score, dist, world.Coins, world.RunTime,
-                world.LastBossSpeedTier, world.LastBossSpeedFishBonus, world.LastBossSpeedScoreBonus);
+                world.LastBossSpeedTier, world.LastBossSpeedFishBonus, world.LastBossSpeedScoreBonus,
+                routeEventDirector.CompletedCount, routeEventDirector.RiskyCompletedCount,
+                skill.TotalScore, skill.PeakChain, runUpgradeState.SelectedIds,
+                bossSystem.LastThemedRelicId);
             onFinish?.Invoke(result);
         }
 

@@ -143,6 +143,23 @@ Require-Pattern $hudCanvas 'MaxVisibleUpgrades\s*=\s*3\b' 'HUD shows at most thr
 Require-Pattern $hudCanvas 'RemainingSeconds\s*<\s*0\.6f' 'HUD emphasizes an expiring skill chain'
 Require-Pattern $hudCanvas 'bossMode' 'Boss mode suppresses route and build detail'
 
+$runResult = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RunnerRunResult.cs'
+foreach ($field in 'RouteEventsCompleted', 'RiskyRoutesCompleted', 'SkillScore', 'PeakSkillChain', 'SelectedUpgradeIds', 'ThemedRelicId') {
+    Require-Pattern $runResult "\b$field\b" "RunnerRunResult.$field"
+}
+Require-Pattern $runResult 'Array\.AsReadOnly|ReadOnlyCollection' 'finished upgrade ids are exposed as an immutable copy'
+
+$outcomeRouter = Require-File 'Assets/Scripts/Runtime/Game/RunOutcomeRouter.cs'
+foreach ($field in 'RouteEventsCompleted', 'RiskyRoutesCompleted', 'SkillScore', 'PeakSkillChain', 'SelectedUpgradeIds', 'ThemedRelicId') {
+    Require-Pattern $outcomeRouter "\b$field\b" "RunOutcomeRouter carries $field"
+}
+
+$journeyModel = Require-File 'Assets/Scripts/Runtime/Game/UI/JourneyResultViewModel.cs'
+Require-Pattern $journeyModel 'SkillScore|PeakSkillChain' 'journey review can highlight skill play'
+Require-Pattern $journeyModel 'SelectedUpgradeIds' 'journey review can highlight the run build'
+Require-Pattern $journeyModel 'RiskyRoutesCompleted|RouteEventsCompleted' 'journey review can highlight route choices'
+Require-Pattern $journeyModel 'ThemedRelicId' 'journey review can highlight the themed relic'
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1
