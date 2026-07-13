@@ -127,6 +127,8 @@ namespace PenguinRun.Game.UI
 
         private void Awake()
         {
+            SaveSchema.EnsureMigrated();
+
             // 确保场景过渡管理器存在
             if (SceneTransitionManager.Instance == null)
             {

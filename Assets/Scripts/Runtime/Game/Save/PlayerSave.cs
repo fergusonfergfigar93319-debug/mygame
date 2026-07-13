@@ -423,6 +423,29 @@ namespace PenguinRun.Game.Save
 
         public static void Flush() => PlayerPrefs.Save();
 
+        /// <summary>
+        /// Reads a value owned by the versioned long-term growth layer. Keys are automatically
+        /// namespaced so feature stores cannot collide with legacy save fields.
+        /// </summary>
+        public static int ReadGrowthInt(string key, int defaultValue = 0) =>
+            PlayerPrefs.GetInt(GrowthKey(key), defaultValue);
+
+        public static void WriteGrowthInt(string key, int value) =>
+            PlayerPrefs.SetInt(GrowthKey(key), value);
+
+        public static string ReadGrowthString(string key, string defaultValue = "") =>
+            PlayerPrefs.GetString(GrowthKey(key), defaultValue ?? string.Empty);
+
+        public static void WriteGrowthString(string key, string value) =>
+            PlayerPrefs.SetString(GrowthKey(key), value ?? string.Empty);
+
+        private static string GrowthKey(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+                throw new ArgumentException("A growth save key is required.", nameof(key));
+            return "growth_" + key.Trim();
+        }
+
         // ── 登录连续天数 & 每日签到 ──────────────────────────────────────────────
 
         public static int LoginStreak
