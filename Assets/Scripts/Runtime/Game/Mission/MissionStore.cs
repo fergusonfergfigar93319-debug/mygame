@@ -31,7 +31,7 @@ namespace PenguinRun.Game.Mission
         }
 
         /// <summary>跨日时清零每日任务的进度与领取标记。</summary>
-        public static void EnsureDailyBucket()
+        public static void EnsureDailyBucket(bool flush = true)
         {
             var today = TodayBucket();
             var stored = PlayerPrefs.GetString(KeyDailyBucket, null);
@@ -42,12 +42,12 @@ namespace PenguinRun.Game.Mission
                 PlayerPrefs.DeleteKey(ProgressKeyDaily(def.Id));
                 PlayerPrefs.DeleteKey(ClaimedKeyDaily(def.Id));
             }
-            PlayerPrefs.Save();
+            if (flush) PlayerPrefs.Save();
         }
 
-        public static List<MissionUiState> MissionStates(MissionTrack track)
+        public static List<MissionUiState> MissionStates(MissionTrack track, bool flushDailyReset = true)
         {
-            if (track == MissionTrack.Daily) EnsureDailyBucket();
+            if (track == MissionTrack.Daily) EnsureDailyBucket(flushDailyReset);
             var list = new List<MissionUiState>();
             foreach (var def in MissionCatalog.DefinitionsFor(track))
             {
@@ -81,13 +81,13 @@ namespace PenguinRun.Game.Mission
         }
 
         /// <summary>可领取任务的数量（首页数字角标）。</summary>
-        public static int CountClaimableMissions()
+        public static int CountClaimableMissions(bool flushDailyReset = true)
         {
-            EnsureDailyBucket();
+            EnsureDailyBucket(flushDailyReset);
             var n = 0;
             foreach (MissionTrack t in Enum.GetValues(typeof(MissionTrack)))
             {
-                foreach (var s in MissionStates(t))
+                foreach (var s in MissionStates(t, flushDailyReset))
                 {
                     if (s.Claimable) n++;
                 }
@@ -98,7 +98,7 @@ namespace PenguinRun.Game.Mission
         /// <summary>跑酷结算后调用，更新所有相关计量；dailyMode=true 时计入「今日挑战」分数任务。</summary>
         public static void RecordAfterRun(int score, int distanceMeters, int coins, bool dailyMode)
         {
-            EnsureDailyBucket();
+            EnsureDailyBucket(false);
             foreach (var def in MissionCatalog.DefinitionsFor(MissionTrack.Daily))
             {
                 var key = ProgressKeyDaily(def.Id);
@@ -132,7 +132,6 @@ namespace PenguinRun.Game.Mission
                 PlayerPrefs.SetInt(key, next);
             }
 
-            PlayerPrefs.Save();
         }
 
         /// <summary>已完成并累计的局数（每次 <see cref="RecordAfterRun"/> +1）。图鉴等系统可读。</summary>

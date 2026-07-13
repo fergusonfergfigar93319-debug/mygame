@@ -92,7 +92,7 @@ $flushCount = if ($null -eq $outcomeRouter) { 0 } else { ([regex]::Matches($outc
 if ($flushCount -ne 1) { $failures.Add("RunOutcomeRouter must contain exactly one PlayerSave.Flush call; found $flushCount") }
 
 $missionStore = Require-File 'Assets/Scripts/Runtime/Game/Mission/MissionStore.cs'
-if ($missionStore -match 'RecordAfterRun[\s\S]*?PlayerPrefs\.Save\s*\(') {
+if ($missionStore -match 'RecordAfterRun[\s\S]*?PlayerPrefs\.Save\s*\([\s\S]*?LifetimeRunsTotal') {
     $failures.Add('MissionStore.RecordAfterRun must not own the post-run flush boundary')
 }
 

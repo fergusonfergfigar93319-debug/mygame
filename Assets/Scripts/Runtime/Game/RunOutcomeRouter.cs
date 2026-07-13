@@ -4,6 +4,7 @@ using PenguinRun.Game.Leaderboard;
 using PenguinRun.Game.Mission;
 using PenguinRun.Game.Save;
 using PenguinRun.Game.Shop;
+using PenguinRun.Game.Growth;
 using UnityEngine;
 
 namespace PenguinRun.Game
@@ -43,6 +44,7 @@ namespace PenguinRun.Game
             public IReadOnlyList<RunUpgradeId> SelectedUpgradeIds;
             public IReadOnlyList<string> CompletedRouteEventIds;
             public string ThemedRelicId;
+            public GrowthTransactionResult Growth;
         }
 
         /// <summary>
@@ -102,8 +104,10 @@ namespace PenguinRun.Game
 
             var submit = LeaderboardStore.Submit(entry);
 
-            MissionStore.RecordAfterRun(score, distanceMeters, coins, dailyMode);
-            CodexUnlocks.ApplyAfterRun(score, distanceMeters, survivalSeconds, dailyMode);
+            var growth = GrowthTransaction.Apply(new GrowthTransactionInput(
+                score, distanceMeters, coins, survivalSeconds, dailyMode,
+                routeEventsCompleted, riskyRoutesCompleted, skillScore,
+                completedRouteEventIds, themedRelicId));
 
             PlayerSave.IncrementTotalRuns();
 
@@ -139,6 +143,7 @@ namespace PenguinRun.Game
                 SelectedUpgradeIds = CopyUpgradeIds(selectedUpgradeIds),
                 CompletedRouteEventIds = CopyStrings(completedRouteEventIds),
                 ThemedRelicId = themedRelicId ?? string.Empty,
+                Growth = growth,
             };
         }
 
