@@ -41,9 +41,10 @@ namespace PenguinRun.Game.UI
                 ? "新的个人最佳纪录"
                 : $"本地排名第 {result.RankByScore} 名";
             var review = BuildRunDepthReview(result);
+            var growthSummary = result.Growth.StrongestSummary;
             var progression = result.BonusCoins > 0 || result.BonusScore > 0
-                ? $"成长加成：鱼干 +{result.BonusCoins} · 得分 +{result.BonusScore}"
-                : "任务、图鉴与营地状态已同步";
+                ? $"{growthSummary} · 加成：鱼干 +{result.BonusCoins} / 得分 +{result.BonusScore}"
+                : string.IsNullOrEmpty(growthSummary) ? "营地已记录本次旅程" : growthSummary;
             return new JourneyResultViewModel(result.NewBest ? "新纪录写入旅程册" : "旅程完成",
                 result.Score, result.DistanceMeters, result.Coins, comparison, review, progression);
         }

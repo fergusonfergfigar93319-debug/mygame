@@ -764,40 +764,18 @@ namespace PenguinRun.Game.UI
 
         private static LobbyViewModel BuildLobbyViewModel()
         {
+            var recommendation = GrowthRecommendation.Build();
             var claimableMissions = MissionStore.CountClaimableMissions();
-            var affordableUpgrades = CampUpgrades.CountAffordableUpgrades();
-
-            string title;
-            string body;
-            string action;
-            if (claimableMissions > 0)
-            {
-                title = "营地来信";
-                body = $"有 {claimableMissions} 份旅程奖励正在等你领取。";
-                action = "领取任务奖励";
-            }
-            else if (affordableUpgrades > 0)
-            {
-                title = "让营火更亮一些";
-                body = $"现有鱼干可以完成 {affordableUpgrades} 项营地修复。";
-                action = "修复营地";
-            }
-            else
-            {
-                title = "风雪后的第一束光";
-                body = "带上伙伴，继续寻找散落在六片雪原里的故事残页。";
-                action = "翻开新旅程";
-            }
-
             var companionHint = PlayerSave.CompanionDrorUnlocked
                 ? "团团已整装，准备同行"
                 : "再完成几次旅程，新的伙伴会来到营地";
             var activeCompanion = PlayerSave.CompanionDrorUnlocked ? CompanionId.Dror : CompanionId.TuanTuan;
             var bond = CompanionBondStore.Snapshot(activeCompanion);
             var camp = CampRebuildStore.Snapshot();
-            return new LobbyViewModel(title, body, action, PlayerSave.PlayerLevelProgress,
+            return new LobbyViewModel(recommendation.Title, recommendation.Body,
+                recommendation.ActionLabel, recommendation.Progress01,
                 companionHint, PlayerSave.TotalFishSnacks, claimableMissions,
-                bond.Level, bond.Progress01, bond.HelperLabel, camp.Progress01);
+                bond.Level, bond.Progress01, bond.HelperLabel, camp.Progress01, recommendation.Kind);
         }
 
         private void RefreshStorybookLobby()
@@ -812,19 +790,22 @@ namespace PenguinRun.Game.UI
 
         private void ExecuteLobbyPrimaryAction()
         {
-            if (MissionStore.CountClaimableMissions() > 0)
+            switch (GrowthRecommendation.Build().Kind)
             {
-                OpenMissions();
-                return;
+                case GrowthRecommendationKind.ClaimGoal:
+                    OpenMissions();
+                    break;
+                case GrowthRecommendationKind.ReviewDiscovery:
+                    OpenCodex();
+                    break;
+                case GrowthRecommendationKind.RebuildCamp:
+                case GrowthRecommendationKind.UpgradeCamp:
+                    OpenCampShop();
+                    break;
+                default:
+                    StartEndless();
+                    break;
             }
-
-            if (CampUpgrades.CountAffordableUpgrades() > 0)
-            {
-                OpenCampShop();
-                return;
-            }
-
-            StartEndless();
         }
 
         private void RefreshHeader()

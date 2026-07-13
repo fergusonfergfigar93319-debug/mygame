@@ -1,4 +1,5 @@
 using UnityEngine;
+using PenguinRun.Game.Growth;
 
 namespace PenguinRun.Game.UI.Lobby
 {
@@ -16,10 +17,12 @@ namespace PenguinRun.Game.UI.Lobby
         public readonly float BondProgress;
         public readonly string BondHelperLabel;
         public readonly float CampProgress;
+        public readonly GrowthRecommendationKind RecommendationKind;
 
         public LobbyViewModel(string title, string body, string action, float progress,
             string companionHint, int fish, int missionBadge, int bondLevel = 0,
-            float bondProgress = 0f, string bondHelperLabel = "", float campProgress = 0f)
+            float bondProgress = 0f, string bondHelperLabel = "", float campProgress = 0f,
+            GrowthRecommendationKind recommendationKind = GrowthRecommendationKind.StartJourney)
         {
             CurrentStoryTitle = title ?? string.Empty;
             CurrentStoryBody = body ?? string.Empty;
@@ -32,6 +35,7 @@ namespace PenguinRun.Game.UI.Lobby
             BondProgress = Mathf.Clamp01(bondProgress);
             BondHelperLabel = bondHelperLabel ?? string.Empty;
             CampProgress = Mathf.Clamp01(campProgress);
+            RecommendationKind = recommendationKind;
         }
     }
 }
