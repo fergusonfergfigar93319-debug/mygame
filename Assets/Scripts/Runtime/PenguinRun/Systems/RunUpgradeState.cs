@@ -27,7 +27,7 @@ namespace PenguinRun
 
         public bool CanSelect => SelectionCount < MaxSelections;
 
-        public IReadOnlyList<RunUpgradeId> SelectedIds => selectedIds.AsReadOnly();
+        public IReadOnlyList<RunUpgradeId> SelectedIds => selectedIds;
 
         public float DashDurationMultiplier => 1f + EffectValue(RunUpgradeEffect.DashDuration);
 

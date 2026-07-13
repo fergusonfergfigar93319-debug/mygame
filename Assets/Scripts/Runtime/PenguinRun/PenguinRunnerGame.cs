@@ -299,6 +299,9 @@ namespace PenguinRun
             var world = game.World;
             hudCanvas.RefreshDynamic(world, world.Score, game.FeedbackText, game.FeedbackTimer);
             hudCanvas.SetBossMode(game.Boss);
+            hudCanvas.SetRouteEvent(game.RouteEvent);
+            hudCanvas.SetUpgradeSummary(game.RunUpgrades);
+            hudCanvas.SetSkillSnapshot(game.SkillScore);
             hudCanvas.SetPaused(game.IsPaused);
         }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using PenguinRun.Game;
 using PenguinRun.Game.UI;
@@ -12,6 +13,7 @@ namespace PenguinRun
     /// <summary>Retained, value-cached runner HUD that never owns gameplay state.</summary>
     internal sealed class RunnerHudCanvas
     {
+        private const int MaxVisibleUpgrades = 3;
         private readonly GameObject canvasObject;
         private readonly GameObject normalStatsRoot;
         private readonly GameObject bossRoot;
@@ -29,6 +31,13 @@ namespace PenguinRun
         private readonly TextMeshProUGUI bossPatternText;
         private readonly TextMeshProUGUI bossHintText;
         private readonly Image bossHealthFill;
+        private readonly GameObject routeRoot;
+        private readonly TextMeshProUGUI routeTitleText;
+        private readonly TextMeshProUGUI routeChoiceText;
+        private readonly GameObject upgradeRoot;
+        private readonly TextMeshProUGUI upgradeText;
+        private readonly GameObject skillRoot;
+        private readonly TextMeshProUGUI skillText;
 
         private int cachedScore = int.MinValue;
         private int cachedDistance = int.MinValue;
@@ -37,13 +46,19 @@ namespace PenguinRun
         private int cachedLives = int.MinValue;
         private string cachedBuffs;
         private float overrideFeedbackUntil;
+        private bool bossMode;
+        private int cachedUpgradeSelectionCount = -1;
+        private int lastSkillTier = -1;
 
         private RunnerHudCanvas(GameObject canvasObject, GameObject normalStatsRoot, GameObject bossRoot,
             GameObject pauseRoot, GameObject feedbackRoot, TextMeshProUGUI modeText,
             TextMeshProUGUI scoreText, TextMeshProUGUI distanceText, TextMeshProUGUI comboText,
             TextMeshProUGUI fishText, TextMeshProUGUI livesText, TextMeshProUGUI buffText,
             TextMeshProUGUI feedbackText, TextMeshProUGUI bossNameText,
-            TextMeshProUGUI bossPatternText, TextMeshProUGUI bossHintText, Image bossHealthFill)
+            TextMeshProUGUI bossPatternText, TextMeshProUGUI bossHintText, Image bossHealthFill,
+            GameObject routeRoot, TextMeshProUGUI routeTitleText, TextMeshProUGUI routeChoiceText,
+            GameObject upgradeRoot, TextMeshProUGUI upgradeText,
+            GameObject skillRoot, TextMeshProUGUI skillText)
         {
             this.canvasObject = canvasObject;
             this.normalStatsRoot = normalStatsRoot;
@@ -62,6 +77,13 @@ namespace PenguinRun
             this.bossPatternText = bossPatternText;
             this.bossHintText = bossHintText;
             this.bossHealthFill = bossHealthFill;
+            this.routeRoot = routeRoot;
+            this.routeTitleText = routeTitleText;
+            this.routeChoiceText = routeChoiceText;
+            this.upgradeRoot = upgradeRoot;
+            this.upgradeText = upgradeText;
+            this.skillRoot = skillRoot;
+            this.skillText = skillText;
         }
 
         public static RunnerHudCanvas Create(RunnerSessionConfig config, Action onExit)
@@ -95,6 +117,27 @@ namespace PenguinRun
             var buffs = CreateHudText("BuffSummary", buffCard, string.Empty, UiTheme.Caption, Color.white,
                 new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.92f), TextAlignmentOptions.Left);
 
+            var upgradeRoot = CreateHudCard("RunBuild", normal, new Vector2(0.69f, 0.055f), new Vector2(0.982f, 0.17f));
+            var upgradeText = CreateHudText("UpgradeSummary", upgradeRoot, string.Empty,
+                UiTheme.Caption, UiTheme.PaperWarm,
+                new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.92f), TextAlignmentOptions.Right);
+            upgradeRoot.gameObject.SetActive(false);
+
+            var skillRoot = CreateHudCard("SkillChain", normal, new Vector2(0.355f, 0.055f), new Vector2(0.645f, 0.15f));
+            var skillText = CreateHudText("SkillSummary", skillRoot, string.Empty,
+                UiTheme.Caption, UiTheme.WarmGold,
+                new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.92f), TextAlignmentOptions.Center);
+            skillRoot.gameObject.SetActive(false);
+
+            var routeRoot = CreateHudCard("RouteChoice", normal, new Vector2(0.25f, 0.79f), new Vector2(0.75f, 0.90f));
+            var routeTitle = CreateHudText("RouteTitle", routeRoot, string.Empty,
+                UiTheme.Caption, UiTheme.PaperWarm,
+                new Vector2(0.04f, 0.52f), new Vector2(0.96f, 0.94f), TextAlignmentOptions.Center);
+            var routeChoice = CreateHudText("RouteLabels", routeRoot, string.Empty,
+                UiTheme.Micro, UiTheme.WarmGold,
+                new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.52f), TextAlignmentOptions.Center);
+            routeRoot.gameObject.SetActive(false);
+
             var exit = UiBuilder.CreateButton("Exit", root, "返回营地", new Color(0.05f, 0.10f, 0.16f, 0.76f),
                 Color.white, UiTheme.Caption, rounded: true);
             Place((RectTransform)exit.transform, new Vector2(0.445f, 0.91f), new Vector2(0.555f, 0.975f));
@@ -127,7 +170,10 @@ namespace PenguinRun
 
             var hud = new RunnerHudCanvas(canvasObject, normal.gameObject, bossRoot.gameObject,
                 pauseRoot.gameObject, feedbackRoot.gameObject, mode, score, distance, combo,
-                fish, lives, buffs, feedback, bossName, pattern, hint, healthFill);
+                fish, lives, buffs, feedback, bossName, pattern, hint, healthFill,
+                routeRoot.gameObject, routeTitle, routeChoice,
+                upgradeRoot.gameObject, upgradeText,
+                skillRoot.gameObject, skillText);
             hud.BindStatic(config);
             return hud;
         }
@@ -166,9 +212,87 @@ namespace PenguinRun
             }
         }
 
+        public void SetRouteEvent(RouteEventSnapshot snapshot)
+        {
+            var visible = !bossMode && snapshot.AwaitingChoice;
+            routeRoot.SetActive(visible);
+            if (!visible) return;
+
+            routeTitleText.text = snapshot.Title;
+            routeChoiceText.text = $"← 安心：{snapshot.SafeLabel}    冒险：{snapshot.RiskLabel} →";
+        }
+
+        public void SetUpgradeSummary(RunUpgradeState upgrades)
+        {
+            if (upgrades == null || bossMode)
+            {
+                upgradeRoot.SetActive(false);
+                return;
+            }
+
+            if (cachedUpgradeSelectionCount == upgrades.SelectionCount)
+            {
+                upgradeRoot.SetActive(cachedUpgradeSelectionCount > 0);
+                return;
+            }
+
+            cachedUpgradeSelectionCount = upgrades.SelectionCount;
+            upgradeRoot.SetActive(cachedUpgradeSelectionCount > 0);
+            if (cachedUpgradeSelectionCount <= 0)
+            {
+                upgradeText.text = string.Empty;
+                return;
+            }
+
+            var seen = new HashSet<RunUpgradeId>();
+            var labels = new StringBuilder(80);
+            var uniqueCount = 0;
+            for (var i = 0; i < upgrades.SelectedIds.Count; i++)
+            {
+                var id = upgrades.SelectedIds[i];
+                if (!seen.Add(id)) continue;
+                uniqueCount++;
+                if (uniqueCount > MaxVisibleUpgrades) continue;
+                if (labels.Length > 0) labels.Append(" · ");
+                labels.Append(RunUpgradeCatalog.For(id).Title)
+                    .Append('×')
+                    .Append(upgrades.GetStack(id));
+            }
+
+            var overflow = Mathf.Max(0, uniqueCount - MaxVisibleUpgrades);
+            if (overflow > 0)
+            {
+                labels.Append("  +").Append(overflow);
+            }
+            upgradeText.text = labels.ToString();
+        }
+
+        public void SetSkillSnapshot(SkillScoreSnapshot snapshot)
+        {
+            var visible = !bossMode && snapshot.TotalScore > 0;
+            skillRoot.SetActive(visible);
+            if (!visible)
+            {
+                lastSkillTier = -1;
+                return;
+            }
+
+            var tier = Mathf.Max(0, Mathf.RoundToInt((snapshot.Multiplier - 1f) / 0.25f));
+            var tierChanged = snapshot.Chain > 0 && tier != lastSkillTier;
+            var expiring = snapshot.Chain > 0 && snapshot.RemainingSeconds < 0.6f;
+            lastSkillTier = tier;
+
+            skillText.text = snapshot.Chain > 0
+                ? $"{snapshot.LastLabel}  ×{snapshot.Chain}  {snapshot.Multiplier:0.00}倍  ·  技巧{snapshot.TotalScore:N0}"
+                : $"技巧分 {snapshot.TotalScore:N0}";
+            skillText.color = tierChanged || expiring ? UiTheme.WarmGold : UiTheme.TextSecondary;
+            skillText.fontSize = tierChanged || expiring ? UiTheme.Body : UiTheme.Caption;
+        }
+
         public void SetBossMode(BossSystem boss)
         {
             var active = boss != null && boss.BossActive && boss.CurrentBoss != null;
+            bossMode = active;
             bossRoot.SetActive(active);
             normalStatsRoot.SetActive(!active);
             if (!active) return;

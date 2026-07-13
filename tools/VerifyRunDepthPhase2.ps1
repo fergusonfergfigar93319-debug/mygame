@@ -124,6 +124,14 @@ Require-Pattern $fxPool 'MaxPoolSize\s*=\s*48\b' 'BossPatternFxPool capacity rem
 $vfxPlayer = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/BossPatternVfxPlayer.cs'
 Require-Pattern $vfxPlayer 'MaxShardBurstCount\s*=\s*6\b' 'Boss pattern shard burst remains capped at six'
 
+$hudCanvas = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RunnerHudCanvas.cs'
+foreach ($method in 'SetRouteEvent', 'SetUpgradeSummary', 'SetSkillSnapshot') {
+    Require-Pattern $hudCanvas "\b$method\s*\(" "RunnerHudCanvas.$method"
+}
+Require-Pattern $hudCanvas 'MaxVisibleUpgrades\s*=\s*3\b' 'HUD shows at most three upgrade labels'
+Require-Pattern $hudCanvas 'RemainingSeconds\s*<\s*0\.6f' 'HUD emphasizes an expiring skill chain'
+Require-Pattern $hudCanvas 'bossMode' 'Boss mode suppresses route and build detail'
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1
