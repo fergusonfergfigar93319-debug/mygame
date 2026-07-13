@@ -11,11 +11,15 @@ namespace PenguinRun.Game.UI.Lobby
     {
         private readonly TextMeshProUGUI hint;
         private readonly Button interaction;
+        private readonly TextMeshProUGUI bondText;
+        private readonly Image bondFill;
 
-        private LobbyCompanionCorner(TextMeshProUGUI hint, Button interaction)
+        private LobbyCompanionCorner(TextMeshProUGUI hint, Button interaction, TextMeshProUGUI bondText, Image bondFill)
         {
             this.hint = hint;
             this.interaction = interaction;
+            this.bondText = bondText;
+            this.bondFill = bondFill;
         }
 
         public static LobbyCompanionCorner Build(Transform parent)
@@ -47,12 +51,33 @@ namespace PenguinRun.Game.UI.Lobby
 
             var button = root.gameObject.AddComponent<Button>();
             button.targetGraphic = root.GetComponent<Image>();
-            return new LobbyCompanionCorner(hint, button);
+
+            var bondCard = UiBuilder.CreateRect("BondProgress", root, new Vector2(0.08f, 0.82f),
+                new Vector2(0.92f, 0.96f), Vector2.zero, Vector2.zero,
+                new Color(UiTheme.PaperBase.r, UiTheme.PaperBase.g, UiTheme.PaperBase.b, 0.88f), rounded: true);
+            var bondText = UiBuilder.CreateTmpText("BondLevel", bondCard, string.Empty, UiTheme.Micro,
+                FontStyle.Bold, TextAnchor.UpperCenter, UiTheme.InkPrimary);
+            bondText.rectTransform.anchorMin = new Vector2(0f, 0.45f);
+            bondText.rectTransform.anchorMax = Vector2.one;
+            bondText.rectTransform.offsetMin = new Vector2(8f, 0f);
+            bondText.rectTransform.offsetMax = new Vector2(-8f, -2f);
+            var track = UiBuilder.CreateRect("Track", bondCard, new Vector2(0.08f, 0.16f),
+                new Vector2(0.92f, 0.34f), Vector2.zero, Vector2.zero, UiTheme.MistBlue, rounded: true);
+            var fill = UiBuilder.CreateRect("Fill", track, Vector2.zero, new Vector2(0f, 1f),
+                Vector2.zero, Vector2.zero, UiTheme.CoralAction, rounded: true).GetComponent<Image>();
+            track.GetComponent<Image>().raycastTarget = false;
+            fill.raycastTarget = false;
+            return new LobbyCompanionCorner(hint, button, bondText, fill);
         }
 
         public void Bind(LobbyViewModel model, Action onInteract)
         {
             hint.text = model.CompanionHint;
+            bondText.text = model.BondLevel > 0
+                ? $"羁绊 Lv {model.BondLevel} · {model.BondHelperLabel}"
+                : "完成旅程，与伙伴建立羁绊";
+            var fillRect = (RectTransform)bondFill.transform;
+            fillRect.anchorMax = new Vector2(model.BondProgress, 1f);
             interaction.onClick.RemoveAllListeners();
             if (onInteract != null) interaction.onClick.AddListener(() => onInteract());
         }

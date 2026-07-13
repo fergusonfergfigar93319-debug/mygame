@@ -792,8 +792,12 @@ namespace PenguinRun.Game.UI
             var companionHint = PlayerSave.CompanionDrorUnlocked
                 ? "团团已整装，准备同行"
                 : "再完成几次旅程，新的伙伴会来到营地";
+            var activeCompanion = PlayerSave.CompanionDrorUnlocked ? CompanionId.Dror : CompanionId.TuanTuan;
+            var bond = CompanionBondStore.Snapshot(activeCompanion);
+            var camp = CampRebuildStore.Snapshot();
             return new LobbyViewModel(title, body, action, PlayerSave.PlayerLevelProgress,
-                companionHint, PlayerSave.TotalFishSnacks, claimableMissions);
+                companionHint, PlayerSave.TotalFishSnacks, claimableMissions,
+                bond.Level, bond.Progress01, bond.HelperLabel, camp.Progress01);
         }
 
         private void RefreshStorybookLobby()

@@ -12,9 +12,14 @@ namespace PenguinRun.Game.UI.Lobby
         public readonly string CompanionHint;
         public readonly int Fish;
         public readonly int MissionBadge;
+        public readonly int BondLevel;
+        public readonly float BondProgress;
+        public readonly string BondHelperLabel;
+        public readonly float CampProgress;
 
         public LobbyViewModel(string title, string body, string action, float progress,
-            string companionHint, int fish, int missionBadge)
+            string companionHint, int fish, int missionBadge, int bondLevel = 0,
+            float bondProgress = 0f, string bondHelperLabel = "", float campProgress = 0f)
         {
             CurrentStoryTitle = title ?? string.Empty;
             CurrentStoryBody = body ?? string.Empty;
@@ -23,6 +28,10 @@ namespace PenguinRun.Game.UI.Lobby
             CompanionHint = companionHint ?? string.Empty;
             Fish = Mathf.Max(0, fish);
             MissionBadge = Mathf.Max(0, missionBadge);
+            BondLevel = Mathf.Max(0, bondLevel);
+            BondProgress = Mathf.Clamp01(bondProgress);
+            BondHelperLabel = bondHelperLabel ?? string.Empty;
+            CampProgress = Mathf.Clamp01(campProgress);
         }
     }
 }
