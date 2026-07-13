@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using PenguinRun.Game.Growth;
 using PenguinRun.Game.Save;
 using UnityEngine;
 using UnityEngine.UI;
@@ -266,6 +267,8 @@ namespace PenguinRun.Game.UI
             }
 
             // 顺序：先 Action / Survival / Reward；同类内按 enum 顺序保留
+            BuildReconstructionSection();
+
             CampUpgradeCategory[] order = { CampUpgradeCategory.Action, CampUpgradeCategory.Survival, CampUpgradeCategory.Reward };
             var anyShown = false;
             foreach (var cat in order)
@@ -295,6 +298,108 @@ namespace PenguinRun.Game.UI
 
             UiBuilder.RebuildScrollContent(contentRoot);
         }
+
+        private void BuildReconstructionSection()
+        {
+            var camp = CampRebuildStore.Snapshot();
+            var summary = UiBuilder.CreateScrollListRow("ReconstructionSummary", contentRoot, 86f,
+                new Color(UiTheme.PaperWarm.r, UiTheme.PaperWarm.g, UiTheme.PaperWarm.b, 0.96f));
+            UiBuilder.AddOutline(summary.gameObject, new Color(UiTheme.PineGreen.r, UiTheme.PineGreen.g,
+                UiTheme.PineGreen.b, 0.35f), new Vector2(1f, -1f));
+            var summaryText = UiBuilder.CreateText("Summary", summary,
+                $"营地重建  {camp.TotalLevels}/{camp.MaxTotalLevels}    可修复 {camp.AffordableNodes}",
+                24, FontStyle.Bold, TextAnchor.MiddleLeft, UiTheme.InkPrimary);
+            var summaryRt = (RectTransform)summaryText.transform;
+            summaryRt.anchorMin = Vector2.zero;
+            summaryRt.anchorMax = Vector2.one;
+            summaryRt.offsetMin = new Vector2(24f, 0f);
+            summaryRt.offsetMax = new Vector2(-24f, 0f);
+
+            foreach (var definition in CampBuildingCatalog.All)
+                BuildReconstructionNode(CampRebuildStore.Snapshot(definition.Id));
+        }
+
+        private void BuildReconstructionNode(CampBuildingSnapshot node)
+        {
+            var available = node.VisibleState != CampBuildingVisibleState.Locked;
+            var affordable = node.VisibleState == CampBuildingVisibleState.Affordable;
+            var theme = node.Id switch
+            {
+                CampBuildingId.Bonfire => UiTheme.CoralAction,
+                CampBuildingId.Workshop => UiTheme.PineGreen,
+                CampBuildingId.CompanionHut => UiTheme.BerryDanger,
+                CampBuildingId.LibraryTent => UiTheme.MistBlue,
+                _ => UiTheme.WarmGold,
+            };
+            var row = UiBuilder.CreateScrollListRow("Rebuild_" + node.Id, contentRoot, 184f,
+                available ? UiTheme.PaperWarm : new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g,
+                    UiTheme.MistBlue.b, 0.42f));
+            UiBuilder.AddOutline(row.gameObject, new Color(theme.r, theme.g, theme.b, available ? 0.5f : 0.22f),
+                new Vector2(1f, -1f));
+
+            var badge = UiBuilder.CreateRect("NodeBadge", row, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(68f, 68f), new Vector2(52f, 0f), new Color(theme.r, theme.g, theme.b, 0.2f), circle: true);
+            UiBuilder.CreateText("Icon", badge, NodeIcon(node.Id), 32, FontStyle.Bold,
+                TextAnchor.MiddleCenter, theme);
+
+            var title = UiBuilder.CreateText("Title", row,
+                $"{node.Definition.Title}  Lv {node.Level}/{CampBuildingCatalog.MaxLevel}",
+                27, FontStyle.Bold, TextAnchor.UpperLeft, UiTheme.InkPrimary);
+            var titleRt = (RectTransform)title.transform;
+            titleRt.anchorMin = new Vector2(0f, 1f);
+            titleRt.anchorMax = new Vector2(0.7f, 1f);
+            titleRt.pivot = new Vector2(0f, 1f);
+            titleRt.sizeDelta = new Vector2(0f, 38f);
+            titleRt.anchoredPosition = new Vector2(98f, -22f);
+
+            var story = available
+                ? $"{node.Definition.Story}\n{node.Definition.UnlockEffect}"
+                : LockedReason(node.Definition);
+            var body = UiBuilder.CreateText("Story", row, story, 18, FontStyle.Normal,
+                TextAnchor.UpperLeft, available ? UiTheme.InkSecondary : UiTheme.TextTertiary);
+            var bodyRt = (RectTransform)body.transform;
+            bodyRt.anchorMin = new Vector2(0f, 0f);
+            bodyRt.anchorMax = new Vector2(0.70f, 1f);
+            bodyRt.offsetMin = new Vector2(98f, 20f);
+            bodyRt.offsetMax = new Vector2(-12f, -66f);
+
+            var label = node.IsMaxLevel ? "重建完成" : affordable ? $"修复  {node.NextCost} 鱼干" :
+                available ? $"还需 {Mathf.Max(0, node.NextCost - PlayerSave.TotalFishSnacks)} 鱼干" : "前置未完成";
+            var button = UiBuilder.CreateButton("Rebuild", row, label,
+                affordable ? theme : new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.6f),
+                affordable ? UiTheme.InkPrimary : UiTheme.TextTertiary, 20, rounded: true);
+            var buttonRt = (RectTransform)button.transform;
+            buttonRt.anchorMin = new Vector2(1f, 0.5f);
+            buttonRt.anchorMax = new Vector2(1f, 0.5f);
+            buttonRt.pivot = new Vector2(1f, 0.5f);
+            buttonRt.sizeDelta = new Vector2(210f, 70f);
+            buttonRt.anchoredPosition = new Vector2(-24f, 0f);
+            button.interactable = affordable;
+            button.onClick.AddListener(() =>
+            {
+                if (CampRebuildStore.TryPurchase(node.Id))
+                {
+                    dispatch(MainMenuBootstrap.PanelEvent.Toast, $"{node.Definition.Title}亮起了新的灯光");
+                    Refresh();
+                }
+            });
+        }
+
+        private static string LockedReason(CampBuildingDefinition definition)
+        {
+            if (!definition.Prerequisite.HasValue) return "收集鱼干即可开始修复。";
+            var prerequisite = CampBuildingCatalog.For(definition.Prerequisite.Value);
+            return $"先将{prerequisite.Title}修复到 Lv {definition.PrerequisiteLevel}。";
+        }
+
+        private static string NodeIcon(CampBuildingId id) => id switch
+        {
+            CampBuildingId.Bonfire => "♨",
+            CampBuildingId.Workshop => "⚒",
+            CampBuildingId.CompanionHut => "♥",
+            CampBuildingId.LibraryTent => "▤",
+            _ => "⌂",
+        };
 
         private bool MatchesFilter(CampUpgradeCategory cat) =>
             activeFilter switch

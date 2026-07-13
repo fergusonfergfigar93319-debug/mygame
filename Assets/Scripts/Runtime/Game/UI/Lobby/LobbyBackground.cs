@@ -1,4 +1,5 @@
 using PenguinRun.Game.UI.Storybook;
+using PenguinRun.Game.Growth;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -7,7 +8,7 @@ namespace PenguinRun.Game.UI.Lobby
     /// <summary>Text-free storybook panorama with cheap depth and snow accents.</summary>
     public static class LobbyBackground
     {
-        public static RectTransform Build(Transform parent)
+        public static RectTransform Build(Transform parent, CampRebuildSnapshot camp)
         {
             var root = UiBuilder.CreateRect("StorybookLobbyBackground", parent, Vector2.zero, Vector2.one,
                 Vector2.zero, Vector2.zero, UiTheme.PaperBase);
@@ -32,6 +33,18 @@ namespace PenguinRun.Game.UI.Lobby
             CreateSilhouette(root, "RightCamp", new Vector2(0.68f, 0f), new Vector2(1f, 0.30f),
                 new Color(UiTheme.BerryDanger.r, UiTheme.BerryDanger.g, UiTheme.BerryDanger.b, 0.10f), 6f);
 
+            CreateCampLayer(root, "BonfireLayer", new Vector2(0.72f, 0.08f), new Vector2(0.77f, 0.17f),
+                UiTheme.CoralAction);
+            CreateCampLayer(root, "WorkshopLayer", new Vector2(0.79f, 0.08f), new Vector2(0.87f, 0.20f),
+                UiTheme.PineGreen);
+            CreateCampLayer(root, "CompanionHutLayer", new Vector2(0.88f, 0.08f), new Vector2(0.96f, 0.19f),
+                UiTheme.BerryDanger);
+            CreateCampLayer(root, "LibraryTentLayer", new Vector2(0.61f, 0.08f), new Vector2(0.69f, 0.18f),
+                UiTheme.MistBlue);
+            CreateCampLayer(root, "LookoutLayer", new Vector2(0.53f, 0.08f), new Vector2(0.59f, 0.25f),
+                UiTheme.WarmGold);
+            Refresh(root, camp);
+
             for (var i = 0; i < 24; i++)
             {
                 var x = Mathf.Repeat(i * 0.6180339f, 1f);
@@ -48,6 +61,38 @@ namespace PenguinRun.Game.UI.Lobby
 
             return root;
         }
+
+        public static void Refresh(RectTransform root, CampRebuildSnapshot camp)
+        {
+            if (root == null) return;
+            foreach (var node in camp.Nodes)
+            {
+                var layer = root.Find(LayerName(node.Id));
+                if (layer == null) continue;
+                layer.gameObject.SetActive(node.Level > 0);
+                var image = layer.GetComponent<Image>();
+                if (image != null) image.color = WithAlpha(image.color, 0.25f + node.Level * 0.2f);
+            }
+        }
+
+        private static void CreateCampLayer(Transform parent, string name, Vector2 min, Vector2 max, Color color)
+        {
+            var layer = UiBuilder.CreateRect(name, parent, min, max, Vector2.zero, Vector2.zero,
+                WithAlpha(color, 0.45f), rounded: true);
+            layer.GetComponent<Image>().raycastTarget = false;
+        }
+
+        private static string LayerName(CampBuildingId id) => id switch
+        {
+            CampBuildingId.Bonfire => "BonfireLayer",
+            CampBuildingId.Workshop => "WorkshopLayer",
+            CampBuildingId.CompanionHut => "CompanionHutLayer",
+            CampBuildingId.LibraryTent => "LibraryTentLayer",
+            _ => "LookoutLayer",
+        };
+
+        private static Color WithAlpha(Color color, float alpha) =>
+            new(color.r, color.g, color.b, Mathf.Clamp01(alpha));
 
         private static void CreateSilhouette(Transform parent, string name, Vector2 min, Vector2 max,
             Color color, float drift)

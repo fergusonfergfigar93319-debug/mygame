@@ -3,6 +3,7 @@ using PenguinRun.Game.Save;
 using PenguinRun.Game.Shop;
 using PenguinRun.Game.Leaderboard;
 using PenguinRun.Game;
+using PenguinRun.Game.Growth;
 using PenguinRun.Game.UI.Lobby;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -48,6 +49,7 @@ namespace PenguinRun.Game.UI
         private LobbyStoryCard lobbyStoryCard;
         private LobbyCompanionCorner lobbyCompanionCorner;
         private LobbyDock lobbyDock;
+        private RectTransform lobbyBackground;
         private RectTransform dockWrap;
 
         /// <summary>「开始游戏」：归入 MenuPrimaryCtaStrip，避免叠层顺序导致点击被吞。</summary>
@@ -276,7 +278,7 @@ namespace PenguinRun.Game.UI
         {
             BuildBackground();
             BuildCanvas();
-            LobbyBackground.Build(canvas.transform);
+            lobbyBackground = LobbyBackground.Build(canvas.transform, CampRebuildStore.Snapshot());
             lobbyStoryCard = LobbyStoryCard.Build(canvas.transform);
             lobbyCompanionCorner = LobbyCompanionCorner.Build(canvas.transform);
             lobbyDock = LobbyDock.Build(canvas.transform, new LobbyDockActions(
@@ -797,6 +799,7 @@ namespace PenguinRun.Game.UI
         private void RefreshStorybookLobby()
         {
             var model = BuildLobbyViewModel();
+            LobbyBackground.Refresh(lobbyBackground, CampRebuildStore.Snapshot());
             lobbyStoryCard?.Bind(model, ExecuteLobbyPrimaryAction);
             lobbyCompanionCorner?.Bind(model, OpenCodex);
             lobbyDock?.SetBadges(MissionStore.CountClaimableMissions(), CampUpgrades.CountAffordableUpgrades());
