@@ -33,6 +33,7 @@ namespace PenguinRun
         private readonly BossSystem bossSystem;
         private readonly RouteEventDirector routeEventDirector;
         private readonly RunUpgradeState runUpgradeState;
+        private readonly SkillScoreTracker skillScoreTracker = new();
         private readonly Transform sceneRoot;
         private readonly System.Action pulseHaptic;
         private readonly System.Action<Color, float> onScreenFlash;
@@ -48,6 +49,8 @@ namespace PenguinRun
         private int lastLifeCount = 3;
         private bool entranceSkipped;
         private bool upgradeOfferPending;
+        private bool segmentTrackingActive;
+        private bool segmentDamaged;
         private EntrancePhase entrancePhase;
         private float entranceTimer;
         private int countdownNumber;
@@ -75,13 +78,13 @@ namespace PenguinRun
 
             var waveDirector = new SegmentWaveDirector(config.MapTheme);
             spawner = new SegmentSpawner(tuning.world, tuning.powerUp, tuning.movement.laneWidth, config, waveDirector, tuning.movement.groundY);
-            motor = new PlayerMotor(playerTransform, runnerAudio, tuning.movement, tuning.powerUp, tuning.combat);
-            world = new WorldDirector(tuning.world, tuning.pickup);
-            pickups = new PickupSystem(tuning.pickup, tuning.powerUp, config);
-            collisions = new CollisionSystem(runnerAudio, tuning.combat);
-            bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth, tuning.combat);
             routeEventDirector = new RouteEventDirector(config.MapTheme, config.Daily, PlayerSave.TotalRuns);
             runUpgradeState = new RunUpgradeState(config.MapTheme, config.Daily, PlayerSave.TotalRuns);
+            motor = new PlayerMotor(playerTransform, runnerAudio, tuning.movement, tuning.powerUp, tuning.combat);
+            world = new WorldDirector(tuning.world, tuning.pickup);
+            pickups = new PickupSystem(tuning.pickup, tuning.powerUp, config, runUpgradeState);
+            collisions = new CollisionSystem(runnerAudio, tuning.combat, runUpgradeState);
+            bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth, tuning.combat);
             stateMachine.OnStateChanged += HandleStateChanged;
         }
 
@@ -129,6 +132,8 @@ namespace PenguinRun
 
         public RunUpgradeState RunUpgrades => runUpgradeState;
 
+        public SkillScoreSnapshot SkillScore => skillScoreTracker.Snapshot;
+
         public RunnerAudio RunnerAudio => runnerAudio;
 
         public string FeedbackText { get => feedbackText; set => feedbackText = value; }
@@ -145,10 +150,13 @@ namespace PenguinRun
             bossSystem.Reset();
             routeEventDirector.Reset();
             runUpgradeState.Reset();
+            skillScoreTracker.Reset();
             collisions.Reset();
             stateMachine.ForceTransitionTo(start ? GameStateMachine.State.Running : GameStateMachine.State.Idle);
             finishRequested = false;
             upgradeOfferPending = false;
+            segmentTrackingActive = false;
+            segmentDamaged = false;
             entranceSkipped = false;
             entrancePhase = EntrancePhase.None;
             entranceTimer = 0f;
@@ -407,6 +415,7 @@ namespace PenguinRun
                 return 0f;
             }
 
+            skillScoreTracker.Tick(dt);
             var effectiveSpeed = world.Tick(dt);
             var groundY = TrackTerrain.SurfaceY(playerTransform.position.z, world.Distance, tuning.movement.groundY);
             if (action == RunnerAction.Dash)
@@ -414,8 +423,15 @@ namespace PenguinRun
                 TriggerManualDash(ref feedbackText, ref feedbackTimer);
                 action = RunnerAction.None;
             }
+            var laneBeforeAction = motor.Lane;
             motor.ApplyAction(action, ref feedbackText, ref feedbackTimer, world.GlideTimer, groundY);
-            motor.Tick(dt, tuning.movement.laneWidth, tuning.movement.laneLerp, ref feedbackText, ref feedbackTimer, world.GlideTimer, groundY);
+            if (motor.Lane != laneBeforeAction)
+            {
+                AwardSkill(SkillAction.LaneChain, 35);
+            }
+            motor.Tick(dt, tuning.movement.laneWidth,
+                tuning.movement.laneLerp * runUpgradeState.LaneResponseMultiplier,
+                ref feedbackText, ref feedbackTimer, world.GlideTimer, groundY);
 
             feedbackTimer = Mathf.Max(0f, feedbackTimer - dt);
 
@@ -492,7 +508,9 @@ namespace PenguinRun
                 runnerAudio.PlayCheckpoint();
             }
 
-            pickups.CollectCoins(playerTransform, motor.PlayerY, world, spawner.coins, ref feedbackText, ref feedbackTimer);
+            pickups.CollectCoins(playerTransform, motor.PlayerY, !motor.Grounded,
+                () => AwardSkill(SkillAction.AirCollection, 60),
+                world, spawner.coins, ref feedbackText, ref feedbackTimer);
             pickups.CollectPowerUps(playerTransform, world, spawner.powerUps, ref feedbackText, ref feedbackTimer);
 
             // ── Boss 战每帧逻辑 ─────────────────────────────────
@@ -502,6 +520,10 @@ namespace PenguinRun
             var bossHitsPlayer = bossSystem.Tick(dt, world.Distance, px, py, groundY,
                 motor.SlideTimer > 0f, world.DashTimer, world.ShieldTimer,
                 ref feedbackText, ref feedbackTimer);
+            if (bossSystem.TryConsumeCounter())
+            {
+                AwardSkill(SkillAction.BossCounter, 250);
+            }
             if (bossSystem.TryConsumeGuidancePauseRequest())
             {
                 waitingForGuidedReaction = true;
@@ -552,7 +574,10 @@ namespace PenguinRun
                 }
 
                 if (outcome.InvulnerabilitySeconds > 0f)
-                    world.SetHitInvulnerability(outcome.InvulnerabilitySeconds);
+                {
+                    var shieldGrace = outcome.ConsumeShield ? runUpgradeState.ShieldGraceSeconds : 0f;
+                    world.SetHitInvulnerability(outcome.InvulnerabilitySeconds + shieldGrace);
+                }
 
                 if (outcome.Kind == HitOutcomeKind.BlockedByDefense)
                 {
@@ -560,12 +585,14 @@ namespace PenguinRun
                 }
                 else if (outcome.Kind == HitOutcomeKind.GameOver)
                 {
+                    BreakSkillChain();
                     EmitRunFeedback(RunFeedbackKind.BossDeath);
                     EnterDeathSequence();
                     return;
                 }
                 else if (outcome.Kind == HitOutcomeKind.Damage)
                 {
+                    BreakSkillChain();
                     character.TriggerHurtFlash();
                     EventBus.Emit(GameEvents.PlayerHurt);
                     pulseHaptic?.Invoke();
@@ -588,6 +615,7 @@ namespace PenguinRun
                 }
             }
 
+            var livesBeforeCollision = world.Lives;
             var gameOverNow = collisions.CheckCollisions(
                     playerTransform,
                     motor.PlayerY,
@@ -602,7 +630,12 @@ namespace PenguinRun
                     ref feedbackTimer,
                     pulseHaptic,
                     motor,
-                    () => EmitRunFeedback(RunFeedbackKind.PerfectDodge));
+                    HandlePerfectDodge);
+
+            if (world.Lives < livesBeforeCollision)
+            {
+                BreakSkillChain();
+            }
 
             if (world.Lives < lastLifeCount)
             {
@@ -629,11 +662,19 @@ namespace PenguinRun
         {
             if (!resolution.IsValid) return;
 
-            world.AddRouteEventReward(resolution.Outcome.FishReward, resolution.Outcome.ScoreReward);
+            var fishReward = Mathf.RoundToInt(
+                resolution.Outcome.FishReward * runUpgradeState.FishRewardMultiplier);
+            var scoreReward = Mathf.RoundToInt(
+                resolution.Outcome.ScoreReward * runUpgradeState.RouteRewardMultiplier);
+            world.AddRouteEventReward(fishReward, scoreReward);
             spawner.SpawnRouteEventOutcome(resolution.Outcome, resolution.Risky, world.Distance);
+            if (resolution.Risky)
+            {
+                AwardSkill(SkillAction.RiskRoute, 140);
+            }
             feedbackText = resolution.Risky
-                ? $"冒险路线 · {resolution.Outcome.Label}  +{resolution.Outcome.ScoreReward}分"
-                : $"安心路线 · {resolution.Outcome.Label}  +{resolution.Outcome.FishReward}鱼干";
+                ? $"冒险路线 · {resolution.Outcome.Label}  +{scoreReward}分"
+                : $"安心路线 · {resolution.Outcome.Label}  +{fishReward}鱼干";
             feedbackTimer = 1.5f;
             runnerAudio.PlayCheckpoint();
 
@@ -678,11 +719,35 @@ namespace PenguinRun
         {
             segmentBannerTimer = Mathf.Max(0f, segmentBannerTimer - dt);
             if (!spawner.TryConsumeSegmentBanner(out var kind)) return;
+            if (segmentTrackingActive && !segmentDamaged)
+            {
+                AwardSkill(SkillAction.NoHitSegment, 180);
+            }
+            segmentTrackingActive = true;
+            segmentDamaged = false;
             segmentBannerKind = kind;
             segmentBannerTimer = 1.2f;
             EmitRunFeedback(kind == SegmentPatternKind.HazardRhythm
                 ? RunFeedbackKind.SegmentHazard
                 : RunFeedbackKind.SegmentReward);
+        }
+
+        private void HandlePerfectDodge()
+        {
+            AwardSkill(SkillAction.PerfectDodge,
+                Mathf.RoundToInt(100f * runUpgradeState.PerfectDodgeScoreMultiplier));
+            EmitRunFeedback(RunFeedbackKind.PerfectDodge);
+        }
+
+        private void AwardSkill(SkillAction action, int baseScore)
+        {
+            world.AddSkillScore(skillScoreTracker.Record(action, baseScore));
+        }
+
+        private void BreakSkillChain()
+        {
+            segmentDamaged = true;
+            skillScoreTracker.BreakChain();
         }
 
         private void EmitRunFeedback(RunFeedbackKind kind)

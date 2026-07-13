@@ -37,6 +37,8 @@ namespace PenguinRun
 
         public float ShieldGraceSeconds => EffectValue(RunUpgradeEffect.ShieldGrace);
 
+        public float PowerUpDurationMultiplier => 1f + EffectValue(RunUpgradeEffect.PowerUpDuration);
+
         public float LaneResponseMultiplier => 1f + EffectValue(RunUpgradeEffect.LaneResponse);
 
         public float RouteRewardMultiplier => 1f + EffectValue(RunUpgradeEffect.RouteReward);

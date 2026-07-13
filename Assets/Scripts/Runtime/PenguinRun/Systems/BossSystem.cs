@@ -85,6 +85,7 @@ namespace PenguinRun
         private BossDefinition currentBossDef;
         private BossDefinition lastDefeatedBoss;
         private BossDefinition nextBossDef; // 预计算的下一个 Boss
+        private bool counterPending;
 
         // 反馈（音频等）
         private readonly RunnerAudio audio;
@@ -111,6 +112,7 @@ namespace PenguinRun
         public void Reset()
         {
             CleanupBoss();
+            counterPending = false;
             BossesDefeated = 0;
             nextBossDistance = firstBossDistance;
             explainedPatterns.Clear();
@@ -315,6 +317,7 @@ namespace PenguinRun
 
         private void DamageBoss(BossEncounter boss, ref string feedbackText, ref float feedbackTimer)
         {
+            counterPending = true;
             boss.HitsRemaining = Mathf.Max(0, boss.HitsRemaining - 1);
             boss.EnterAfterHit();
             audio.PlayBossShieldBreak();
@@ -396,6 +399,13 @@ namespace PenguinRun
                 return true;
             }
             return false;
+        }
+
+        public bool TryConsumeCounter()
+        {
+            if (!counterPending) return false;
+            counterPending = false;
+            return true;
         }
 
         // Boss 前奏 / 奖励段对外 API

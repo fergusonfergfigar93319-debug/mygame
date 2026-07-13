@@ -11,12 +11,14 @@ namespace PenguinRun
 
         private readonly RunnerAudio audio;
         private readonly RunnerCombatTuning combat;
+        private readonly RunUpgradeState upgrades;
         private readonly HashSet<GameObject> perfectDodged = new();
 
-        public CollisionSystem(RunnerAudio audio, RunnerCombatTuning combat)
+        public CollisionSystem(RunnerAudio audio, RunnerCombatTuning combat, RunUpgradeState upgrades)
         {
             this.audio = audio;
             this.combat = combat;
+            this.upgrades = upgrades;
         }
 
         public void Reset() => perfectDodged.Clear();
@@ -122,7 +124,10 @@ namespace PenguinRun
                 spawner.TryRemoveObstacle(obstacle);
 
             if (outcome.InvulnerabilitySeconds > 0f)
-                world.SetHitInvulnerability(outcome.InvulnerabilitySeconds);
+            {
+                var shieldGrace = outcome.ConsumeShield ? upgrades.ShieldGraceSeconds : 0f;
+                world.SetHitInvulnerability(outcome.InvulnerabilitySeconds + shieldGrace);
+            }
 
             if (outcome.Kind == HitOutcomeKind.Damage || outcome.Kind == HitOutcomeKind.GameOver)
                 world.BreakPerfectDodgeStreak();

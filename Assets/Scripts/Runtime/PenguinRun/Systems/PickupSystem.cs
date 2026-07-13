@@ -10,24 +10,39 @@ namespace PenguinRun
         private readonly RunnerPickupTuning pickupTuning;
         private readonly RunnerPowerUpTuning powerUpTuning;
         private readonly RunnerSessionConfig config;
+        private readonly RunUpgradeState upgrades;
 
-        public PickupSystem(RunnerPickupTuning pickupTuning, RunnerPowerUpTuning powerUpTuning, RunnerSessionConfig config)
+        public PickupSystem(
+            RunnerPickupTuning pickupTuning,
+            RunnerPowerUpTuning powerUpTuning,
+            RunnerSessionConfig config,
+            RunUpgradeState upgrades)
         {
             this.pickupTuning = pickupTuning;
             this.powerUpTuning = powerUpTuning;
             this.config = config;
+            this.upgrades = upgrades;
         }
 
-        public void CollectCoins(Transform player, float playerY, WorldDirector world, List<GameObject> coinObjs, ref string feedbackText, ref float feedbackTimer)
+        public void CollectCoins(
+            Transform player,
+            float playerY,
+            bool playerAirborne,
+            System.Action onAirCollection,
+            WorldDirector world,
+            List<GameObject> coinObjs,
+            ref string feedbackText,
+            ref float feedbackTimer)
         {
             var px = player.position.x;
             var pz = player.position.z;
             var magnetActive = world.MagnetTimer > 0f;
             var collectX =
                 magnetActive
-                    ? pickupTuning.magnetCollectXBase + config.MagnetLevel * pickupTuning.magnetCollectXPerLevel
+                    ? (pickupTuning.magnetCollectXBase + config.MagnetLevel * pickupTuning.magnetCollectXPerLevel) * upgrades.MagnetRadiusMultiplier
                     : pickupTuning.coinCollectX;
             var collectZ = magnetActive ? pickupTuning.magnetCollectZ : pickupTuning.coinCollectZ;
+            var airCollectionReported = false;
 
             for (var i = coinObjs.Count - 1; i >= 0; i--)
             {
@@ -44,6 +59,11 @@ namespace PenguinRun
                 feedbackText = nextCombo >= 3 ? $"金币连击 x{nextCombo}" : "+1 金币";
                 feedbackTimer = 0.55f;
                 EventBus.Emit(GameEvents.CoinCollected, nextCombo);
+                if (playerAirborne && !airCollectionReported)
+                {
+                    airCollectionReported = true;
+                    onAirCollection?.Invoke();
+                }
                 c.SetActive(false); // 池化回收由 SegmentSpawner.Tick 处理
                 coinObjs.RemoveAt(i);
             }
@@ -58,7 +78,7 @@ namespace PenguinRun
             var magnetActive = world.MagnetTimer > 0f;
             var collectX = magnetActive
                 ? Mathf.Min(
-                    pickupTuning.magnetCollectXBase + config.MagnetLevel * pickupTuning.magnetCollectXPerLevel,
+                    (pickupTuning.magnetCollectXBase + config.MagnetLevel * pickupTuning.magnetCollectXPerLevel) * upgrades.MagnetRadiusMultiplier,
                     4.2f)
                 : 1.38f;
             var collectZ = magnetActive ? Mathf.Min(pickupTuning.magnetCollectZ, 2.15f) : 1.32f;
@@ -91,35 +111,36 @@ namespace PenguinRun
         {
             var comboMult = world.RegisterPowerUpPickup(kind);
             var comboLabel = world.PowerUpComboLabel;
+            var durationMult = upgrades.PowerUpDurationMultiplier;
 
             switch (kind)
             {
                 case PowerUpKind.Dash:
-                    world.DashTimer = Mathf.Max(world.DashTimer, (powerUpTuning.dashBaseSeconds + config.DashLevel * powerUpTuning.dashPerLevelSeconds) * comboMult);
+                    world.DashTimer = Mathf.Max(world.DashTimer, (powerUpTuning.dashBaseSeconds + config.DashLevel * powerUpTuning.dashPerLevelSeconds) * comboMult * durationMult * upgrades.DashDurationMultiplier);
                     feedbackText = string.IsNullOrEmpty(comboLabel) ? "鱼干冲刺" : $"鱼干冲刺 · {comboLabel}";
                     break;
                 case PowerUpKind.Magnet:
-                    world.MagnetTimer = Mathf.Max(world.MagnetTimer, (powerUpTuning.magnetBaseSeconds + config.MagnetLevel * powerUpTuning.magnetPerLevelSeconds) * comboMult);
+                    world.MagnetTimer = Mathf.Max(world.MagnetTimer, (powerUpTuning.magnetBaseSeconds + config.MagnetLevel * powerUpTuning.magnetPerLevelSeconds) * comboMult * durationMult);
                     feedbackText = string.IsNullOrEmpty(comboLabel) ? "极光磁针" : $"极光磁针 · {comboLabel}";
                     break;
                 case PowerUpKind.Shield:
-                    world.ShieldTimer = Mathf.Max(world.ShieldTimer, (powerUpTuning.shieldBaseSeconds + config.TuanLevel * powerUpTuning.shieldPerLevelSeconds) * comboMult);
+                    world.ShieldTimer = Mathf.Max(world.ShieldTimer, (powerUpTuning.shieldBaseSeconds + config.TuanLevel * powerUpTuning.shieldPerLevelSeconds) * comboMult * durationMult);
                     feedbackText = string.IsNullOrEmpty(comboLabel) ? "团团护盾" : $"团团护盾 · {comboLabel}";
                     break;
                 case PowerUpKind.ScoreStar:
-                    world.ScoreBoostTimer = Mathf.Max(world.ScoreBoostTimer, (powerUpTuning.scoreStarBaseSeconds + config.PolarLevel * powerUpTuning.scoreStarPerLevelSeconds) * comboMult);
+                    world.ScoreBoostTimer = Mathf.Max(world.ScoreBoostTimer, (powerUpTuning.scoreStarBaseSeconds + config.PolarLevel * powerUpTuning.scoreStarPerLevelSeconds) * comboMult * durationMult);
                     feedbackText = string.IsNullOrEmpty(comboLabel) ? "星光加分" : $"星光加分 · {comboLabel}";
                     break;
                 case PowerUpKind.GlideFeather:
-                    world.GlideTimer = Mathf.Max(world.GlideTimer, (powerUpTuning.glideBaseSeconds + config.TuanLevel * powerUpTuning.glidePerLevelSeconds) * comboMult);
+                    world.GlideTimer = Mathf.Max(world.GlideTimer, (powerUpTuning.glideBaseSeconds + config.TuanLevel * powerUpTuning.glidePerLevelSeconds) * comboMult * durationMult);
                     feedbackText = string.IsNullOrEmpty(comboLabel) ? "极地滑翔" : $"极地滑翔 · {comboLabel}";
                     break;
                 case PowerUpKind.DoubleFishSnack:
-                    world.ExtendDoubleFish((powerUpTuning.doubleFishBaseSeconds + config.PolarLevel * powerUpTuning.doubleFishPerPolarLevelSeconds) * comboMult);
+                    world.ExtendDoubleFish((powerUpTuning.doubleFishBaseSeconds + config.PolarLevel * powerUpTuning.doubleFishPerPolarLevelSeconds) * comboMult * durationMult);
                     feedbackText = string.IsNullOrEmpty(comboLabel) ? "双倍鱼干" : $"双倍鱼干 · {comboLabel}";
                     break;
                 case PowerUpKind.TimeHourglass:
-                    world.ExtendSlowMo((powerUpTuning.hourglassBaseSeconds + config.PolarLevel * powerUpTuning.hourglassPerPolarLevelSeconds) * comboMult);
+                    world.ExtendSlowMo((powerUpTuning.hourglassBaseSeconds + config.PolarLevel * powerUpTuning.hourglassPerPolarLevelSeconds) * comboMult * durationMult);
                     feedbackText = string.IsNullOrEmpty(comboLabel) ? "时间沙漏" : $"时间沙漏 · {comboLabel}";
                     break;
                 case PowerUpKind.BubbleShield:
@@ -181,4 +202,3 @@ namespace PenguinRun
         }
     }
 }
-

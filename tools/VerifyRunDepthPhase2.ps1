@@ -59,6 +59,7 @@ Require-Pattern $upgradeState 'MaxStacksPerUpgrade\s*=\s*3\b' 'run upgrade stack
 foreach ($query in 'DashDurationMultiplier', 'MagnetRadiusMultiplier', 'PerfectDodgeScoreMultiplier', 'ShieldGraceSeconds') {
     Require-Pattern $upgradeState "\b$query\b" "RunUpgradeState.$query"
 }
+Require-Pattern $upgradeState '\bPowerUpDurationMultiplier\b' 'RunUpgradeState.PowerUpDurationMultiplier'
 Require-Pattern $runnerController 'runUpgradeState\.Reset\s*\(' 'controller resets in-run upgrades per run'
 
 $upgradeModels = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RunUpgradeModels.cs'
@@ -88,11 +89,28 @@ Require-Pattern $runnerController '\(routeEventDirector\.CompletedCount\s*-\s*1\
 
 $skillTracker = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/SkillScoreTracker.cs'
 Require-Pattern $skillTracker '\bRecord\s*\(' 'SkillScoreTracker.Record'
+foreach ($action in 'PerfectDodge', 'LaneChain', 'AirCollection', 'NoHitSegment', 'RiskRoute', 'BossCounter') {
+    Require-Pattern $skillTracker "\b$action\b" "SkillAction.$action"
+}
+Require-Pattern $skillTracker 'ChainWindowSeconds\s*=\s*2\.5f' 'skill chain window is 2.5 seconds'
+Require-Pattern $skillTracker 'MaxMultiplier\s*=\s*3f' 'skill multiplier is capped at 3.0'
+Require-Pattern $skillTracker '\bBreakChain\s*\(' 'skill chain explicitly breaks on damage'
+Require-Pattern $worldDirector '\bAddSkillScore\s*\(' 'WorldDirector.AddSkillScore explicit command'
+Require-Pattern $runnerController 'skillScoreTracker\.Tick\s*\(' 'controller advances skill-chain time'
+Require-Pattern $runnerController 'skillScoreTracker\.BreakChain\s*\(' 'controller breaks the skill chain on damage'
+
+$pickupSystem = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/PickupSystem.cs'
+Require-Pattern $pickupSystem 'MagnetRadiusMultiplier' 'pickup collection consumes the magnet-radius upgrade query'
+Require-Pattern $pickupSystem 'PowerUpDurationMultiplier' 'pickup activation consumes the duration upgrade query'
+
+$collisionSystem = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/CollisionSystem.cs'
+Require-Pattern $collisionSystem 'ShieldGraceSeconds' 'collision defense consumes the shield-grace upgrade query'
 
 $traitCatalog = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/BossThemeTraitCatalog.cs'
 Require-Pattern $traitCatalog '\bFor\s*\(' 'BossThemeTraitCatalog.For'
 
 $bossSystem = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/BossSystem.cs'
+Require-Pattern $bossSystem '\bTryConsumeCounter\s*\(' 'BossSystem exposes real counter events'
 Require-Pattern $bossSystem '\bCheckPatternHit\s*\(' 'BossSystem.CheckPatternHit damage authority'
 Require-Pattern $bossSystem 'RunnerHitResolver\.IsBossPatternHit\s*\(' 'BossSystem delegates pattern hits to RunnerHitResolver'
 

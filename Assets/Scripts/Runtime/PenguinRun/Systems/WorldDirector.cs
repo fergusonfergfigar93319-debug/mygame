@@ -22,6 +22,7 @@ namespace PenguinRun
         public int Score { get; private set; }
 
         public int Coins { get; private set; }
+        public int SkillScore { get; private set; }
         public int ComboBonusScore { get; private set; }
         public int CoinCombo { get; private set; }
 
@@ -171,6 +172,7 @@ namespace PenguinRun
             Speed = worldTuning.startSpeed;
             Score = 0;
             Coins = 0;
+            SkillScore = 0;
             ComboBonusScore = 0;
             CoinCombo = 0;
             comboTimer = 0f;
@@ -267,6 +269,13 @@ namespace PenguinRun
         {
             Coins += Mathf.Max(0, fishBonus);
             ComboBonusScore += Mathf.Max(0, scoreBonus);
+        }
+
+        public void AddSkillScore(int score)
+        {
+            var award = Mathf.Max(0, score);
+            SkillScore += award;
+            ComboBonusScore += award;
         }
 
         public void SetBossSpeedResult(string tier, int fishBonus, int scoreBonus)
