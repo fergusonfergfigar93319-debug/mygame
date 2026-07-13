@@ -9,13 +9,15 @@ namespace PenguinRun.Game.UI.Lobby
     /// <summary>Mascot portrait and one lightweight relationship interaction.</summary>
     public sealed class LobbyCompanionCorner
     {
+        public RectTransform Root { get; }
         private readonly TextMeshProUGUI hint;
         private readonly Button interaction;
         private readonly TextMeshProUGUI bondText;
         private readonly Image bondFill;
 
-        private LobbyCompanionCorner(TextMeshProUGUI hint, Button interaction, TextMeshProUGUI bondText, Image bondFill)
+        private LobbyCompanionCorner(RectTransform root, TextMeshProUGUI hint, Button interaction, TextMeshProUGUI bondText, Image bondFill)
         {
+            Root = root;
             this.hint = hint;
             this.interaction = interaction;
             this.bondText = bondText;
@@ -67,7 +69,7 @@ namespace PenguinRun.Game.UI.Lobby
                 Vector2.zero, Vector2.zero, UiTheme.CoralAction, rounded: true).GetComponent<Image>();
             track.GetComponent<Image>().raycastTarget = false;
             fill.raycastTarget = false;
-            return new LobbyCompanionCorner(hint, button, bondText, fill);
+            return new LobbyCompanionCorner(root, hint, button, bondText, fill);
         }
 
         public void Bind(LobbyViewModel model, Action onInteract)

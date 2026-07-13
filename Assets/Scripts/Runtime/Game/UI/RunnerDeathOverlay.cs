@@ -19,9 +19,11 @@ namespace PenguinRun.Game.UI
                 new Vector2(760f, 700f), Vector2.zero, UiTheme.PaperWarm, addBorder: true, addShadow: true);
             UiBuilder.AddOutline(card.gameObject, UiTheme.StitchBorder, new Vector2(2f, -2f));
 
-            AddText("Title", card, model.Headline, UiTheme.H1, FontStyle.Bold, new Vector2(0f, 224f), new Vector2(0f, 70f), UiTheme.InkPrimary);
-            AddText("Score", card, model.Score.ToString("N0"), UiTheme.Display, FontStyle.Bold, new Vector2(0f, 126f), new Vector2(0f, 90f), UiTheme.CoralAction);
-            AddText("ScoreLabel", card, model.BestComparison, UiTheme.Caption, FontStyle.Normal, new Vector2(0f, 72f), new Vector2(0f, 34f), UiTheme.InkSecondary);
+            // These labels are center-anchored, so a zero X size collapses them to a
+            // one-character-wide column. Keep an explicit width at every resolution.
+            AddText("Title", card, model.Headline, UiTheme.H1, FontStyle.Bold, new Vector2(0f, 224f), new Vector2(620f, 70f), UiTheme.InkPrimary);
+            AddText("Score", card, model.Score.ToString("N0"), UiTheme.Display, FontStyle.Bold, new Vector2(0f, 126f), new Vector2(620f, 90f), UiTheme.CoralAction);
+            AddText("ScoreLabel", card, model.BestComparison, UiTheme.Caption, FontStyle.Normal, new Vector2(0f, 72f), new Vector2(620f, 34f), UiTheme.InkSecondary);
 
             AddStat(card, "距离", $"{model.DistanceMeters}m", new Vector2(-188f, -32f), UiTheme.MistBlue);
             AddStat(card, "鱼干", model.Fish.ToString(), new Vector2(0f, -32f), UiTheme.CoralAction);

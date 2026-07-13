@@ -26,9 +26,11 @@ namespace PenguinRun
 
         public string EventDisplayName => ActiveEvent switch
         {
-            WorldEventType.MeteorShower => "☄ 流星雨",
-            WorldEventType.Blizzard => "❄ 暴风雪",
-            WorldEventType.AuroraBurst => "✨ 极光爆发",
+            // The bundled CJK font does not contain these emoji/symbol glyphs on
+            // every Android device. Text labels remain deterministic and legible.
+            WorldEventType.MeteorShower => "[流星] 流星雨",
+            WorldEventType.Blizzard => "[暴雪] 暴风雪",
+            WorldEventType.AuroraBurst => "[极光] 极光爆发",
             _ => "",
         };
 

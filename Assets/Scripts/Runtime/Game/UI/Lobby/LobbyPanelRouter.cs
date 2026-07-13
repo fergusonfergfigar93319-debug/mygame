@@ -30,12 +30,23 @@ namespace PenguinRun.Game.UI.Lobby
                 return;
             }
 
+            if (ReferenceEquals(currentPanel, panel))
+            {
+                CurrentPanelName = panelName ?? string.Empty;
+                panel.SetActive(true);
+                bringUiToFront?.Invoke();
+                onChanged?.Invoke();
+                return;
+            }
+
             CloseCurrent(notify: false);
             currentPanel = panel;
             CurrentPanelName = panelName ?? string.Empty;
 
             if (panelLayer != null && panel.transform.parent != panelLayer)
                 panel.transform.SetParent(panelLayer, false);
+
+            panel.SetActive(true);
 
             if (panel.TryGetComponent<RectTransform>(out var panelRect))
                 StorybookUi.PlayPageTurnIn(panelRect);
@@ -53,7 +64,13 @@ namespace PenguinRun.Game.UI.Lobby
         {
             if (currentPanel == null) return;
 
-            UnityEngine.Object.Destroy(currentPanel);
+            // Destroy is deferred until the end of the frame. Deactivate first so
+            // rapid navigation never renders or receives input on two pages at once.
+            currentPanel.SetActive(false);
+            if (Application.isPlaying)
+                UnityEngine.Object.Destroy(currentPanel);
+            else
+                UnityEngine.Object.DestroyImmediate(currentPanel);
             currentPanel = null;
             CurrentPanelName = null;
             if (notify) onChanged?.Invoke();

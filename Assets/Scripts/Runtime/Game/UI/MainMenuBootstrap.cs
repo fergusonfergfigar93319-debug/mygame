@@ -51,6 +51,7 @@ namespace PenguinRun.Game.UI
         private LobbyDock lobbyDock;
         private RectTransform lobbyBackground;
         private RectTransform dockWrap;
+        private RectTransform versionLabel;
 
         /// <summary>「开始游戏」：归入 MenuPrimaryCtaStrip，避免叠层顺序导致点击被吞。</summary>
         private Transform startGameButton;
@@ -291,9 +292,10 @@ namespace PenguinRun.Game.UI
 
             // 右下角版本号
             var versionText = UiBuilder.CreateText("VersionText", canvas.transform,
-                "v1.0 · 企鹅快跑", 14, FontStyle.Normal, TextAnchor.LowerRight,
+                $"v{Application.version} · 企鹅快跑", 14, FontStyle.Normal, TextAnchor.LowerRight,
                 new Color(0.4f, 0.6f, 0.8f, 0.35f));
             var vrt = (RectTransform)versionText.transform;
+            versionLabel = vrt;
             vrt.anchorMin = new Vector2(1f, 0f);
             vrt.anchorMax = new Vector2(1f, 0f);
             vrt.pivot = new Vector2(1f, 0f);
@@ -1438,15 +1440,27 @@ namespace PenguinRun.Game.UI
 
         private void OnPanelRouterChanged()
         {
+            SetLobbySurfaceVisible(panelRouter == null || !panelRouter.HasOpenPanel);
             RefreshHeader();
             RefreshDockState();
             RefreshStorybookLobby();
+            BringLobbyUiToFront();
+        }
+
+        private void SetLobbySurfaceVisible(bool visible)
+        {
+            if (lobbyBackground != null) lobbyBackground.gameObject.SetActive(visible);
+            if (lobbyStoryCard?.Root != null) lobbyStoryCard.Root.gameObject.SetActive(visible);
+            if (lobbyCompanionCorner?.Root != null) lobbyCompanionCorner.Root.gameObject.SetActive(visible);
+            if (dockWrap != null) dockWrap.gameObject.SetActive(visible);
+            if (versionLabel != null) versionLabel.gameObject.SetActive(visible);
         }
 
         private void BringLobbyUiToFront()
         {
             if (panelLayer != null) panelLayer.SetAsLastSibling();
-            if (dockWrap != null) dockWrap.SetAsLastSibling();
+            if (dockWrap != null && (panelRouter == null || !panelRouter.HasOpenPanel))
+                dockWrap.SetAsLastSibling();
             if (snackbar != null) snackbar.transform.SetAsLastSibling();
         }
 

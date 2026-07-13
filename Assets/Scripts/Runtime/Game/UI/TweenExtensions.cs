@@ -47,8 +47,10 @@ namespace PenguinRun.Game.UI
         public static void PlayPanelPopIn(this RectTransform rt, float duration = 0.35f)
         {
 #if DOTWEEN
-            rt.localScale = Vector3.one * 0.7f;
-            rt.DOScale(1f, duration).SetEase(Ease.OutBack);
+            // Full-page panels must remain readable even if gameplay is paused.
+            // A subtle scale also avoids exposing most of the previous surface.
+            rt.localScale = Vector3.one * 0.96f;
+            rt.DOScale(1f, duration).SetEase(Ease.OutCubic).SetUpdate(true);
 #endif
         }
 

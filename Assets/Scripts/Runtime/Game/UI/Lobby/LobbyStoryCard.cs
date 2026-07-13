@@ -9,6 +9,7 @@ namespace PenguinRun.Game.UI.Lobby
     /// <summary>The lobby's single answer to “what should I do next?”.</summary>
     public sealed class LobbyStoryCard
     {
+        public RectTransform Root { get; }
         private readonly TextMeshProUGUI title;
         private readonly TextMeshProUGUI body;
         private readonly TextMeshProUGUI actionLabel;
@@ -16,10 +17,11 @@ namespace PenguinRun.Game.UI.Lobby
         private readonly Image progressFill;
         private readonly Button primaryAction;
 
-        private LobbyStoryCard(TextMeshProUGUI title, TextMeshProUGUI body,
+        private LobbyStoryCard(RectTransform root, TextMeshProUGUI title, TextMeshProUGUI body,
             TextMeshProUGUI actionLabel, TextMeshProUGUI fishLabel, Image progressFill,
             Button primaryAction)
         {
+            Root = root;
             this.title = title;
             this.body = body;
             this.actionLabel = actionLabel;
@@ -69,7 +71,7 @@ namespace PenguinRun.Game.UI.Lobby
             var actionLabel = button.GetComponentInChildren<TextMeshProUGUI>();
 
             StorybookUi.PlayPageTurnIn(card);
-            return new LobbyStoryCard(title, body, actionLabel, fish, fill, button);
+            return new LobbyStoryCard(card, title, body, actionLabel, fish, fill, button);
         }
 
         public void Bind(LobbyViewModel model, Action onPrimaryAction)
