@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 
@@ -36,12 +37,16 @@ public static class PenguinRunCiBuild
         EditorUserBuildSettings.exportAsGoogleAndroidProject = false;
         EditorUserBuildSettings.buildAppBundle = false;
 
+        Debug.Log($"Android test build: package={PlayerSettings.GetApplicationIdentifier(NamedBuildTarget.Android)}, " +
+                  $"version={Application.version} ({PlayerSettings.Android.bundleVersionCode}), " +
+                  $"scenes={string.Join(", ", scenes)}");
+
         var opts = new BuildPlayerOptions
         {
             scenes = scenes,
             locationPathName = apkPath,
             target = BuildTarget.Android,
-            options = BuildOptions.CompressWithLz4HC
+            options = BuildOptions.CompressWithLz4HC | BuildOptions.StrictMode
         };
 
         BuildReport report = BuildPipeline.BuildPlayer(opts);

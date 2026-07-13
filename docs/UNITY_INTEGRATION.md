@@ -1,5 +1,20 @@
 # Unity Integration
 
+## 2026-07-13 最新测试 APK 打包
+
+- 当前测试版本：`1.1.0 (2)`。
+- 测试包名继续使用 `com.example.mygame`，以便覆盖安装 2026-05 的 `1.0 (1)` 测试包。
+- 当前未配置私有 keystore；本地测试 APK 使用 Android Debug 证书，只适合侧载测试，不能作为应用商店正式包。
+- `tools/BuildLatestAndroidApk.ps1` 会依次执行四阶段静态门禁、调用 Unity 构建、使用 `aapt` 校验包名/版本，并使用 `apksigner` 校验签名，最终生成稳定文件名 `Builds/Android/PenguinRun-Latest-Test-v1.1.0-2.apk` 与 SHA-256。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/BuildLatestAndroidApk.ps1
+```
+
+本机 Unity Hub 必须先登录并激活有效的 Personal/Pro 许可证。若日志出现返回码 198，说明编辑器在导入与构建前被许可证阻断，不能把仓库内 2026-05 的旧 APK 当作最新版发送。
+
+正式发布前需要另行确定不可变的 production application id，创建并离线备份正式 keystore，然后从该正式证书开始维护连续的 versionCode。
+
 当前仓库根目录已经是 Unity 工程结构。第一阶段已完成 Unity 跑酷原型、Android Library 导出和 Android 主工程接入。
 
 ## 当前状态
