@@ -17,6 +17,7 @@ namespace PenguinRun
         private float eventStartDistance;
         private RouteEventDefinition activeDefinition;
         private RouteEventSnapshot snapshot = RouteEventSnapshot.Empty;
+        private readonly List<string> completedEventIds = new();
 
         public RouteEventDirector(RunnerMapTheme theme, bool daily, int runCount)
         {
@@ -31,6 +32,7 @@ namespace PenguinRun
         public int CompletedCount { get; private set; }
 
         public int RiskyCompletedCount { get; private set; }
+        public IReadOnlyList<string> CompletedEventIds => completedEventIds;
 
         public bool Tick(float distanceMeters)
         {
@@ -69,6 +71,8 @@ namespace PenguinRun
                 outcome);
 
             CompletedCount++;
+            if (!string.IsNullOrEmpty(resolution.EventId) && !completedEventIds.Contains(resolution.EventId))
+                completedEventIds.Add(resolution.EventId);
             if (risky)
             {
                 RiskyCompletedCount++;
@@ -93,6 +97,7 @@ namespace PenguinRun
             snapshot = RouteEventSnapshot.Empty;
             CompletedCount = 0;
             RiskyCompletedCount = 0;
+            completedEventIds.Clear();
         }
 
         private int DeterministicIndex(int ordinal, int count)

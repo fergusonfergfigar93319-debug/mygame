@@ -319,6 +319,7 @@ namespace PenguinRun
                 world.LastBossSpeedTier, world.LastBossSpeedFishBonus, world.LastBossSpeedScoreBonus,
                 routeEventDirector.CompletedCount, routeEventDirector.RiskyCompletedCount,
                 skill.TotalScore, skill.PeakChain, runUpgradeState.SelectedIds,
+                routeEventDirector.CompletedEventIds,
                 bossSystem.LastThemedRelicId);
             onFinish?.Invoke(result);
         }

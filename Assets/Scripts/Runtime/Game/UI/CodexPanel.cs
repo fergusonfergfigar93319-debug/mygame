@@ -1,5 +1,6 @@
 using PenguinRun;
 using PenguinRun.Game.Save;
+using PenguinRun.Game.Growth;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -124,10 +125,37 @@ namespace PenguinRun.Game.UI
             foreach (var boss in BossDefinitions.GetAllBossesOrdered())
                 BuildBossEntry(boss);
 
+            BuildDiscoverySection(CodexDiscoveryGroup.Route, "路线手记");
+            BuildDiscoverySection(CodexDiscoveryGroup.Relic, "主题遗物");
+            CodexDiscoveryStore.MarkAllSeen();
+
             UiBuilder.RebuildScrollContent(contentRoot);
         }
 
-        private void BuildEntry(string fallbackIcon, string iconSpriteName, string title, string desc, bool unlocked, Color themeColor)
+        private void BuildDiscoverySection(CodexDiscoveryGroup group, string label)
+        {
+            var unlockedCount = 0;
+            var total = 0;
+            foreach (var definition in CodexDiscoveryCatalog.ForGroup(group))
+            {
+                total++;
+                if (CodexDiscoveryStore.IsDiscovered(definition.Id)) unlockedCount++;
+            }
+            BuildSectionHeader($"{label} · {unlockedCount}/{total}");
+            foreach (var definition in CodexDiscoveryCatalog.ForGroup(group))
+            {
+                var unlocked = CodexDiscoveryStore.IsDiscovered(definition.Id);
+                var isNew = CodexDiscoveryStore.IsNew(definition.Id);
+                var title = unlocked && isNew ? $"{definition.Title}  新" : definition.Title;
+                var color = group == CodexDiscoveryGroup.Route ? UiTheme.PineGreen : UiTheme.CoralAction;
+                BuildEntry(group == CodexDiscoveryGroup.Route ? "路" : "◆", "icon_locked",
+                    title, $"{definition.Theme} · {definition.Description}", unlocked, color,
+                    $"线索：{definition.UnknownClue}");
+            }
+        }
+
+        private void BuildEntry(string fallbackIcon, string iconSpriteName, string title, string desc,
+            bool unlocked, Color themeColor, string lockedDescription = null)
         {
             var rowBg = unlocked ? UiBuilder.Surface1 : new Color(0.05f, 0.09f, 0.14f, 0.85f);
             var row = UiBuilder.CreateScrollListRow("Entry_" + title, contentRoot, 160f, rowBg);
@@ -187,7 +215,7 @@ namespace PenguinRun.Game.UI
 
             // 描述
             var descText = UiBuilder.CreateText("Desc", row,
-                unlocked ? desc : "继续游戏以解锁此条目。",
+                unlocked ? desc : (lockedDescription ?? "继续游戏以解锁此条目。"),
                 20, FontStyle.Normal, TextAnchor.UpperLeft,
                 unlocked ? UiBuilder.TextSecondary : UiBuilder.TextTertiary);
             var drt = (RectTransform)descText.transform;

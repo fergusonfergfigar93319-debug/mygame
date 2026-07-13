@@ -41,6 +41,7 @@ namespace PenguinRun.Game
             public int SkillScore;
             public int PeakSkillChain;
             public IReadOnlyList<RunUpgradeId> SelectedUpgradeIds;
+            public IReadOnlyList<string> CompletedRouteEventIds;
             public string ThemedRelicId;
         }
 
@@ -53,6 +54,7 @@ namespace PenguinRun.Game
             int routeEventsCompleted = 0, int riskyRoutesCompleted = 0,
             int skillScore = 0, int peakSkillChain = 0,
             IReadOnlyList<RunUpgradeId> selectedUpgradeIds = null,
+            IReadOnlyList<string> completedRouteEventIds = null,
             string themedRelicId = "")
         {
             score = Math.Max(0, score);
@@ -135,6 +137,7 @@ namespace PenguinRun.Game
                 SkillScore = Math.Max(0, skillScore),
                 PeakSkillChain = Math.Max(0, peakSkillChain),
                 SelectedUpgradeIds = CopyUpgradeIds(selectedUpgradeIds),
+                CompletedRouteEventIds = CopyStrings(completedRouteEventIds),
                 ThemedRelicId = themedRelicId ?? string.Empty,
             };
         }
@@ -146,6 +149,15 @@ namespace PenguinRun.Game
 
             var copy = new RunUpgradeId[source.Count];
             for (var i = 0; i < source.Count; i++) copy[i] = source[i];
+            return Array.AsReadOnly(copy);
+        }
+
+        private static IReadOnlyList<string> CopyStrings(IReadOnlyList<string> source)
+        {
+            if (source == null || source.Count == 0)
+                return Array.AsReadOnly(Array.Empty<string>());
+            var copy = new string[source.Count];
+            for (var i = 0; i < source.Count; i++) copy[i] = source[i] ?? string.Empty;
             return Array.AsReadOnly(copy);
         }
     }
