@@ -1,5 +1,6 @@
 using PenguinRun.Core;
 using PenguinRun.Game;
+using PenguinRun.Game.Save;
 using PenguinRun.Game.Shop;
 using UnityEngine;
 
@@ -30,6 +31,7 @@ namespace PenguinRun
         private readonly PickupSystem pickups;
         private readonly CollisionSystem collisions;
         private readonly BossSystem bossSystem;
+        private readonly RouteEventDirector routeEventDirector;
         private readonly Transform sceneRoot;
         private readonly System.Action pulseHaptic;
         private readonly System.Action<Color, float> onScreenFlash;
@@ -76,6 +78,7 @@ namespace PenguinRun
             pickups = new PickupSystem(tuning.pickup, tuning.powerUp, config);
             collisions = new CollisionSystem(runnerAudio, tuning.combat);
             bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth, tuning.combat);
+            routeEventDirector = new RouteEventDirector(config.MapTheme, config.Daily, PlayerSave.TotalRuns);
             stateMachine.OnStateChanged += HandleStateChanged;
         }
 
@@ -119,6 +122,8 @@ namespace PenguinRun
 
         public BossSystem Boss => bossSystem;
 
+        public RouteEventSnapshot RouteEvent => routeEventDirector.Snapshot;
+
         public RunnerAudio RunnerAudio => runnerAudio;
 
         public string FeedbackText { get => feedbackText; set => feedbackText = value; }
@@ -133,6 +138,7 @@ namespace PenguinRun
             if (start && ShopStore.TryConsumePendingLuckyStartForRunStart())
                 world.AddExtraLife();
             bossSystem.Reset();
+            routeEventDirector.Reset();
             collisions.Reset();
             stateMachine.ForceTransitionTo(start ? GameStateMachine.State.Running : GameStateMachine.State.Idle);
             finishRequested = false;
@@ -427,9 +433,32 @@ namespace PenguinRun
         public void TickRunningWorld(float dt, float effectiveSpeed)
         {
             if (world.Paused) return;
-            spawner.SpawnPaused = bossSystem.ShouldPauseSpawning;
+            var routeCanStart =
+                stateMachine.Current == GameStateMachine.State.Running &&
+                !bossSystem.BossActive &&
+                !bossSystem.HasSpawnedPrelude &&
+                !bossSystem.IsBossApproaching(world.Distance, 180f);
+            if (routeEventDirector.AwaitingChoice)
+            {
+                routeEventDirector.Tick(world.Distance);
+            }
+            else if (routeCanStart && routeEventDirector.Tick(world.Distance))
+            {
+                if (!spawner.SpawnRouteEvent(routeEventDirector.Snapshot, world.Distance))
+                {
+                    routeEventDirector.Expire(world.Distance);
+                }
+            }
+
+            spawner.SpawnPaused = bossSystem.ShouldPauseSpawning || routeEventDirector.AwaitingChoice;
             spawner.Tick(dt, effectiveSpeed, world.Distance);
             TickSegmentBanner(dt);
+
+            if (routeEventDirector.AwaitingChoice &&
+                spawner.TryConsumeRouteChoice(motor.Lane, out var choseRisk))
+            {
+                ApplyRouteEventOutcome(routeEventDirector.Choose(choseRisk, world.Distance));
+            }
 
             if (spawner.TryConsumeSlideGateTutorial(out var slideTutorial))
             {
@@ -587,6 +616,19 @@ namespace PenguinRun
                 EmitRunFeedback(RunFeedbackKind.ObstacleDeath);
                 EnterDeathSequence();
             }
+        }
+
+        private void ApplyRouteEventOutcome(RouteEventResolution resolution)
+        {
+            if (!resolution.IsValid) return;
+
+            world.AddRouteEventReward(resolution.Outcome.FishReward, resolution.Outcome.ScoreReward);
+            spawner.SpawnRouteEventOutcome(resolution.Outcome, resolution.Risky, world.Distance);
+            feedbackText = resolution.Risky
+                ? $"冒险路线 · {resolution.Outcome.Label}  +{resolution.Outcome.ScoreReward}分"
+                : $"安心路线 · {resolution.Outcome.Label}  +{resolution.Outcome.FishReward}鱼干";
+            feedbackTimer = 1.5f;
+            runnerAudio.PlayCheckpoint();
         }
 
         public float SegmentBannerTimer => segmentBannerTimer;

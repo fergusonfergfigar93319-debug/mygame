@@ -52,6 +52,8 @@ namespace PenguinRun
         private readonly Dictionary<GameObject, float> coinYDelta = new();
         private readonly Dictionary<string, GameObject> modelPrefabCache = new();
         private bool slideGateTutorialPending;
+        private GameObject routeEventRoot;
+        private readonly List<GameObject> routeOutcomeRoots = new();
 
         private readonly GameObjectPool coinPool;
         private readonly GameObjectPool powerUpPool;
@@ -129,6 +131,95 @@ namespace PenguinRun
             return true;
         }
 
+        public bool SpawnRouteEvent(RouteEventSnapshot routeEvent, float runDistance)
+        {
+            if (!routeEvent.AwaitingChoice || routeEventRoot != null)
+            {
+                return false;
+            }
+
+            var spawnZ = Mathf.Max(
+                worldTuning.spawnDistance + 34f,
+                nextSpawnZ + worldTuning.spawnDistance + 24f);
+            var surfaceY = TrackTerrain.SurfaceY(spawnZ, runDistance, baseGroundY);
+            var root = new GameObject($"Route Event {routeEvent.Id}");
+            root.transform.position = new Vector3(0f, surfaceY, spawnZ);
+
+            // Collider-free route markers: RunnerVisuals creates mesh renderers without physics components.
+            var safeColor = new Color(0.34f, 0.82f, 0.68f, 0.88f);
+            var riskColor = new Color(1f, 0.42f, 0.32f, 0.92f);
+            for (var i = 0; i < 5; i++)
+            {
+                var z = i * 5.5f;
+                AddRouteLaneMarker(root.transform, RunnerLane.Left, z, safeColor, false);
+                AddRouteLaneMarker(root.transform, RunnerLane.Right, z, riskColor, true);
+            }
+
+            AddChildPrimitive(root.transform, "Safe Beacon", PrimitiveType.Cylinder,
+                new Vector3(RunnerLane.Left.ToX(laneWidth), 1.1f, 20f),
+                new Vector3(0.5f, 2.2f, 0.5f), safeColor, true);
+            AddChildPrimitive(root.transform, "Risk Beacon", PrimitiveType.Cylinder,
+                new Vector3(RunnerLane.Right.ToX(laneWidth), 1.35f, 20f),
+                new Vector3(0.62f, 2.7f, 0.62f), riskColor, true);
+            AddChildPrimitive(root.transform, "Decision Line", PrimitiveType.Cube,
+                new Vector3(0f, 0.05f, 0f),
+                new Vector3(laneWidth * 3.15f, 0.07f, 0.26f),
+                new Color(1f, 0.9f, 0.55f, 0.8f), true);
+
+            routeEventRoot = root;
+            nextSpawnZ = Mathf.Max(nextSpawnZ, spawnZ + 30f - worldTuning.spawnDistance);
+            return true;
+        }
+
+        public bool TryConsumeRouteChoice(RunnerLane playerLane, out bool risky)
+        {
+            risky = false;
+            if (routeEventRoot == null || routeEventRoot.transform.position.z > 2.5f)
+            {
+                return false;
+            }
+
+            risky = playerLane == RunnerLane.Right;
+            Object.Destroy(routeEventRoot);
+            routeEventRoot = null;
+            return true;
+        }
+
+        public void SpawnRouteEventOutcome(
+            RouteEventOutcome outcome,
+            bool risky,
+            float runDistance)
+        {
+            var spawnZ = worldTuning.spawnDistance + 18f;
+            var surfaceY = TrackTerrain.SurfaceY(spawnZ, runDistance, baseGroundY);
+            var lane = risky ? RunnerLane.Right : RunnerLane.Left;
+            var laneX = lane.ToX(laneWidth);
+            var color = risky
+                ? new Color(1f, 0.55f, 0.28f, 0.72f)
+                : new Color(0.48f, 0.9f, 0.7f, 0.72f);
+            var root = new GameObject($"Route Outcome {outcome.SegmentPattern}");
+            root.transform.position = new Vector3(0f, surfaceY, spawnZ);
+
+            for (var i = 0; i < 8; i++)
+            {
+                var sideOffset = outcome.SegmentPattern switch
+                {
+                    RouteSegmentPattern.Slalom => (i % 2 == 0 ? -0.38f : 0.38f) * laneWidth,
+                    RouteSegmentPattern.FishRibbon => Mathf.Sin(i * 0.8f) * laneWidth * 0.28f,
+                    RouteSegmentPattern.ChaseLine => Mathf.Sin(i * 0.45f) * laneWidth * 0.18f,
+                    _ => 0f,
+                };
+                var height = outcome.SegmentPattern == RouteSegmentPattern.JumpArc
+                    ? Mathf.Sin(i / 7f * Mathf.PI) * 1.15f
+                    : 0.12f;
+                AddChildPrimitive(root.transform, $"Reward Trail {i}", PrimitiveType.Cube,
+                    new Vector3(laneX + sideOffset, height, i * 2.4f),
+                    new Vector3(0.34f, 0.08f, 0.52f), color, true);
+            }
+
+            routeOutcomeRoots.Add(root);
+        }
+
         public void Tick(float dt, float effectiveSpeed, float runDistance)
         {
             nextSpawnZ -= effectiveSpeed * dt;
@@ -151,6 +242,8 @@ namespace PenguinRun
                 // boss 战期间，不堆积新障碍生成时机
                 nextSpawnZ = Mathf.Max(nextSpawnZ, worldTuning.spawnDistance + 4f);
             }
+
+            TickRouteMarkers(dt, effectiveSpeed, runDistance);
 
             for (var i = obstacles.Count - 1; i >= 0; i--)
             {
@@ -340,8 +433,68 @@ namespace PenguinRun
             foreach (var gate in speedGates) Object.Destroy(gate);
             speedGates.Clear();
 
+            if (routeEventRoot != null) Object.Destroy(routeEventRoot);
+            routeEventRoot = null;
+            foreach (var root in routeOutcomeRoots) Object.Destroy(root);
+            routeOutcomeRoots.Clear();
+
             obstacleYDelta.Clear();
             coinYDelta.Clear();
+        }
+
+        private void TickRouteMarkers(float dt, float effectiveSpeed, float runDistance)
+        {
+            if (routeEventRoot != null)
+            {
+                MoveRouteMarkerRoot(routeEventRoot, dt, effectiveSpeed, runDistance);
+                if (routeEventRoot.transform.position.z < worldTuning.despawnZ)
+                {
+                    Object.Destroy(routeEventRoot);
+                    routeEventRoot = null;
+                }
+            }
+
+            for (var i = routeOutcomeRoots.Count - 1; i >= 0; i--)
+            {
+                var root = routeOutcomeRoots[i];
+                if (root == null)
+                {
+                    routeOutcomeRoots.RemoveAt(i);
+                    continue;
+                }
+
+                MoveRouteMarkerRoot(root, dt, effectiveSpeed, runDistance);
+                if (root.transform.position.z < worldTuning.despawnZ)
+                {
+                    Object.Destroy(root);
+                    routeOutcomeRoots.RemoveAt(i);
+                }
+            }
+        }
+
+        private void MoveRouteMarkerRoot(GameObject root, float dt, float effectiveSpeed, float runDistance)
+        {
+            var position = root.transform.position;
+            position.z -= effectiveSpeed * dt;
+            position.y = TrackTerrain.SurfaceY(position.z, runDistance, baseGroundY);
+            root.transform.position = position;
+        }
+
+        private void AddRouteLaneMarker(
+            Transform root,
+            RunnerLane lane,
+            float localZ,
+            Color color,
+            bool diamond)
+        {
+            var marker = AddChildPrimitive(root, diamond ? "Risk Diamond" : "Safe Tile",
+                PrimitiveType.Cube,
+                new Vector3(lane.ToX(laneWidth), 0.08f, localZ),
+                new Vector3(0.72f, 0.08f, 0.72f), color, true);
+            if (diamond)
+            {
+                marker.transform.localRotation = Quaternion.Euler(0f, 45f, 0f);
+            }
         }
 
         /// <summary>护盾/受击消除障碍时调用，同步滚动雪球列表。</summary>

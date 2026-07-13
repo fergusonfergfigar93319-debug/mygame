@@ -263,6 +263,12 @@ namespace PenguinRun
             BossesDefeated += 1;
         }
 
+        public void AddRouteEventReward(int fishBonus, int scoreBonus)
+        {
+            Coins += Mathf.Max(0, fishBonus);
+            ComboBonusScore += Mathf.Max(0, scoreBonus);
+        }
+
         public void SetBossSpeedResult(string tier, int fishBonus, int scoreBonus)
         {
             LastBossSpeedTier = string.IsNullOrEmpty(tier) ? "C" : tier;

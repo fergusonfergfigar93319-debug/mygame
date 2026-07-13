@@ -38,6 +38,19 @@ foreach ($theme in 'IceLakeEcho', 'CedarRuins', 'AuroraField', 'MistDike', 'Ocea
     Require-Pattern $routeCatalog "RunnerMapTheme\.$theme" "route catalog covers $theme"
 }
 
+$segmentSpawner = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/SegmentSpawner.cs'
+Require-Pattern $segmentSpawner '\bSpawnRouteEvent\s*\(' 'SegmentSpawner.SpawnRouteEvent'
+Require-Pattern $segmentSpawner '\bTryConsumeRouteChoice\s*\(' 'SegmentSpawner.TryConsumeRouteChoice'
+Require-Pattern $segmentSpawner '\bSpawnRouteEventOutcome\s*\(' 'SegmentSpawner.SpawnRouteEventOutcome reward lane'
+Require-Pattern $segmentSpawner 'collider-free|Collider-free' 'route markers are explicitly collider-free'
+
+$runnerController = Require-File 'Assets/Scripts/Runtime/PenguinRun/RunnerGameController.cs'
+Require-Pattern $runnerController '\bApplyRouteEventOutcome\s*\(' 'RunnerGameController.ApplyRouteEventOutcome'
+Require-Pattern $runnerController 'routeEventDirector\.Tick\s*\(' 'controller advances route event director'
+
+$worldDirector = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/WorldDirector.cs'
+Require-Pattern $worldDirector '\bAddRouteEventReward\s*\(' 'WorldDirector.AddRouteEventReward explicit route reward command'
+
 $upgradeState = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/RunUpgradeState.cs'
 Require-Pattern $upgradeState '\bBuildOffer\s*\(' 'RunUpgradeState.BuildOffer'
 Require-Pattern $upgradeState '\bSelect\s*\(' 'RunUpgradeState.Select'
