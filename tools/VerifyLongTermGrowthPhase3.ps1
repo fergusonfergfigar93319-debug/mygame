@@ -37,11 +37,11 @@ foreach ($state in 'Locked', 'Affordable', 'Rebuilt') {
     Require-Pattern $campModels "\b$state\b" "camp node visible state $state"
 }
 
+foreach ($field in 'FishCosts', 'Prerequisite', 'Story') {
+    Require-Pattern $campModels "\b$field\b" "camp definition includes $field"
+}
 $campCatalog = Require-File 'Assets/Scripts/Runtime/Game/Growth/CampBuildingCatalog.cs'
 Require-Pattern $campCatalog 'MaxLevel\s*=\s*3\b' 'camp building max level three'
-foreach ($field in 'FishCosts', 'Prerequisite', 'Story') {
-    Require-Pattern $campCatalog "\b$field\b" "camp definition includes $field"
-}
 
 $campStore = Require-File 'Assets/Scripts/Runtime/Game/Growth/CampRebuildStore.cs'
 foreach ($method in 'Snapshot', 'CanPurchase', 'TryPurchase', 'CountAffordableNodes') {
