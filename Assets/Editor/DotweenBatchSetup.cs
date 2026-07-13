@@ -25,6 +25,7 @@ public static class DotweenBatchSetup
     {
         EnsureDefineOnAllTargets();
         RefreshDotweenModuleDefines();
+        FinalizeUpgradeManager();
         AssetDatabase.SaveAssets();
         Debug.Log("[DotweenBatchSetup] DOTween batch setup complete.");
     }
@@ -77,6 +78,44 @@ public static class DotweenBatchSetup
 
         refreshAll.Invoke(null, null);
         Debug.Log("[DotweenBatchSetup] DOTweenDefines.RefreshAll applied.");
+    }
+
+    static void FinalizeUpgradeManager()
+    {
+        var upgradeAsm = AppDomain.CurrentDomain.GetAssemblies()
+            .FirstOrDefault(a => a.GetName().Name == "DOTweenUpgradeManager");
+        var autorunType = upgradeAsm?.GetType("DG.DOTweenUpgradeManager.Autorun");
+        if (autorunType == null)
+        {
+            Debug.LogWarning("[DotweenBatchSetup] DOTweenUpgradeManager assembly not loaded; skip upgrade finalizer.");
+            return;
+        }
+
+        var applySettings = autorunType.GetMethod(
+            "ApplyModulesAndASMDEFSettings",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        applySettings?.Invoke(null, null);
+
+        var onUpdate = autorunType.GetMethod("OnUpdate", BindingFlags.NonPublic | BindingFlags.Static);
+        if (onUpdate != null)
+        {
+            var callback = (EditorApplication.CallbackFunction)Delegate.CreateDelegate(
+                typeof(EditorApplication.CallbackFunction),
+                onUpdate);
+            EditorApplication.update -= callback;
+        }
+
+        var windowType = upgradeAsm.GetType("DG.DOTweenUpgradeManager.UpgradeWindow");
+        if (windowType != null)
+        {
+            foreach (var instance in Resources.FindObjectsOfTypeAll(windowType))
+            {
+                if (instance is EditorWindow window)
+                    window.Close();
+            }
+        }
+
+        Debug.Log("[DotweenBatchSetup] DOTween module/ASMDEF upgrade setup finalized.");
     }
 }
 #endif

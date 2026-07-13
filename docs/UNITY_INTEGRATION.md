@@ -2,10 +2,10 @@
 
 ## 2026-07-13 最新测试 APK 打包
 
-- 当前测试版本：`1.1.0 (2)`。
+- 当前测试版本：`1.1.1 (3)`。
 - 测试包名继续使用 `com.example.mygame`，以便覆盖安装 2026-05 的 `1.0 (1)` 测试包。
 - 当前未配置私有 keystore；本地测试 APK 使用 Android Debug 证书，只适合侧载测试，不能作为应用商店正式包。
-- `tools/BuildLatestAndroidApk.ps1` 会依次执行四阶段静态门禁、调用 Unity 构建、使用 `aapt` 校验包名/版本，并使用 `apksigner` 校验签名，最终生成稳定文件名 `Builds/Android/PenguinRun-Latest-Test-v1.1.0-2.apk` 与 SHA-256。
+- `tools/BuildLatestAndroidApk.ps1` 会依次执行四阶段静态门禁、调用 Unity 构建、使用 `aapt` 校验包名/版本，并使用 `apksigner` 校验签名，最终生成稳定文件名 `Builds/Android/PenguinRun-Latest-Test-v1.1.1-3.apk` 与 SHA-256。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/BuildLatestAndroidApk.ps1

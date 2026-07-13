@@ -6,8 +6,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$versionName = '1.1.0'
-$versionCode = '2'
+$versionName = '1.1.1'
+$versionCode = '3'
 $packageName = 'com.example.mygame'
 $startedAt = Get-Date
 $outputRoot = Join-Path $ProjectRoot $OutputDirectory
