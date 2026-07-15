@@ -86,7 +86,7 @@ namespace PenguinRun.Editor
             }
         }
 
-        private static SculpturePalette ThemePalette(RunnerMapTheme theme)
+        internal static SculpturePalette ThemePalette(RunnerMapTheme theme)
         {
             var slug = RunnerVisualAssetCatalog.ThemeSlug(theme);
             var colors = theme switch
@@ -115,7 +115,7 @@ namespace PenguinRun.Editor
             Material("M_Shared_Snow", new Color(.91f,.95f,.97f)),
             Material("M_Pickup_Glow", new Color(1f,.72f,.28f), emission: true));
 
-        private static Material Material(string name, Color color, bool metallic = false, bool emission = false)
+        internal static Material Material(string name, Color color, bool metallic = false, bool emission = false)
         {
             var path = $"{MaterialFolder}/{name}.mat";
             var material = AssetDatabase.LoadAssetAtPath<Material>(path);
@@ -138,7 +138,7 @@ namespace PenguinRun.Editor
             return material;
         }
 
-        private static void EnsureFolder(string folder)
+        internal static void EnsureFolder(string folder)
         {
             if (string.IsNullOrWhiteSpace(folder) || AssetDatabase.IsValidFolder(folder)) return;
             var parent = Path.GetDirectoryName(folder)?.Replace('\\', '/');

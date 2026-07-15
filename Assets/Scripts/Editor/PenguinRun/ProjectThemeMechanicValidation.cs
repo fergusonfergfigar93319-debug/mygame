@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using PenguinRun.Game;
 using PenguinRun.Game.Growth;
@@ -41,9 +42,10 @@ namespace PenguinRun.Editor
             ValidateJourneyContracts(failures);
             ValidateRunSeeds(failures);
             ValidateThemeMasteryPersistence(failures);
+            ValidateApparatusAssets(failures);
 
             report = failures.Count == 0
-                ? "PASS: six definitions, 10,000 director beats, 12 patterns/65 beats, pool reset, five contracts, and resonance are valid."
+                ? "PASS: six definitions, 10,000 director beats, 12 patterns/65 beats, pool reset, five contracts, resonance, and 18 detailed dual-LOD apparatus prefabs are valid."
                 : "FAIL:\n" + string.Join("\n", failures);
             return failures.Count == 0;
         }
@@ -481,9 +483,15 @@ namespace PenguinRun.Editor
                 {
                     failures.Add($"Ice signature activated {spawner.ActiveCount} pooled roots; expected 5.");
                 }
-                if (!spawner.CriticalAssetMissing)
+                var signatureAsset = AssetDatabase.LoadAssetAtPath<GameObject>(
+                    ThemeMechanicPrefabBuilder.AssetPath("ice/floe_bridge"));
+                if (signatureAsset == null && !spawner.CriticalAssetMissing)
                 {
                     failures.Add("Missing Ice signature prefab was not reported as a critical asset failure.");
+                }
+                if (signatureAsset != null && spawner.CriticalAssetMissing)
+                {
+                    failures.Add("Available Ice signature prefab was incorrectly reported missing.");
                 }
 
                 spawner.Clear();
@@ -505,7 +513,7 @@ namespace PenguinRun.Editor
             }
             finally
             {
-                Object.DestroyImmediate(sceneRoot);
+                UnityEngine.Object.DestroyImmediate(sceneRoot);
             }
         }
 
@@ -702,6 +710,88 @@ namespace PenguinRun.Editor
                 }
             }
         }
+
+        private static void ValidateApparatusAssets(List<string> failures)
+        {
+            var assetPaths = new HashSet<string>();
+            foreach (var definition in ThemeMechanicCatalog.Definitions)
+            {
+                assetPaths.Add(ThemeMechanicPrefabBuilder.AssetPath(definition.ApparatusA));
+                assetPaths.Add(ThemeMechanicPrefabBuilder.AssetPath(definition.ApparatusB));
+                assetPaths.Add(ThemeMechanicPrefabBuilder.AssetPath(definition.Signature));
+            }
+
+            if (assetPaths.Count != 18)
+            {
+                failures.Add($"Catalog resolves to {assetPaths.Count} unique apparatus asset paths; expected 18.");
+            }
+
+            var loaded = 0;
+            foreach (var assetPath in assetPaths)
+            {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+                if (prefab == null)
+                {
+                    failures.Add($"Missing apparatus prefab: {assetPath}.");
+                    continue;
+                }
+                loaded++;
+
+                var lodGroups = prefab.GetComponentsInChildren<LODGroup>(true);
+                if (lodGroups.Length != 1)
+                {
+                    failures.Add($"{assetPath} has {lodGroups.Length} LOD groups; expected exactly one.");
+                }
+                else
+                {
+                    var lods = lodGroups[0].GetLODs();
+                    if (lods.Length < 2 || lods[0].renderers.Length == 0 || lods[1].renderers.Length == 0)
+                    {
+                        failures.Add($"{assetPath} does not contain populated LOD0 and LOD1 levels.");
+                    }
+                    else if (lods[0].renderers.Length > 24)
+                    {
+                        failures.Add($"{assetPath} LOD0 has {lods[0].renderers.Length} renderers; budget is 24.");
+                    }
+                }
+
+                if (prefab.GetComponentsInChildren<Collider>(true).Length != 0)
+                {
+                    failures.Add($"{assetPath} contains colliders; gameplay authority must remain elsewhere.");
+                }
+
+                foreach (var renderer in prefab.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (!Finite(renderer.bounds.center) || !Finite(renderer.bounds.size)
+                        || renderer.bounds.size.sqrMagnitude <= .000001f)
+                    {
+                        failures.Add($"{assetPath}/{renderer.name} has invalid render bounds.");
+                        break;
+                    }
+
+                    foreach (var material in renderer.sharedMaterials)
+                    {
+                        if (material == null || material.shader == null
+                            || material.shader.name.Contains("Hidden/InternalErrorShader"))
+                        {
+                            failures.Add($"{assetPath}/{renderer.name} has a missing or invalid material.");
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (loaded != 18)
+            {
+                failures.Add($"Loaded {loaded}/18 apparatus prefabs.");
+            }
+        }
+
+        private static bool Finite(Vector3 value) =>
+            Finite(value.x) && Finite(value.y) && Finite(value.z);
+
+        private static bool Finite(float value) =>
+            !float.IsNaN(value) && !float.IsInfinity(value);
     }
 }
 #endif

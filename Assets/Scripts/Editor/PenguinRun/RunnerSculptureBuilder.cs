@@ -301,7 +301,7 @@ namespace PenguinRun.Editor
             }
         }
 
-        private static GameObject Part(Transform parent, string name, PrimitiveType type, Vector3 position,
+        internal static GameObject Part(Transform parent, string name, PrimitiveType type, Vector3 position,
             Vector3 scale, Material material, Vector3 euler = default)
         {
             var go=GameObject.CreatePrimitive(type); go.name=name; go.transform.SetParent(parent,false);
@@ -311,7 +311,7 @@ namespace PenguinRun.Editor
             return go;
         }
 
-        private static GameObject Beam(Transform parent, string name, Vector3 start, Vector3 end,
+        internal static GameObject Beam(Transform parent, string name, Vector3 start, Vector3 end,
             float radius, Material material)
         {
             var delta=end-start; var go=Part(parent,name,PrimitiveType.Cylinder,(start+end)*.5f,

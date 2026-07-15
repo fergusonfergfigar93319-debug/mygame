@@ -96,6 +96,13 @@ foreach ($name in 'MechanicBanner','ResonanceFill','ContractSummary','SetThemeMe
     Require $hud "\b$name\b" "theme HUD $name"
 }
 
+$prefabBuilder = Read-Required 'Assets/Scripts/Editor/PenguinRun/ThemeMechanicPrefabBuilder.cs'
+$previewCapture = Read-Required 'Assets/Scripts/Editor/PenguinRun/ProjectThemeMechanicPreviewCapture.cs'
+Require $prefabBuilder '\bThemeMechanicPrefabBuilder\b' 'theme mechanic prefab builder'
+Require $prefabBuilder '\bBuildBatch' '18-prefab batch entry point'
+Require $prefabBuilder '\bLODGroup\b' 'dual-LOD prefab construction'
+Require $previewCapture '\bHasVisibleContent\b' 'preview blank-image rejection'
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1
