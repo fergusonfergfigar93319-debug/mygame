@@ -26,6 +26,14 @@ foreach ($name in 'ThemeMechanicId','ThemeMechanicPhase','ThemeMechanicMode','Th
 Require $random '\bIRunRandom\b' 'injected run random interface'
 Require $random '\bXorShiftRunRandom\b' 'deterministic xorshift implementation'
 
+$catalog = Read-Required 'Assets/Scripts/Runtime/PenguinRun/ThemeMechanics/ThemeMechanicCatalog.cs'
+foreach ($id in 'IceInertia','CedarCollapse','AuroraPolarity','MistBeacon','OceanTide','SkyWind') {
+    Require $catalog "ThemeMechanicId\.$id" "catalog definition $id"
+}
+Require $catalog '\bForTheme\s*\(' 'theme lookup'
+Require $catalog '\bTryForTheme\s*\(' 'safe theme lookup'
+Require $catalog '\bPolicyFor\s*\(' 'mode policy lookup'
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1
