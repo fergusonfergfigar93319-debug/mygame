@@ -9,7 +9,8 @@ namespace PenguinRun.Game.Growth
     {
         public GrowthTransactionInput(int score, int distanceMeters, int coins, float survivalSeconds,
             bool dailyMode, int routeEventsCompleted, int riskyRoutesCompleted, int skillScore,
-            IReadOnlyList<string> completedRouteEventIds, string themedRelicId)
+            IReadOnlyList<string> completedRouteEventIds, string themedRelicId,
+            ThemeMasteryRunSnapshot themeMastery = default)
         {
             Score = Math.Max(0, score);
             DistanceMeters = Math.Max(0, distanceMeters);
@@ -30,6 +31,7 @@ namespace PenguinRun.Game.Growth
                 CompletedRouteEventIds = Array.AsReadOnly(copy);
             }
             ThemedRelicId = themedRelicId ?? string.Empty;
+            ThemeMastery = themeMastery;
         }
         public int Score { get; }
         public int DistanceMeters { get; }
@@ -41,23 +43,30 @@ namespace PenguinRun.Game.Growth
         public int SkillScore { get; }
         public IReadOnlyList<string> CompletedRouteEventIds { get; }
         public string ThemedRelicId { get; }
+        public ThemeMasteryRunSnapshot ThemeMastery { get; }
     }
 
     public readonly struct GrowthTransactionResult
     {
         public GrowthTransactionResult(CompanionBondAward bondAward, IReadOnlyList<string> newDiscoveryIds,
-            int newlyClaimableGoals, string strongestSummary)
+            int newlyClaimableGoals, string strongestSummary,
+            ThemeMasteryRecord themeMastery = default, bool themeMasteryStarGained = false)
         {
             BondAward = bondAward;
             NewDiscoveryIds = newDiscoveryIds ?? Array.AsReadOnly(Array.Empty<string>());
             NewlyClaimableGoals = Math.Max(0, newlyClaimableGoals);
             StrongestSummary = strongestSummary ?? string.Empty;
+            ThemeMastery = themeMastery;
+            ThemeMasteryStarGained = themeMasteryStarGained;
         }
         public CompanionBondAward BondAward { get; }
         public IReadOnlyList<string> NewDiscoveryIds { get; }
         public int NewlyClaimableGoals { get; }
         public string StrongestSummary { get; }
-        public bool HasProgress => BondAward.TotalXp > 0 || NewDiscoveryIds.Count > 0 || NewlyClaimableGoals > 0;
+        public ThemeMasteryRecord ThemeMastery { get; }
+        public bool ThemeMasteryStarGained { get; }
+        public bool HasProgress => BondAward.TotalXp > 0 || NewDiscoveryIds.Count > 0
+            || NewlyClaimableGoals > 0 || ThemeMasteryStarGained;
         public static GrowthTransactionResult Empty => new(default,
             Array.AsReadOnly(Array.Empty<string>()), 0, string.Empty);
     }
@@ -76,17 +85,23 @@ namespace PenguinRun.Game.Growth
             if (!string.IsNullOrEmpty(input.ThemedRelicId) && CodexDiscoveryStore.Discover(input.ThemedRelicId))
                 newDiscoveries.Add(input.ThemedRelicId);
 
+            var masteryBefore = ThemeMasteryStore.For(input.ThemeMastery.Theme);
+            var mastery = ThemeMasteryStore.ApplyRun(input.ThemeMastery);
+            var masteryStarGained = mastery.Stars > masteryBefore.Stars;
+
             var bondAward = CompanionBondStore.AwardAfterRun(input.RouteEventsCompleted,
                 input.RiskyRoutesCompleted, input.SkillScore, input.DailyMode,
                 !string.IsNullOrEmpty(input.ThemedRelicId));
             var newlyClaimable = Math.Max(0, MissionStore.CountClaimableMissions(false) - claimableBefore);
             var immutableDiscoveries = Array.AsReadOnly(newDiscoveries.ToArray());
             return new GrowthTransactionResult(bondAward, immutableDiscoveries, newlyClaimable,
-                BuildStrongestSummary(bondAward, immutableDiscoveries, newlyClaimable));
+                BuildStrongestSummary(bondAward, immutableDiscoveries, newlyClaimable,
+                    mastery, masteryStarGained), mastery, masteryStarGained);
         }
 
         private static string BuildStrongestSummary(CompanionBondAward bondAward,
-            IReadOnlyList<string> discoveries, int newlyClaimable)
+            IReadOnlyList<string> discoveries, int newlyClaimable,
+            ThemeMasteryRecord mastery, bool masteryStarGained)
         {
             if (discoveries.Count > 0)
             {
@@ -95,6 +110,7 @@ namespace PenguinRun.Game.Growth
                     ? $"图鉴新增 {discoveries.Count} 页 · {first?.Title} 等"
                     : $"图鉴新增 · {first?.Title ?? "未知发现"}";
             }
+            if (masteryStarGained) return $"主题精通提升至 {mastery.Stars} 星";
             if (bondAward.TuanTuanLevelUp || bondAward.DrorLevelUp) return "伙伴羁绊提升，解锁新的同行回应";
             if (newlyClaimable > 0) return $"新增 {newlyClaimable} 项可领取旅程目标";
             if (bondAward.TotalXp > 0) return $"伙伴羁绊 +{bondAward.TotalXp} 经验";

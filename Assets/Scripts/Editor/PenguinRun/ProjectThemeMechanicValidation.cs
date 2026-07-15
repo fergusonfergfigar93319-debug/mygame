@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
 using PenguinRun.Game;
+using PenguinRun.Game.Growth;
 using UnityEditor;
 using UnityEngine;
 
@@ -38,6 +39,7 @@ namespace PenguinRun.Editor
             ValidateResonance(failures);
             ValidateJourneyContracts(failures);
             ValidateRunSeeds(failures);
+            ValidateThemeMasteryPersistence(failures);
 
             report = failures.Count == 0
                 ? "PASS: six definitions, 10,000 director beats, lifecycle, Ice pool, five contracts, and resonance are valid."
@@ -607,6 +609,61 @@ namespace PenguinRun.Editor
             if (endlessA == endlessB)
             {
                 failures.Add("Consecutive Endless attempts produced the same seed.");
+            }
+        }
+
+        private static void ValidateThemeMasteryPersistence(List<string> failures)
+        {
+            var theme = RunnerMapTheme.SkyFlight;
+            var suffixes = new[]
+            {
+                "events", "perfect", "flawless", "best_streak",
+                "signature", "contracts", "stars", "tutorial",
+            };
+            var keys = new string[suffixes.Length];
+            var existed = new bool[suffixes.Length];
+            var values = new int[suffixes.Length];
+            for (var index = 0; index < suffixes.Length; index++)
+            {
+                keys[index] = $"growth_theme_mastery_v1_{(int)theme}_{suffixes[index]}";
+                existed[index] = PlayerPrefs.HasKey(keys[index]);
+                values[index] = PlayerPrefs.GetInt(keys[index], 0);
+                PlayerPrefs.DeleteKey(keys[index]);
+            }
+
+            try
+            {
+                var empty = ThemeMasteryStore.For(theme);
+                if (empty.EventsCompleted != 0 || empty.Stars != 0 || empty.TutorialSeen)
+                {
+                    failures.Add("Theme mastery migration did not create zero-default records.");
+                    return;
+                }
+
+                var run = new ThemeMasteryRunSnapshot(theme, 3, 5, 1, 3,
+                    true, false, true, JourneyContractKind.PerfectStreak, 2, true);
+                ThemeMasteryStore.ApplyRun(run);
+                var twice = ThemeMasteryStore.ApplyRun(run);
+                if (twice.EventsCompleted != 6 || twice.PerfectCount != 10
+                    || twice.ContractsCompleted != 2 || twice.Stars != 2 || !twice.TutorialSeen)
+                {
+                    failures.Add("Theme mastery store did not accumulate two run snapshots exactly.");
+                }
+
+                var flawlessSignature = new ThemeMasteryRunSnapshot(theme, 1, 1, 1, 1,
+                    true, true, false, JourneyContractKind.SignatureComplete, 3, true);
+                if (ThemeMasteryStore.ApplyRun(flawlessSignature).Stars != 3)
+                {
+                    failures.Add("Flawless signature did not clamp permanent mastery to three stars.");
+                }
+            }
+            finally
+            {
+                for (var index = 0; index < keys.Length; index++)
+                {
+                    if (existed[index]) PlayerPrefs.SetInt(keys[index], values[index]);
+                    else PlayerPrefs.DeleteKey(keys[index]);
+                }
             }
         }
     }

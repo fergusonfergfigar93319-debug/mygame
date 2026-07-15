@@ -1,5 +1,6 @@
 using PenguinRun.Core;
 using PenguinRun.Game;
+using PenguinRun.Game.Growth;
 using PenguinRun.Game.Save;
 using PenguinRun.Game.Shop;
 using UnityEngine;
@@ -94,7 +95,8 @@ namespace PenguinRun
             mechanicSpawner = new ThemeMechanicSpawner(
                 sceneRoot, tuning.movement.laneWidth, tuning.movement.groundY);
             themeMastery = new ThemeMasteryTracker(
-                config.MapTheme, config.ThemeMechanicMode, config.RunSeed, false);
+                config.MapTheme, config.ThemeMechanicMode, config.RunSeed,
+                ThemeMasteryStore.For(config.MapTheme).TutorialSeen);
             pickups = new PickupSystem(tuning.pickup, tuning.powerUp, config, runUpgradeState);
             collisions = new CollisionSystem(runnerAudio, tuning.combat, runUpgradeState);
             bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth, tuning.combat);

@@ -149,7 +149,8 @@ namespace PenguinRun
                 result.LastBossSpeedTier, result.LastBossSpeedFishBonus, result.LastBossSpeedScoreBonus,
                 result.RouteEventsCompleted, result.RiskyRoutesCompleted,
                 result.SkillScore, result.PeakSkillChain,
-                result.SelectedUpgradeIds, result.CompletedRouteEventIds, result.ThemedRelicId);
+                result.SelectedUpgradeIds, result.CompletedRouteEventIds, result.ThemedRelicId,
+                result.ThemeMastery);
             RunSession.LastResult = applied;
             SceneTransitionManager.Instance.TransitionTo("MainMenu");
         }

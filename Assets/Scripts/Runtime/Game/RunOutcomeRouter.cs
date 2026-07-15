@@ -44,6 +44,7 @@ namespace PenguinRun.Game
             public IReadOnlyList<RunUpgradeId> SelectedUpgradeIds;
             public IReadOnlyList<string> CompletedRouteEventIds;
             public string ThemedRelicId;
+            public ThemeMasteryRunSnapshot ThemeMastery;
             public GrowthTransactionResult Growth;
             public bool CompanionHelperTriggered;
             public int CompanionHelperFishBonus;
@@ -59,7 +60,8 @@ namespace PenguinRun.Game
             int skillScore = 0, int peakSkillChain = 0,
             IReadOnlyList<RunUpgradeId> selectedUpgradeIds = null,
             IReadOnlyList<string> completedRouteEventIds = null,
-            string themedRelicId = "")
+            string themedRelicId = "",
+            ThemeMasteryRunSnapshot themeMastery = default)
         {
             score = Math.Max(0, score);
             distanceMeters = Math.Max(0, distanceMeters);
@@ -114,7 +116,7 @@ namespace PenguinRun.Game
             var growth = GrowthTransaction.Apply(new GrowthTransactionInput(
                 score, distanceMeters, coins, survivalSeconds, dailyMode,
                 routeEventsCompleted, riskyRoutesCompleted, skillScore,
-                completedRouteEventIds, themedRelicId));
+                completedRouteEventIds, themedRelicId, themeMastery));
 
             PlayerSave.IncrementTotalRuns();
 
@@ -150,6 +152,7 @@ namespace PenguinRun.Game
                 SelectedUpgradeIds = CopyUpgradeIds(selectedUpgradeIds),
                 CompletedRouteEventIds = CopyStrings(completedRouteEventIds),
                 ThemedRelicId = themedRelicId ?? string.Empty,
+                ThemeMastery = themeMastery,
                 Growth = growth,
                 CompanionHelperTriggered = helperTriggered,
                 CompanionHelperFishBonus = helperFishBonus,

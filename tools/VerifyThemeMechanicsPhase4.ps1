@@ -83,6 +83,14 @@ Require $controller 'Cancel\(ThemeMechanicCancelReason\.RouteEvent\)' 'route mec
 Require $controller 'Cancel\(ThemeMechanicCancelReason\.ThemeTransition\)' 'theme transition mechanic cancellation'
 Require $runResult '\bThemeMasteryRunSnapshot\b' 'mastery run result snapshot'
 
+$masteryStore = Read-Required 'Assets/Scripts/Runtime/Game/Growth/ThemeMasteryStore.cs'
+foreach ($name in 'ThemeMasteryStore','ThemeMasteryRecord','EnsureMigrated','ApplyRun','TutorialSeen') {
+    Require $masteryStore "\b$name\b" "mastery persistence $name"
+}
+if ($null -ne $masteryStore -and $masteryStore -match 'PlayerSave\.Flush') {
+    $failures.Add('ThemeMasteryStore must not flush outside the growth transaction.')
+}
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1
