@@ -41,6 +41,13 @@ Require $spawner 'visualFactory\.TryAttachPickup\(' 'SegmentSpawner custom picku
 $runner = Read-Required 'Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs'
 Require $runner 'visualFactory\.TryAttachEnvironment\(' 'runner custom environment path'
 
+$prefabBuilder = Read-Required 'Assets/Scripts/Editor/PenguinRun/PenguinVisualPrefabBuilder.cs'
+Require $prefabBuilder 'Build Batch One Prefabs' 'batch-one prefab builder menu'
+Require $prefabBuilder '\bLODGroup\b' 'batch-one prefab LOD construction'
+$assetValidation = Read-Required 'Assets/Scripts/Editor/PenguinRun/ProjectVisualAssetValidation.cs'
+Require $assetValidation '\bRunNow\s*\(' 'custom visual validation entry point'
+Require $assetValidation 'Validate Batch One' 'custom visual validation menu'
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1
