@@ -18,11 +18,23 @@ namespace PenguinRun.Game.UI.Lobby
         public readonly string BondHelperLabel;
         public readonly float CampProgress;
         public readonly GrowthRecommendationKind RecommendationKind;
+        public readonly int PlayerLevel;
+        public readonly int RareResource;
+        public readonly string SeasonLabel;
+        public readonly string JournalRewardLabel;
+        public readonly string NextChapterTitle;
+        public readonly string NextChapterBody;
+        public readonly string DifficultyLabel;
+        public readonly string RouteRewardLabel;
 
         public LobbyViewModel(string title, string body, string action, float progress,
             string companionHint, int fish, int missionBadge, int bondLevel = 0,
             float bondProgress = 0f, string bondHelperLabel = "", float campProgress = 0f,
-            GrowthRecommendationKind recommendationKind = GrowthRecommendationKind.StartJourney)
+            GrowthRecommendationKind recommendationKind = GrowthRecommendationKind.StartJourney,
+            int playerLevel = 0, int rareResource = 0, string seasonLabel = "",
+            string journalRewardLabel = "", string nextChapterTitle = "",
+            string nextChapterBody = "", string difficultyLabel = "",
+            string routeRewardLabel = "")
         {
             CurrentStoryTitle = title ?? string.Empty;
             CurrentStoryBody = body ?? string.Empty;
@@ -36,6 +48,14 @@ namespace PenguinRun.Game.UI.Lobby
             BondHelperLabel = bondHelperLabel ?? string.Empty;
             CampProgress = Mathf.Clamp01(campProgress);
             RecommendationKind = recommendationKind;
+            PlayerLevel = Mathf.Max(0, playerLevel);
+            RareResource = Mathf.Max(0, rareResource);
+            SeasonLabel = seasonLabel ?? string.Empty;
+            JournalRewardLabel = journalRewardLabel ?? string.Empty;
+            NextChapterTitle = nextChapterTitle ?? string.Empty;
+            NextChapterBody = nextChapterBody ?? string.Empty;
+            DifficultyLabel = difficultyLabel ?? string.Empty;
+            RouteRewardLabel = routeRewardLabel ?? string.Empty;
         }
     }
 }

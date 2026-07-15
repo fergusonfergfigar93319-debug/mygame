@@ -774,10 +774,26 @@ namespace PenguinRun.Game.UI
             var activeCompanion = PlayerSave.CompanionDrorUnlocked ? CompanionId.Dror : CompanionId.TuanTuan;
             var bond = CompanionBondStore.Snapshot(activeCompanion);
             var camp = CampRebuildStore.Snapshot();
+            var difficulty = DifficultyPreset.ForKind(PlayerSave.SelectedDifficulty);
+            var chapterTitle = recommendation.Kind == GrowthRecommendationKind.StartJourney
+                ? "雪松遗迹"
+                : recommendation.Title;
+            var chapterBody = recommendation.Kind == GrowthRecommendationKind.StartJourney
+                ? "穿过低雾中的旧木桥，避开倒伏雪松和滚落石块。"
+                : recommendation.Body;
+            var journalReward = claimableMissions > 0
+                ? $"可领取 {claimableMissions} 份任务奖励"
+                : "今日奖励：鱼干 × 80";
+            var routeReward = HasPlayedDailyToday()
+                ? "伙伴手记 · 普通"
+                : "今日首胜 · 双倍鱼干";
             return new LobbyViewModel(recommendation.Title, recommendation.Body,
                 recommendation.ActionLabel, recommendation.Progress01,
                 companionHint, PlayerSave.TotalFishSnacks, claimableMissions,
-                bond.Level, bond.Progress01, bond.HelperLabel, camp.Progress01, recommendation.Kind);
+                bond.Level, bond.Progress01, bond.HelperLabel, camp.Progress01, recommendation.Kind,
+                PlayerSave.PlayerLevel, CodexDiscoveryStore.CountDiscovered(), "极光季 · 第三章",
+                journalReward, chapterTitle, chapterBody,
+                $"{difficulty.DisplayName} · 得分 ×{difficulty.ScoreMultiplier:0.##}", routeReward);
         }
 
         private void RefreshStorybookLobby()
