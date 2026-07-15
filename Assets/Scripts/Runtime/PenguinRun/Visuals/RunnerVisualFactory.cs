@@ -27,7 +27,11 @@ namespace PenguinRun
             {
                 var child = root.GetChild(index);
                 if (child.name != AttachmentName) continue;
-                if (Application.isPlaying) Object.Destroy(child.gameObject);
+                if (Application.isPlaying)
+                {
+                    child.SetParent(null, false);
+                    Object.Destroy(child.gameObject);
+                }
                 else Object.DestroyImmediate(child.gameObject);
             }
         }

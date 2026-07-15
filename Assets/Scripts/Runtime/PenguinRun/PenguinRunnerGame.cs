@@ -22,6 +22,7 @@ namespace PenguinRun
         private readonly List<GameObject> roadTiles = new();
         private readonly Dictionary<string, Texture2D> textureCache = new();
         private readonly Dictionary<string, GameObject> modelPrefabCache = new();
+        private readonly RunnerVisualFactory visualFactory = new();
 
         private RunnerSessionConfig config;
         private GameObject player;
@@ -1204,9 +1205,34 @@ namespace PenguinRun
             }
 
             var profile = ThemePresentationProfile.For(theme);
-            AddProfileLandmark(profile.PrimaryLandmark, -10.8f, z + 13f, index, profile.AccentColor);
+            if (!AddCustomEnvironmentProp(theme, profile.Landmark, -10.8f, z + 13f, 1f))
+                AddProfileLandmark(profile.PrimaryLandmark, -10.8f, z + 13f, index, profile.AccentColor);
             if (index % 2 == 0)
-                AddProfileLandmark(profile.SecondaryLandmark, 10.8f, z + 17f, index + 1, profile.AccentColor);
+            {
+                if (!AddCustomEnvironmentProp(theme, profile.Landmark, 10.8f, z + 17f, .82f))
+                    AddProfileLandmark(profile.SecondaryLandmark, 10.8f, z + 17f, index + 1, profile.AccentColor);
+            }
+
+            AddCustomEnvironmentProp(theme, profile.Signpost, -9.2f, z + 7.5f, .92f);
+            AddCustomEnvironmentProp(theme, profile.Light, 9.0f, z + 11.2f, .88f);
+            AddCustomEnvironmentProp(theme, profile.EdgeProp, index % 2 == 0 ? -8.8f : 8.8f,
+                z + 20.5f, 1f);
+        }
+
+        private bool AddCustomEnvironmentProp(RunnerMapTheme theme, EnvironmentPropId propId,
+            float x, float z, float scale)
+        {
+            x = ClampScenerySideX(x);
+            var root = new GameObject($"Custom {theme} {propId}");
+            root.transform.position = new Vector3(x, 0f, z);
+            root.transform.localScale = Vector3.one * Mathf.Max(.1f, scale);
+            if (!visualFactory.TryAttachEnvironment(root.transform, theme, propId))
+            {
+                Object.Destroy(root);
+                return false;
+            }
+            RegisterSceneryProp(root, x, z);
+            return true;
         }
 
         private void AddProfileLandmark(ThemeLandmarkKind kind, float x, float z, int index, Color accent)

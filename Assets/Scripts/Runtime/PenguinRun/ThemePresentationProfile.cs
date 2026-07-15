@@ -17,11 +17,19 @@ namespace PenguinRun
         public readonly Color AccentColor;
         public readonly ThemeLandmarkKind PrimaryLandmark;
         public readonly ThemeLandmarkKind SecondaryLandmark;
+        public readonly EnvironmentPropId Landmark;
+        public readonly EnvironmentPropId Signpost;
+        public readonly EnvironmentPropId Light;
+        public readonly EnvironmentPropId EdgeProp;
 
         private ThemePresentationProfile(Color ground, Color horizon, Color zenith, Color accent, ThemeLandmarkKind primary, ThemeLandmarkKind secondary)
         {
             GroundTint = ground; HorizonColor = horizon; ZenithColor = zenith; AccentColor = accent;
             PrimaryLandmark = primary; SecondaryLandmark = secondary;
+            Landmark = EnvironmentPropId.Landmark;
+            Signpost = EnvironmentPropId.Signpost;
+            Light = EnvironmentPropId.Light;
+            EdgeProp = EnvironmentPropId.EdgeProp;
         }
 
         public static ThemePresentationProfile For(RunnerMapTheme theme) => theme switch

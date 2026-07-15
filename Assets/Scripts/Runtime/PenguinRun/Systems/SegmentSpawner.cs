@@ -51,6 +51,7 @@ namespace PenguinRun
         private readonly Dictionary<GameObject, float> obstacleYDelta = new();
         private readonly Dictionary<GameObject, float> coinYDelta = new();
         private readonly Dictionary<string, GameObject> modelPrefabCache = new();
+        private readonly RunnerVisualFactory visualFactory = new();
         private bool slideGateTutorialPending;
         private GameObject routeEventRoot;
         private readonly List<GameObject> routeOutcomeRoots = new();
@@ -1232,7 +1233,10 @@ namespace PenguinRun
             obstacle.transform.position = new Vector3(obstacleLane.ToX(laneWidth), surface + dy, z);
 
             // 外观优先级：开源模型 > 程序化 Mesh > Primitive 回退
-            var builtWithModel = TryBuildOpenModelObstacle(obstacle.transform, lowBarrier, palette);
+            var obstacleKind = lowBarrier ? ObstacleKind.SlideGate : ObstacleKind.StandardHigh;
+            var builtWithModel = visualFactory.TryAttachObstacle(obstacle.transform, config.MapTheme, obstacleKind);
+            if (!builtWithModel)
+                builtWithModel = TryBuildOpenModelObstacle(obstacle.transform, lowBarrier, palette);
             if (!builtWithModel)
                 builtWithModel = TryBuildProceduralObstacle(obstacle.transform, lowBarrier, palette);
 
@@ -1606,7 +1610,9 @@ namespace PenguinRun
             var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
             obstacle.transform.position = new Vector3(obstacleLane.ToX(laneWidth), surface + dy, z);
 
-            var builtWithModel = TryBuildOpenModelWideWall(obstacle.transform, palette);
+            var builtWithModel = visualFactory.TryAttachObstacle(obstacle.transform, config.MapTheme, ObstacleKind.WideWall);
+            if (!builtWithModel)
+                builtWithModel = TryBuildOpenModelWideWall(obstacle.transform, palette);
             if (!builtWithModel)
             {
                 var wallTint = palette switch
@@ -1900,18 +1906,19 @@ namespace PenguinRun
             }
         }
 
-        private static GameObject BuildFishSnackVisual()
+        private GameObject BuildFishSnackVisual()
         {
             var root = new GameObject("Fish Coin");
-
-            var meshRoot = new GameObject("FishMesh");
-            meshRoot.transform.SetParent(root.transform, false);
-            var mf = meshRoot.AddComponent<MeshFilter>();
-            mf.sharedMesh = ObstacleMeshBuilder.BuildFishSnack();
-            var mr = meshRoot.AddComponent<MeshRenderer>();
-            mr.sharedMaterial = CreateFishSnackMaterial(new Color(1f, 0.82f, 0.28f));
-
-            AttachFishSnackFace(meshRoot.transform);
+            if (!visualFactory.TryAttachPickup(root.transform, PickupVisualId.FishSnack))
+            {
+                var meshRoot = new GameObject("FishMesh");
+                meshRoot.transform.SetParent(root.transform, false);
+                var mf = meshRoot.AddComponent<MeshFilter>();
+                mf.sharedMesh = ObstacleMeshBuilder.BuildFishSnack();
+                var mr = meshRoot.AddComponent<MeshRenderer>();
+                mr.sharedMaterial = CreateFishSnackMaterial(new Color(1f, 0.82f, 0.28f));
+                AttachFishSnackFace(meshRoot.transform);
+            }
 
             var glow = RunnerVisuals.CreatePrimitive("PickupGlow", PrimitiveType.Cylinder,
                 new Vector3(0f, -0.2f, 0f), new Vector3(0.62f, 0.025f, 0.62f),
@@ -2094,7 +2101,12 @@ namespace PenguinRun
                 }
             }
 
-            AddPowerUpEffects(root.transform, kind, coreColor, secondaryColor);
+            var hasCustomVisual = RunnerVisualAssetCatalog.TryGetPickupId(kind, out var visualId)
+                && visualFactory.TryAttachPickup(root.transform, visualId);
+            if (hasCustomVisual)
+                AddPickupRecognitionRing(root.transform, coreColor);
+            else
+                AddPowerUpEffects(root.transform, kind, coreColor, secondaryColor);
             var pulse = root.GetComponent<PowerUpPulse>();
             if (pulse == null) pulse = root.AddComponent<PowerUpPulse>();
             pulse.Configure(visualProfile.PulseScale);
@@ -2113,6 +2125,7 @@ namespace PenguinRun
         /// <summary>回收道具到池：销毁子物件、重置位姿。</summary>
         private void ReturnPowerUp(GameObject power)
         {
+            visualFactory.ClearAttachment(power.transform);
             // 销毁类型专属子物件（保留核心球）
             for (var i = power.transform.childCount - 1; i >= 0; i--)
             {
@@ -2153,8 +2166,7 @@ namespace PenguinRun
 
         private static void AddPowerUpEffects(Transform root, PowerUpKind kind, Color color, Color secondaryColor)
         {
-            var ring = AddChildPrimitive(root, "Pickup Ring", PrimitiveType.Cylinder, Vector3.zero, new Vector3(1.42f, 0.04f, 1.42f), new Color(color.r, color.g, color.b, 0.32f), true);
-            ring.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            AddPickupRecognitionRing(root, color);
 
             switch (kind)
             {
@@ -2323,6 +2335,13 @@ namespace PenguinRun
                     AddChildPrimitive(root, "Pickup Spark", PrimitiveType.Cube, new Vector3(0f, 0.72f, 0f), new Vector3(0.12f, 0.52f, 0.12f), color, true);
                     break;
             }
+        }
+
+        private static void AddPickupRecognitionRing(Transform root, Color color)
+        {
+            var ring = AddChildPrimitive(root, "Pickup Ring", PrimitiveType.Cylinder, Vector3.zero,
+                new Vector3(1.42f, 0.04f, 1.42f), new Color(color.r, color.g, color.b, 0.32f), true);
+            ring.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
         }
 
         private static GameObject AddChildPrimitive(Transform parent, string name, PrimitiveType type, Vector3 localPosition, Vector3 localScale, Color color, bool transparent = false)
