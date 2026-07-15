@@ -1,0 +1,48 @@
+param([string]$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path)
+$ErrorActionPreference = 'Stop'
+$failures = [System.Collections.Generic.List[string]]::new()
+
+function Read-Required([string]$relativePath) {
+    $path = Join-Path $ProjectRoot $relativePath
+    if (-not (Test-Path -LiteralPath $path)) {
+        $failures.Add("Missing required file: $relativePath")
+        return $null
+    }
+    Get-Content -Raw -Encoding utf8 -LiteralPath $path
+}
+
+function Require([string]$content, [string]$pattern, [string]$description) {
+    if ($null -eq $content -or $content -notmatch $pattern) {
+        $failures.Add("Missing contract: $description")
+    }
+}
+
+$catalog = Read-Required 'Assets/Scripts/Runtime/PenguinRun/Visuals/RunnerVisualAssetCatalog.cs'
+$factory = Read-Required 'Assets/Scripts/Runtime/PenguinRun/Visuals/RunnerVisualFactory.cs'
+$pickupIds = Read-Required 'Assets/Scripts/Runtime/PenguinRun/Visuals/PickupVisualId.cs'
+$propIds = Read-Required 'Assets/Scripts/Runtime/PenguinRun/Visuals/EnvironmentPropId.cs'
+
+foreach ($method in 'ForObstacle','ForPickup','ForEnvironment','AllBatchOneObstacleKeys','AllBatchOnePickupKeys','AllBatchOneEnvironmentKeys') {
+    Require $catalog "\b$method\b" "RunnerVisualAssetCatalog.$method"
+}
+foreach ($method in 'TryAttachObstacle','TryAttachPickup','TryAttachEnvironment','ClearAttachment') {
+    Require $factory "\b$method\s*\(" "RunnerVisualFactory.$method"
+}
+foreach ($id in 'FishSnack','Dash','Magnet','Shield','ScoreStar','GlideFeather') {
+    Require $pickupIds "\b$id\b" "PickupVisualId.$id"
+}
+foreach ($id in 'Landmark','Signpost','Light','EdgeProp') {
+    Require $propIds "\b$id\b" "EnvironmentPropId.$id"
+}
+
+$spawner = Read-Required 'Assets/Scripts/Runtime/PenguinRun/Systems/SegmentSpawner.cs'
+Require $spawner 'visualFactory\.TryAttachObstacle\(' 'SegmentSpawner custom obstacle path'
+Require $spawner 'visualFactory\.TryAttachPickup\(' 'SegmentSpawner custom pickup path'
+$runner = Read-Required 'Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs'
+Require $runner 'visualFactory\.TryAttachEnvironment\(' 'runner custom environment path'
+
+if ($failures.Count -gt 0) {
+    $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
+    exit 1
+}
+Write-Output 'Custom map asset batch-one static contracts passed.'
