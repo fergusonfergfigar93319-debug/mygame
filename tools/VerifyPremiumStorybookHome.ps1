@@ -27,10 +27,16 @@ foreach ($component in 'LobbyTopRibbon','LobbyJournalPage','LobbyChapterPage','L
     Require $text "(class|struct)\s+$component" "premium home component $component"
 }
 
+foreach ($asset in 'camp_bonfire_atlas','camp_workshop_atlas','camp_companion_hut_atlas','camp_library_atlas','camp_lookout_atlas','camp_foreground_props','camp_smoke_soft','camp_glow_soft') {
+    Read-Required "Assets/Resources/PenguinRun/StorybookUI/PremiumHome/$asset.png" | Out-Null
+}
+
 $campScene = Read-Required 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyCampScene.cs'
 foreach ($method in 'Bind','SetInputEnabled','SetPanelOpen') {
     Require $campScene "\b$method\s*\(" "LobbyCampScene.$method"
 }
+Require $campScene 'CampVisualAssetCatalog\.Glow' 'premium bonfire glow is integrated into the camp scene'
+Require $campScene 'CampVisualAssetCatalog\.Smoke' 'premium bonfire smoke is integrated into the camp scene'
 
 $mainMenu = Read-Required 'Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs'
 foreach ($call in 'LobbyTopRibbon\.Build\(','LobbyJournalPage\.Build\(','LobbyChapterPage\.Build\(','LobbyCampScene\.Build\(') {

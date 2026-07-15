@@ -71,6 +71,10 @@ namespace PenguinRun.Game.UI.Lobby
             var buildingLayer = UiBuilder.CreateRect("BuildingLayer", scene.Root, Vector2.zero, Vector2.one,
                 Vector2.zero, Vector2.zero, Color.clear);
             buildingLayer.GetComponent<Image>().raycastTarget = false;
+            scene.CreateEffect(buildingLayer, "BonfireGlow", new Vector2(0.34f, 0.31f),
+                new Vector2(0.17f, 0.28f), CampVisualAssetCatalog.Glow, 0.58f, pulse: true);
+            scene.CreateEffect(buildingLayer, "BonfireSmoke", new Vector2(0.34f, 0.43f),
+                new Vector2(0.08f, 0.22f), CampVisualAssetCatalog.Smoke, 0.54f, smokeDrift: true);
             scene.CreateBuilding(buildingLayer, hotspotLayer, CampBuildingId.Bonfire, new Vector2(0.34f, 0.27f), new Vector2(0.14f, 0.20f));
             scene.CreateBuilding(buildingLayer, hotspotLayer, CampBuildingId.Workshop, new Vector2(0.18f, 0.40f), new Vector2(0.18f, 0.28f));
             scene.CreateBuilding(buildingLayer, hotspotLayer, CampBuildingId.CompanionHut, new Vector2(0.82f, 0.35f), new Vector2(0.18f, 0.27f));
@@ -169,6 +173,26 @@ namespace PenguinRun.Game.UI.Lobby
                 FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
             Stretch(caption.rectTransform, 6f);
             buildings[id] = new BuildingView { Image = image, Button = button, CaptionRoot = captionRoot.gameObject, Caption = caption };
+        }
+
+        private void CreateEffect(Transform parent, string name, Vector2 anchor, Vector2 size,
+            Sprite sprite, float alpha, bool pulse = false, bool smokeDrift = false)
+        {
+            var rect = UiBuilder.CreateRect(name, parent, anchor - size * 0.5f, anchor + size * 0.5f,
+                Vector2.zero, Vector2.zero, Color.white);
+            var image = rect.GetComponent<Image>();
+            image.sprite = sprite;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            image.color = new Color(1f, 1f, 1f, Mathf.Clamp01(alpha));
+            rect.gameObject.SetActive(sprite != null);
+            if (pulse)
+            {
+                var motion = rect.gameObject.AddComponent<LobbyCampPulse>();
+                motion.Amplitude = 0.045f;
+            }
+            if (smokeDrift)
+                rect.gameObject.AddComponent<LobbyCampSmokeDrift>();
         }
 
         private void CreateCompanionBondPlate(Transform parent)
@@ -285,6 +309,29 @@ namespace PenguinRun.Game.UI.Lobby
             var t = Time.unscaledTime + Phase;
             ((RectTransform)transform).anchoredPosition = origin +
                 new Vector2(Mathf.Sin(t * 0.65f) * 5f, Mathf.Repeat(t * Speed, 46f) - 23f);
+        }
+    }
+
+    internal sealed class LobbyCampPulse : MonoBehaviour
+    {
+        public float Amplitude = 0.04f;
+        private Vector3 origin;
+
+        private void Awake() => origin = transform.localScale;
+        private void Update() => transform.localScale = origin *
+            (1f + Mathf.Sin(Time.unscaledTime * 1.35f) * Amplitude);
+    }
+
+    internal sealed class LobbyCampSmokeDrift : MonoBehaviour
+    {
+        private Vector2 origin;
+
+        private void Awake() => origin = ((RectTransform)transform).anchoredPosition;
+        private void Update()
+        {
+            var t = Time.unscaledTime;
+            ((RectTransform)transform).anchoredPosition = origin +
+                new Vector2(Mathf.Sin(t * 0.72f) * 5f, Mathf.Sin(t * 0.41f) * 3f);
         }
     }
 }
