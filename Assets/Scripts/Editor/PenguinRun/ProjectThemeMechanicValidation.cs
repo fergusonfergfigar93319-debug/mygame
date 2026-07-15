@@ -34,6 +34,7 @@ namespace PenguinRun.Editor
             ValidateMechanicLifecycle(failures);
             ValidateMechanicCancellation(failures);
             ValidateIcePatterns(failures);
+            ValidateAllThemePatterns(failures);
             ValidateMechanicPool(failures);
             ValidateMasteryGrades(failures);
             ValidateResonance(failures);
@@ -42,7 +43,7 @@ namespace PenguinRun.Editor
             ValidateThemeMasteryPersistence(failures);
 
             report = failures.Count == 0
-                ? "PASS: six definitions, 10,000 director beats, lifecycle, Ice pool, five contracts, and resonance are valid."
+                ? "PASS: six definitions, 10,000 director beats, 12 patterns/65 beats, pool reset, five contracts, and resonance are valid."
                 : "FAIL:\n" + string.Join("\n", failures);
             return failures.Count == 0;
         }
@@ -430,6 +431,41 @@ namespace PenguinRun.Editor
             if (cracked != 3 || rebound != 2)
             {
                 failures.Add($"Ice normal identity is {cracked} cracked/{rebound} rebound; expected 3/2.");
+            }
+        }
+
+        private static void ValidateAllThemePatterns(List<string> failures)
+        {
+            var totalBeats = 0;
+            foreach (var definition in ThemeMechanicCatalog.Definitions)
+            {
+                var normal = ThemeMechanicPatternCatalog.For(definition.Id, false);
+                var signature = ThemeMechanicPatternCatalog.For(definition.Id, true);
+                totalBeats += normal.Length + signature.Length;
+                if (normal.Length < 5 || signature.Length < 5)
+                {
+                    failures.Add($"{definition.Id} has only {normal.Length}/{signature.Length} normal/signature beats.");
+                    continue;
+                }
+
+                var hasA = false;
+                var hasB = false;
+                var hasReward = false;
+                for (var index = 0; index < normal.Length; index++)
+                {
+                    hasA |= normal[index].ApparatusPath == definition.ApparatusA;
+                    hasB |= normal[index].ApparatusPath == definition.ApparatusB;
+                    hasReward |= normal[index].Rewarding;
+                }
+                if (!hasA || !hasB || !hasReward)
+                {
+                    failures.Add($"{definition.Id} normal pattern is missing apparatus identity or reward beat.");
+                }
+            }
+
+            if (totalBeats < 60)
+            {
+                failures.Add($"Theme pattern catalog has {totalBeats} beats; expected at least 60.");
             }
         }
 

@@ -105,7 +105,12 @@ namespace PenguinRun
 
         private static bool IsCriticalApparatus(string apparatusPath)
         {
-            return apparatusPath == "ice/floe_bridge";
+            return apparatusPath == "ice/floe_bridge"
+                || apparatusPath == "cedar/ruin_escape"
+                || apparatusPath == "aurora/magnetic_rebuild"
+                || apparatusPath == "mist/floodgate_chase"
+                || apparatusPath == "ocean/wave_tunnel"
+                || apparatusPath == "sky/island_glide_chain";
         }
 
         private static void BuildFallbackMarker(Transform root, ThemeMechanicBeat beat)

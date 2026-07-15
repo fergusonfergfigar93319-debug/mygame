@@ -1258,13 +1258,27 @@ namespace PenguinRun
 
         internal bool SpawnMechanicObstacle(string apparatusPath, RunnerLane lane, float z, float runDistance)
         {
-            if (apparatusPath != "ice/cracked_plate")
+            var kind = apparatusPath switch
             {
-                return true;
-            }
+                "ice/cracked_plate" => ObstacleKind.StandardHigh,
+                "cedar/swing_log" => ObstacleKind.StandardHigh,
+                "cedar/root_gallery" => ObstacleKind.SlideGate,
+                "aurora/prism_beam" => ObstacleKind.SlideGate,
+                "ocean/coral_lift" => ObstacleKind.StandardHigh,
+                "sky/cloud_platform" => ObstacleKind.WideWall,
+                _ => (ObstacleKind?)null,
+            };
+            return !kind.HasValue || SpawnExisting(kind.Value, lane, z, runDistance);
+        }
 
+        private bool SpawnExisting(ObstacleKind kind, RunnerLane lane, float z, float runDistance)
+        {
             var countBefore = obstacles.Count;
-            SpawnStandardObstacle(z, lane, false, waveDirector.CurrentPalette, runDistance);
+            if (kind == ObstacleKind.WideWall)
+                SpawnWideSnowWall(z, lane, waveDirector.CurrentPalette, runDistance);
+            else
+                SpawnStandardObstacle(z, lane, kind == ObstacleKind.SlideGate,
+                    waveDirector.CurrentPalette, runDistance);
             if (obstacles.Count <= countBefore)
             {
                 return false;
