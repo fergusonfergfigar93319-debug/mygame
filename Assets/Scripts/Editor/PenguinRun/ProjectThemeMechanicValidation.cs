@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using PenguinRun.Game;
 using UnityEditor;
 using UnityEngine;
 
@@ -36,6 +37,7 @@ namespace PenguinRun.Editor
             ValidateMasteryGrades(failures);
             ValidateResonance(failures);
             ValidateJourneyContracts(failures);
+            ValidateRunSeeds(failures);
 
             report = failures.Count == 0
                 ? "PASS: six definitions, 10,000 director beats, lifecycle, Ice pool, five contracts, and resonance are valid."
@@ -575,6 +577,37 @@ namespace PenguinRun.Editor
             tracker.BeginEvent(1, signature);
             tracker.RecordKeypoint(true);
             tracker.ResolveEvent(signature);
+        }
+
+        private static void ValidateRunSeeds(List<string> failures)
+        {
+            var utc = new System.DateTime(2026, 7, 16, 12, 0, 0, System.DateTimeKind.Utc);
+            var dailyA = RunSession.ResolveRunSeed(
+                RunnerRunMode.Daily, RunnerMapTheme.MistDike, 0, utc);
+            var dailyB = RunSession.ResolveRunSeed(
+                RunnerRunMode.Daily, RunnerMapTheme.MistDike, 99, utc);
+            if (dailyA != dailyB)
+            {
+                failures.Add("Daily run seed changed for the same UTC date and theme.");
+            }
+
+            var storyA = RunSession.ResolveRunSeed(
+                RunnerRunMode.Story, RunnerMapTheme.CedarRuins, 2, utc);
+            var storyB = RunSession.ResolveRunSeed(
+                RunnerRunMode.Story, RunnerMapTheme.CedarRuins, 2, utc.AddDays(1));
+            if (storyA != storyB)
+            {
+                failures.Add("Story run seed changed for the same theme and attempt.");
+            }
+
+            var endlessA = RunSession.ResolveRunSeed(
+                RunnerRunMode.Endless, RunnerMapTheme.IceLakeEcho, 1, utc);
+            var endlessB = RunSession.ResolveRunSeed(
+                RunnerRunMode.Endless, RunnerMapTheme.IceLakeEcho, 2, utc);
+            if (endlessA == endlessB)
+            {
+                failures.Add("Consecutive Endless attempts produced the same seed.");
+            }
         }
     }
 }

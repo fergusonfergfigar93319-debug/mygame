@@ -96,6 +96,7 @@ namespace PenguinRun.Game.UI
 
         private enum DifficultyOverlayMode
         {
+            BeforeStoryRun,
             BeforeEndlessRun,
             BeforeDailyRun,
             SettingsOnly,
@@ -806,7 +807,7 @@ namespace PenguinRun.Game.UI
             lobbyCampScene?.Bind(model, camp, PlayerSave.CompanionDrorUnlocked);
             lobbyTopRibbon?.Bind(model);
             lobbyJournalPage?.Bind(model, ExecuteLobbyPrimaryAction);
-            lobbyChapterPage?.Bind(model, StartEndless);
+            lobbyChapterPage?.Bind(model, StartStory);
             lobbyDock?.SetBadges(MissionStore.CountClaimableMissions(), CampUpgrades.CountAffordableUpgrades());
             lobbyDock?.SetSelected(panelRouter?.CurrentPanelName);
         }
@@ -1203,6 +1204,13 @@ namespace PenguinRun.Game.UI
             ShowDifficultyOverlay(difficultyOverlayMode);
         }
 
+        private void StartStory()
+        {
+            difficultyOverlayMode = DifficultyOverlayMode.BeforeStoryRun;
+            pendingDifficulty = PlayerSave.SelectedDifficulty;
+            ShowDifficultyOverlay(difficultyOverlayMode);
+        }
+
         private void StartDaily()
         {
             difficultyOverlayMode = DifficultyOverlayMode.BeforeDailyRun;
@@ -1238,6 +1246,7 @@ namespace PenguinRun.Game.UI
 
             var overlayTitle = mode switch
             {
+                DifficultyOverlayMode.BeforeStoryRun => "继续章节 · 选择难度",
                 DifficultyOverlayMode.BeforeDailyRun => "今日挑战 · 选择难度",
                 DifficultyOverlayMode.BeforeEndlessRun => "极夜快跑 · 选择难度",
                 _ => "选择难度",
@@ -1408,7 +1417,18 @@ namespace PenguinRun.Game.UI
                     return;
 
                 if (mode == DifficultyOverlayMode.BeforeDailyRun)
-                    RunSession.PrepareDailyRun(difficulty: pendingDifficulty);
+                {
+                    if (!RunSession.TryPrepareDailyRun(
+                            System.DateTime.UtcNow,
+                            pendingDifficulty,
+                            out var error))
+                    {
+                        OnPanelEvent(PanelEvent.Toast, error);
+                        return;
+                    }
+                }
+                else if (mode == DifficultyOverlayMode.BeforeStoryRun)
+                    RunSession.PrepareStoryRun(RunSession.NextRunTheme, pendingDifficulty);
                 else
                     RunSession.PrepareEndlessRun(difficulty: pendingDifficulty);
                 SceneTransitionManager.Instance.TransitionTo("PenguinRunner");

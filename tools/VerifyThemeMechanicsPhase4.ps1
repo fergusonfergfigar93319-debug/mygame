@@ -64,6 +64,15 @@ foreach ($kind in 'PerfectStreak','FlawlessEvents','ResonanceFish','SignatureCom
     Require $contracts "JourneyContractKind\.$kind" "journey contract $kind"
 }
 
+$session = Read-Required 'Assets/Scripts/Runtime/Game/RunSession.cs'
+$sessionConfig = Read-Required 'Assets/Scripts/Runtime/Game/RunnerSessionConfig.cs'
+foreach ($name in 'RunnerRunMode','PrepareStoryRun','PrepareEndlessRun','TryPrepareDailyRun','NextRunSeed') {
+    Require $session "\b$name\b" $name
+}
+foreach ($name in 'Mode','ThemeMechanicMode','RunSeed') {
+    Require $sessionConfig "\b$name\b" "session config $name"
+}
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1

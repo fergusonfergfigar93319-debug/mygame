@@ -23,6 +23,14 @@ namespace PenguinRun.Game
         public string SfxStyle = PlayerSave.DefaultSfxStyle;
         public float HapticIntensity = 0.7f;
         public RunnerMapTheme MapTheme = RunnerMapTheme.IceLakeEcho;
+        public RunnerRunMode Mode { get; private set; } = RunnerRunMode.Endless;
+        public int RunSeed { get; private set; } = 1;
+        internal ThemeMechanicMode ThemeMechanicMode => Mode switch
+        {
+            RunnerRunMode.Story => ThemeMechanicMode.Story,
+            RunnerRunMode.Daily => ThemeMechanicMode.Daily,
+            _ => ThemeMechanicMode.Endless,
+        };
 
         /// <summary>本局难度（影响速度曲线和 Boss 触发时机）。</summary>
         public DifficultyKind Difficulty = DifficultyKind.Normal;
@@ -34,8 +42,15 @@ namespace PenguinRun.Game
         {
             return new RunnerSessionConfig
             {
-                RunMode = RunSession.NextRunDaily ? "daily_3d" : "runner_3d",
+                RunMode = RunSession.NextRunMode switch
+                {
+                    RunnerRunMode.Story => "story_3d",
+                    RunnerRunMode.Daily => "daily_3d",
+                    _ => "runner_3d",
+                },
                 Daily = RunSession.NextRunDaily,
+                Mode = RunSession.NextRunMode,
+                RunSeed = RunSession.NextRunSeed,
                 Nickname = PlayerSave.PlayerNickname,
                 BestScore = PlayerSave.BestScore,
                 DashLevel = CampUpgrades.GetLevel(CampUpgradeKind.Dash),

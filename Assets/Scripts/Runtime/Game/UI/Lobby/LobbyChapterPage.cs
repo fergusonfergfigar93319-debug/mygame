@@ -68,7 +68,7 @@ namespace PenguinRun.Game.UI.Lobby
             return page;
         }
 
-        public void Bind(LobbyViewModel model, Action onStartJourney)
+        public void Bind(LobbyViewModel model, Action onStartStory)
         {
             title.text = model.NextChapterTitle;
             body.text = model.NextChapterBody;
@@ -76,8 +76,8 @@ namespace PenguinRun.Game.UI.Lobby
             reward.text = model.RouteRewardLabel;
             actionLabel.text = "翻开旅程";
             primaryAction.onClick.RemoveAllListeners();
-            if (onStartJourney != null)
-                primaryAction.onClick.AddListener(() => onStartJourney());
+            if (onStartStory != null)
+                primaryAction.onClick.AddListener(() => onStartStory());
         }
 
         private static void Place(RectTransform rect, Vector2 min, Vector2 max)
