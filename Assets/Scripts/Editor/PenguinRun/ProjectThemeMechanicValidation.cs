@@ -29,9 +29,11 @@ namespace PenguinRun.Editor
             ValidateDirectorReset(failures);
             ValidateDirectorCooldown(failures);
             ValidateDirectorExclusions(failures);
+            ValidateMechanicLifecycle(failures);
+            ValidateMechanicCancellation(failures);
 
             report = failures.Count == 0
-                ? "PASS: six theme mechanic definitions and 10,000 director beats are valid."
+                ? "PASS: six definitions, 10,000 director beats, lifecycle, and six cleanup paths are valid."
                 : "FAIL:\n" + string.Join("\n", failures);
             return failures.Count == 0;
         }
@@ -285,6 +287,117 @@ namespace PenguinRun.Editor
                 false,
                 false,
                 0.65f);
+        }
+
+        private static void ValidateMechanicLifecycle(List<string> failures)
+        {
+            var runtime = new ThemeMechanicRuntime();
+            var definition = ThemeMechanicCatalog.ForTheme(RunnerMapTheme.IceLakeEcho);
+            var request = new ThemeMechanicRequest(
+                true,
+                definition,
+                ThemeMechanicIntensity.High,
+                false);
+            if (!runtime.Begin(request) || runtime.Snapshot.Phase != ThemeMechanicPhase.Telegraph)
+            {
+                failures.Add("Lifecycle did not begin in Telegraph.");
+                return;
+            }
+
+            var phases = new[]
+            {
+                ThemeMechanicPhase.Active,
+                ThemeMechanicPhase.Resolve,
+                ThemeMechanicPhase.Reward,
+                ThemeMechanicPhase.Cooldown,
+                ThemeMechanicPhase.Idle,
+            };
+            foreach (var expected in phases)
+            {
+                if (!AdvanceToPhase(runtime, expected))
+                {
+                    failures.Add($"Lifecycle did not reach {expected}.");
+                    return;
+                }
+
+                if (expected == ThemeMechanicPhase.Active)
+                {
+                    runtime.RecordKeypoint(true);
+                    if (runtime.CompletedKeypoints != 1 || runtime.PerfectKeypoints != 1)
+                    {
+                        failures.Add("Active keypoint progress was not recorded.");
+                    }
+                }
+                else if (!IsIdentity(runtime.Snapshot.Modifiers))
+                {
+                    failures.Add($"Lifecycle retained movement modifiers during {expected}.");
+                }
+            }
+        }
+
+        private static void ValidateMechanicCancellation(List<string> failures)
+        {
+            var reasons = new[]
+            {
+                ThemeMechanicCancelReason.Boss,
+                ThemeMechanicCancelReason.RouteEvent,
+                ThemeMechanicCancelReason.ThemeTransition,
+                ThemeMechanicCancelReason.Timeout,
+                ThemeMechanicCancelReason.MissingCriticalAsset,
+            };
+            foreach (var reason in reasons)
+            {
+                var runtime = new ThemeMechanicRuntime();
+                var request = new ThemeMechanicRequest(
+                    true,
+                    ThemeMechanicCatalog.ForTheme(RunnerMapTheme.SkyFlight),
+                    ThemeMechanicIntensity.Signature,
+                    true);
+                runtime.Begin(request);
+                if (!AdvanceToPhase(runtime, ThemeMechanicPhase.Active))
+                {
+                    failures.Add($"Cancellation setup failed for {reason}.");
+                    continue;
+                }
+
+                runtime.Cancel(reason);
+                if (runtime.Snapshot.Phase != ThemeMechanicPhase.Cancelled
+                    || runtime.LastCancelReason != reason
+                    || !IsIdentity(runtime.Snapshot.Modifiers))
+                {
+                    failures.Add($"Cancellation {reason} did not restore identity immediately.");
+                    continue;
+                }
+
+                runtime.Tick(0f);
+                if (runtime.Snapshot.Phase != ThemeMechanicPhase.Idle
+                    || !IsIdentity(runtime.Snapshot.Modifiers))
+                {
+                    failures.Add($"Cancellation {reason} did not clear to Idle.");
+                }
+            }
+        }
+
+        private static bool AdvanceToPhase(ThemeMechanicRuntime runtime, ThemeMechanicPhase phase)
+        {
+            for (var step = 0; step < 300; step++)
+            {
+                runtime.Tick(0.1f);
+                if (runtime.Snapshot.Phase == phase)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool IsIdentity(ThemeMechanicModifiers modifiers)
+        {
+            return Mathf.Approximately(modifiers.LaneResponseMultiplier, 1f)
+                && Mathf.Approximately(modifiers.LaneDriftLanesPerSecond, 0f)
+                && Mathf.Approximately(modifiers.GravityMultiplier, 1f)
+                && Mathf.Approximately(modifiers.GlideDurationMultiplier, 1f)
+                && Mathf.Approximately(modifiers.Visibility01, 1f);
         }
     }
 }

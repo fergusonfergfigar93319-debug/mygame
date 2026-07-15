@@ -41,6 +41,11 @@ foreach ($name in 'MapMechanicDirector','RecordBeat','TrySchedule','RewardDebt',
 Require $models '\bThemeMechanicContext\b' 'director context model'
 Require $models '\bThemeMechanicRequest\b' 'director request model'
 
+$runtime = Read-Required 'Assets/Scripts/Runtime/PenguinRun/ThemeMechanics/ThemeMechanicRuntime.cs'
+foreach ($name in 'ThemeMechanicRuntime','Begin','Tick','Cancel','RecordKeypoint','ModifiersFor','Snapshot') {
+    Require $runtime "\b$name\b" $name
+}
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1
