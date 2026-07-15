@@ -61,23 +61,27 @@ Require-Pattern $mainMenu 'panelRouter\.Open\(' 'main menu delegates panel openi
 Require-Pattern $mainMenu 'panelRouter\.Close\(' 'main menu delegates panel closing'
 
 foreach ($component in @(
-    'LobbyBackground',
-    'LobbyStoryCard',
-    'LobbyCompanionCorner',
+    'LobbyCampScene',
+    'LobbyTopRibbon',
+    'LobbyJournalPage',
+    'LobbyChapterPage',
     'LobbyDock'
 )) {
     $componentText = Require-File "Assets/Scripts/Runtime/Game/UI/Lobby/$component.cs"
     Require-Pattern $componentText "class\s+$component" "lobby component $component"
 }
-$storyCard = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyStoryCard.cs'
-Require-Pattern $storyCard 'void\s+Bind\s*\(' 'LobbyStoryCard.Bind'
-$companionCorner = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyCompanionCorner.cs'
-Require-Pattern $companionCorner 'void\s+Bind\s*\(' 'LobbyCompanionCorner.Bind'
+$journalPage = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyJournalPage.cs'
+Require-Pattern $journalPage 'void\s+Bind\s*\(' 'LobbyJournalPage.Bind'
+$chapterPage = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyChapterPage.cs'
+Require-Pattern $chapterPage 'void\s+Bind\s*\(' 'LobbyChapterPage.Bind'
+$campScene = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyCampScene.cs'
+Require-Pattern $campScene 'void\s+SetPanelOpen\s*\(' 'LobbyCampScene.SetPanelOpen'
 $lobbyDock = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyDock.cs'
 Require-Pattern $lobbyDock 'void\s+SetSelected\s*\(' 'LobbyDock.SetSelected'
-Require-Pattern $mainMenu 'LobbyBackground\.Build\(' 'main menu delegates lobby background'
-Require-Pattern $mainMenu 'LobbyStoryCard\.Build\(' 'main menu delegates lobby story card'
-Require-Pattern $mainMenu 'LobbyCompanionCorner\.Build\(' 'main menu delegates companion corner'
+Require-Pattern $mainMenu 'LobbyCampScene\.Build\(' 'main menu delegates premium camp scene'
+Require-Pattern $mainMenu 'LobbyTopRibbon\.Build\(' 'main menu delegates top ribbon'
+Require-Pattern $mainMenu 'LobbyJournalPage\.Build\(' 'main menu delegates journal page'
+Require-Pattern $mainMenu 'LobbyChapterPage\.Build\(' 'main menu delegates chapter page'
 Require-Pattern $mainMenu 'LobbyDock\.Build\(' 'main menu delegates lobby dock'
 if ((Get-Content -Encoding utf8 -LiteralPath (Join-Path $ProjectRoot 'Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs')).Count -gt 1900) {
     $failures.Add('MainMenuBootstrap still exceeds the phase-one 1900-line composition boundary')

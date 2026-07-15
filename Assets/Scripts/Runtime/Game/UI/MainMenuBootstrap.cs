@@ -46,10 +46,11 @@ namespace PenguinRun.Game.UI
         private GameObject profileStatsOverlay;
         private Transform panelLayer;
         private LobbyPanelRouter panelRouter;
-        private LobbyStoryCard lobbyStoryCard;
-        private LobbyCompanionCorner lobbyCompanionCorner;
+        private LobbyTopRibbon lobbyTopRibbon;
+        private LobbyJournalPage lobbyJournalPage;
+        private LobbyChapterPage lobbyChapterPage;
+        private LobbyCampScene lobbyCampScene;
         private LobbyDock lobbyDock;
-        private RectTransform lobbyBackground;
         private RectTransform dockWrap;
         private RectTransform versionLabel;
 
@@ -279,9 +280,11 @@ namespace PenguinRun.Game.UI
         {
             BuildBackground();
             BuildCanvas();
-            lobbyBackground = LobbyBackground.Build(canvas.transform, CampRebuildStore.Snapshot());
-            lobbyStoryCard = LobbyStoryCard.Build(canvas.transform);
-            lobbyCompanionCorner = LobbyCompanionCorner.Build(canvas.transform);
+            lobbyCampScene = LobbyCampScene.Build(canvas.transform,
+                new LobbyCampActions(OpenCampShop, OpenCodex));
+            lobbyTopRibbon = LobbyTopRibbon.Build(canvas.transform);
+            lobbyJournalPage = LobbyJournalPage.Build(canvas.transform);
+            lobbyChapterPage = LobbyChapterPage.Build(canvas.transform);
             lobbyDock = LobbyDock.Build(canvas.transform, new LobbyDockActions(
                 OpenCampShop, OpenMissions, StartEndless, OpenCodex, OpenSettings));
             dockWrap = lobbyDock.Root;
@@ -799,9 +802,11 @@ namespace PenguinRun.Game.UI
         private void RefreshStorybookLobby()
         {
             var model = BuildLobbyViewModel();
-            LobbyBackground.Refresh(lobbyBackground, CampRebuildStore.Snapshot());
-            lobbyStoryCard?.Bind(model, ExecuteLobbyPrimaryAction);
-            lobbyCompanionCorner?.Bind(model, OpenCodex);
+            var camp = CampRebuildStore.Snapshot();
+            lobbyCampScene?.Bind(model, camp, PlayerSave.CompanionDrorUnlocked);
+            lobbyTopRibbon?.Bind(model);
+            lobbyJournalPage?.Bind(model, ExecuteLobbyPrimaryAction);
+            lobbyChapterPage?.Bind(model, StartEndless);
             lobbyDock?.SetBadges(MissionStore.CountClaimableMissions(), CampUpgrades.CountAffordableUpgrades());
             lobbyDock?.SetSelected(panelRouter?.CurrentPanelName);
         }
@@ -1465,9 +1470,12 @@ namespace PenguinRun.Game.UI
 
         private void SetLobbySurfaceVisible(bool visible)
         {
-            if (lobbyBackground != null) lobbyBackground.gameObject.SetActive(visible);
-            if (lobbyStoryCard?.Root != null) lobbyStoryCard.Root.gameObject.SetActive(visible);
-            if (lobbyCompanionCorner?.Root != null) lobbyCompanionCorner.Root.gameObject.SetActive(visible);
+            if (lobbyCampScene?.Root != null) lobbyCampScene.Root.gameObject.SetActive(true);
+            lobbyCampScene?.SetPanelOpen(!visible);
+            lobbyCampScene?.SetInputEnabled(visible);
+            if (lobbyTopRibbon?.Root != null) lobbyTopRibbon.Root.gameObject.SetActive(visible);
+            if (lobbyJournalPage?.Root != null) lobbyJournalPage.Root.gameObject.SetActive(visible);
+            if (lobbyChapterPage?.Root != null) lobbyChapterPage.Root.gameObject.SetActive(visible);
             if (dockWrap != null) dockWrap.gameObject.SetActive(visible);
             if (versionLabel != null) versionLabel.gameObject.SetActive(visible);
         }

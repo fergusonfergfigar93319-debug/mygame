@@ -27,7 +27,7 @@ namespace PenguinRun.Game.UI.Storybook
             var button = UiBuilder.CreateButton(name, parent, text, UiTheme.CoralAction,
                 Color.white, UiTheme.Body, rounded: true);
             var legacyLabel = button.GetComponentInChildren<Text>();
-            if (legacyLabel != null) Object.Destroy(legacyLabel.gameObject);
+            if (legacyLabel != null) DestroyGeneratedObject(legacyLabel.gameObject);
             var storyLabel = UiBuilder.CreateTmpText("StoryLabel", button.transform, text, UiTheme.Body,
                 FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
             storyLabel.rectTransform.anchorMin = Vector2.zero;
@@ -54,6 +54,13 @@ namespace PenguinRun.Game.UI.Storybook
         {
             if (target == null) return;
             target.PlayPanelPopIn(UiTheme.StorybookPageTurnDuration);
+        }
+
+        public static void DestroyGeneratedObject(Object target)
+        {
+            if (target == null) return;
+            if (Application.isPlaying) Object.Destroy(target);
+            else Object.DestroyImmediate(target);
         }
     }
 }

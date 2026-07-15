@@ -42,8 +42,8 @@ namespace PenguinRun.Game.UI.Lobby
         public static LobbyDock Build(Transform parent, LobbyDockActions actions)
         {
             var dock = new LobbyDock();
-            var root = UiBuilder.CreateRect("StorybookLobbyDock", parent, new Vector2(0.05f, 0.025f),
-                new Vector2(0.95f, 0.145f), Vector2.zero, Vector2.zero,
+            var root = UiBuilder.CreateRect("StorybookLobbyDock", parent, new Vector2(0.27f, 0.025f),
+                new Vector2(0.73f, 0.145f), Vector2.zero, Vector2.zero,
                 new Color(UiTheme.PaperWarm.r, UiTheme.PaperWarm.g, UiTheme.PaperWarm.b, 0.94f), rounded: true);
             UiBuilder.AddOutline(root.gameObject, UiTheme.StitchBorder, new Vector2(2f, -2f));
             UiBuilder.AddShadow(root.gameObject, UiTheme.ShadowWarm, new Vector2(0f, -6f));

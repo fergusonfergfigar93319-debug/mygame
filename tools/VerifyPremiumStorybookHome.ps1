@@ -39,6 +39,12 @@ foreach ($call in 'LobbyTopRibbon\.Build\(','LobbyJournalPage\.Build\(','LobbyCh
 if ($mainMenu -match 'LobbyStoryCard\.Build\(') { $failures.Add('Legacy combined LobbyStoryCard is still constructed.') }
 if ($mainMenu -match 'LobbyCompanionCorner\.Build\(') { $failures.Add('Legacy companion card is still constructed.') }
 
+$layoutRegression = Read-Required 'Assets/Editor/ProjectUiLayoutRegressionTest.cs'
+Require $layoutRegression 'ValidatePremiumHomeLayouts\s*\(' 'premium home multi-resolution layout regression'
+foreach ($resolution in '1920, 1080','2560, 1080','1280, 720') {
+    Require $layoutRegression ([regex]::Escape($resolution)) "premium home layout resolution $resolution"
+}
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1

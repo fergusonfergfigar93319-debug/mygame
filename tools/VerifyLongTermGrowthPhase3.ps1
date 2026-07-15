@@ -115,14 +115,12 @@ $codexPanel = Require-File 'Assets/Scripts/Runtime/Game/UI/CodexPanel.cs'
 Require-Pattern $codexPanel '\bBuildDiscoverySection\s*\(' 'codex grouped discovery section'
 Require-Pattern $codexPanel 'CodexDiscoveryStore\.MarkAllSeen' 'codex marks presented discoveries seen'
 
-$background = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyBackground.cs'
-foreach ($layer in 'BonfireLayer', 'WorkshopLayer', 'CompanionHutLayer', 'LibraryTentLayer', 'LookoutLayer') {
-    Require-Pattern $background $layer "lobby camp scenery $layer"
+$campScene = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyCampScene.cs'
+foreach ($building in 'Bonfire', 'Workshop', 'CompanionHut', 'LibraryTent', 'Lookout') {
+    Require-Pattern $campScene "CampBuildingId\.$building" "premium lobby camp scenery $building"
 }
-Require-Pattern $background 'CampRebuildSnapshot' 'lobby background consumes reconstruction snapshot'
-
-$companionCorner = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyCompanionCorner.cs'
-Require-Pattern $companionCorner 'BondLevel|BondProgress' 'companion corner surfaces bond progress'
+Require-Pattern $campScene 'CampRebuildSnapshot' 'premium lobby scene consumes reconstruction snapshot'
+Require-Pattern $campScene 'BondLevel|BondProgress' 'premium companion presentation surfaces bond progress'
 
 $mainMenu = Require-File 'Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs'
 Require-Pattern $mainMenu 'SaveSchema\.EnsureMigrated\s*\(' 'save migration runs before lobby reads'
