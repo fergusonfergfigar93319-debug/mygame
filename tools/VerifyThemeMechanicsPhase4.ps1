@@ -34,6 +34,13 @@ Require $catalog '\bForTheme\s*\(' 'theme lookup'
 Require $catalog '\bTryForTheme\s*\(' 'safe theme lookup'
 Require $catalog '\bPolicyFor\s*\(' 'mode policy lookup'
 
+$director = Read-Required 'Assets/Scripts/Runtime/PenguinRun/ThemeMechanics/MapMechanicDirector.cs'
+foreach ($name in 'MapMechanicDirector','RecordBeat','TrySchedule','RewardDebt','PressureDebt') {
+    Require $director "\b$name\b" $name
+}
+Require $models '\bThemeMechanicContext\b' 'director context model'
+Require $models '\bThemeMechanicRequest\b' 'director request model'
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1

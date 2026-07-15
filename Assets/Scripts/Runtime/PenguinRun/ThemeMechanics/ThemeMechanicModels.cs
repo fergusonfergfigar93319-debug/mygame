@@ -163,4 +163,65 @@ namespace PenguinRun
             ThemeMechanicModifiers.Identity,
             false);
     }
+
+    internal readonly struct ThemeMechanicContext
+    {
+        public ThemeMechanicContext(
+            RunnerMapTheme theme,
+            ThemeMechanicMode mode,
+            float distance,
+            int lives,
+            float secondsSinceHit,
+            bool bossActive,
+            bool routeEventActive,
+            bool themeTransition,
+            float difficulty01)
+        {
+            Theme = theme;
+            Mode = mode;
+            Distance = Mathf.Max(0f, distance);
+            Lives = Mathf.Max(0, lives);
+            SecondsSinceHit = Mathf.Max(0f, secondsSinceHit);
+            BossActive = bossActive;
+            RouteEventActive = routeEventActive;
+            ThemeTransition = themeTransition;
+            Difficulty01 = Mathf.Clamp01(difficulty01);
+        }
+
+        public RunnerMapTheme Theme { get; }
+        public ThemeMechanicMode Mode { get; }
+        public float Distance { get; }
+        public int Lives { get; }
+        public float SecondsSinceHit { get; }
+        public bool BossActive { get; }
+        public bool RouteEventActive { get; }
+        public bool ThemeTransition { get; }
+        public float Difficulty01 { get; }
+    }
+
+    internal readonly struct ThemeMechanicRequest
+    {
+        public ThemeMechanicRequest(
+            bool isValid,
+            ThemeMechanicDefinition definition,
+            ThemeMechanicIntensity intensity,
+            bool signature)
+        {
+            IsValid = isValid;
+            Definition = definition;
+            Intensity = intensity;
+            Signature = signature;
+        }
+
+        public bool IsValid { get; }
+        public ThemeMechanicDefinition Definition { get; }
+        public ThemeMechanicIntensity Intensity { get; }
+        public bool Signature { get; }
+
+        public static ThemeMechanicRequest None => new(
+            false,
+            default,
+            ThemeMechanicIntensity.Low,
+            false);
+    }
 }
