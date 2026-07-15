@@ -6,10 +6,17 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$versionName = '1.1.1'
-$versionCode = '3'
-$packageName = 'com.example.mygame'
-$startedAt = Get-Date
+$projectSettingsPath = Join-Path $ProjectRoot 'ProjectSettings\ProjectSettings.asset'
+$projectSettings = Get-Content -LiteralPath $projectSettingsPath -Raw -Encoding utf8
+$versionNameMatch = [regex]::Match($projectSettings, '(?m)^\s*bundleVersion:\s*(\S+)\s*$')
+$versionCodeMatch = [regex]::Match($projectSettings, '(?m)^\s*AndroidBundleVersionCode:\s*(\d+)\s*$')
+$packageNameMatch = [regex]::Match($projectSettings, '(?ms)^\s*applicationIdentifier:\s*\r?\n\s+Android:\s*(\S+)\s*$')
+if (-not $versionNameMatch.Success -or -not $versionCodeMatch.Success -or -not $packageNameMatch.Success) {
+    throw "Could not read Android identity from $projectSettingsPath"
+}
+$versionName = $versionNameMatch.Groups[1].Value
+$versionCode = $versionCodeMatch.Groups[1].Value
+$packageName = $packageNameMatch.Groups[1].Value
 $outputRoot = Join-Path $ProjectRoot $OutputDirectory
 $logRoot = Join-Path $ProjectRoot 'Logs'
 $logPath = Join-Path $logRoot 'android-apk-build.log'
@@ -19,13 +26,19 @@ if (-not (Test-Path -LiteralPath $UnityPath)) {
 }
 
 New-Item -ItemType Directory -Force -Path $outputRoot, $logRoot | Out-Null
+$existingApkPaths = @(
+    Get-ChildItem -LiteralPath $outputRoot -Filter 'PenguinRun-Test-v*.apk' -File |
+        ForEach-Object { $_.FullName }
+)
 
 if (-not $SkipChecks) {
     foreach ($script in @(
         'VerifyUiArtP0.ps1',
         'VerifyStorybookUiPhase1.ps1',
         'VerifyRunDepthPhase2.ps1',
-        'VerifyLongTermGrowthPhase3.ps1'
+        'VerifyLongTermGrowthPhase3.ps1',
+        'VerifyPremiumStorybookHome.ps1',
+        'VerifyCustomMapAssetsBatch1.ps1'
     )) {
         & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot $script) -ProjectRoot $ProjectRoot
         if ($LASTEXITCODE -ne 0) { throw "Pre-build verification failed: $script" }
@@ -48,8 +61,8 @@ if ($process.ExitCode -ne 0) {
 }
 
 $apk = Get-ChildItem -LiteralPath $outputRoot -Filter 'PenguinRun-Test-v*.apk' -File |
-    Where-Object { $_.LastWriteTime -ge $startedAt.AddMinutes(-1) } |
-    Sort-Object LastWriteTime -Descending |
+    Where-Object { $existingApkPaths -notcontains $_.FullName } |
+    Sort-Object Name -Descending |
     Select-Object -First 1
 if ($null -eq $apk) { throw "Unity exited successfully but no new APK was produced in $outputRoot" }
 
