@@ -107,9 +107,20 @@ namespace PenguinRun
 
         public void Tick(float dt, float laneWidth, float laneLerp, ref string feedbackText, ref float feedbackTimer, float glideTimerSeconds, float groundY)
         {
+            Tick(dt, laneWidth, laneLerp, ref feedbackText, ref feedbackTimer,
+                glideTimerSeconds, groundY, ThemeMechanicModifiers.Identity);
+        }
+
+        public void Tick(float dt, float laneWidth, float laneLerp, ref string feedbackText,
+            ref float feedbackTimer, float glideTimerSeconds, float groundY,
+            in ThemeMechanicModifiers mechanic)
+        {
             var wasGrounded = Grounded;
 
-            velocityY -= tuning.gravity * (glideTimerSeconds > 0f && !Grounded ? powerUpTuning.glideGravityMultiplier : 1f) * dt;
+            velocityY -= tuning.gravity
+                * (glideTimerSeconds > 0f && !Grounded ? powerUpTuning.glideGravityMultiplier : 1f)
+                * mechanic.GravityMultiplier
+                * dt;
             PlayerY += velocityY * dt;
 
             Grounded = PlayerY <= groundY + tuning.groundEpsilon;
@@ -147,7 +158,10 @@ namespace PenguinRun
             var targetX = Lane.ToX(laneWidth);
             var pos = player.position;
             LaneLean01 = Mathf.Clamp((targetX - pos.x) / laneWidth, -1f, 1f);
-            pos.x = Mathf.Lerp(pos.x, targetX, Mathf.Clamp01(laneLerp * dt));
+            var response = laneLerp * mechanic.LaneResponseMultiplier;
+            pos.x = Mathf.Lerp(pos.x, targetX, Mathf.Clamp01(response * dt));
+            pos.x += mechanic.LaneDriftLanesPerSecond * laneWidth * dt;
+            pos.x = Mathf.Clamp(pos.x, -laneWidth, laneWidth);
             // 脚底在 PlayerY，身体中心在脚底上方；滑铲时身体降低
             pos.y = PlayerY + PlayerVisualCenterOffset - (SlideTimer > 0f ? 0.35f : 0f);
             player.position = pos;
@@ -187,4 +201,3 @@ namespace PenguinRun
         }
     }
 }
-

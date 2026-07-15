@@ -31,9 +31,11 @@ namespace PenguinRun.Editor
             ValidateDirectorExclusions(failures);
             ValidateMechanicLifecycle(failures);
             ValidateMechanicCancellation(failures);
+            ValidateIcePatterns(failures);
+            ValidateMechanicPool(failures);
 
             report = failures.Count == 0
-                ? "PASS: six definitions, 10,000 director beats, lifecycle, and six cleanup paths are valid."
+                ? "PASS: six definitions, 10,000 director beats, lifecycle, Ice patterns, and pool reset are valid."
                 : "FAIL:\n" + string.Join("\n", failures);
             return failures.Count == 0;
         }
@@ -398,6 +400,70 @@ namespace PenguinRun.Editor
                 && Mathf.Approximately(modifiers.GravityMultiplier, 1f)
                 && Mathf.Approximately(modifiers.GlideDurationMultiplier, 1f)
                 && Mathf.Approximately(modifiers.Visibility01, 1f);
+        }
+
+        private static void ValidateIcePatterns(List<string> failures)
+        {
+            var normal = ThemeMechanicPatternCatalog.For(ThemeMechanicId.IceInertia, false);
+            var signature = ThemeMechanicPatternCatalog.For(ThemeMechanicId.IceInertia, true);
+            if (normal.Length != 5 || signature.Length != 5)
+            {
+                failures.Add($"Ice patterns contain {normal.Length}/{signature.Length} beats; expected 5/5.");
+                return;
+            }
+
+            var cracked = 0;
+            var rebound = 0;
+            for (var index = 0; index < normal.Length; index++)
+            {
+                var beat = normal[index];
+                if (beat.ApparatusPath == "ice/cracked_plate") cracked++;
+                if (beat.ApparatusPath == "ice/crystal_rebound_gate") rebound++;
+            }
+            if (cracked != 3 || rebound != 2)
+            {
+                failures.Add($"Ice normal identity is {cracked} cracked/{rebound} rebound; expected 3/2.");
+            }
+        }
+
+        private static void ValidateMechanicPool(List<string> failures)
+        {
+            var sceneRoot = new GameObject("ThemeMechanicPoolValidation");
+            try
+            {
+                var spawner = new ThemeMechanicSpawner(sceneRoot.transform, 4f, 0f);
+                spawner.Begin(ThemeMechanicPatternCatalog.For(ThemeMechanicId.IceInertia, true), 0f);
+                spawner.Tick(10f, 0f);
+                if (spawner.ActiveCount != 5 || spawner.ActiveCount > ThemeMechanicSpawner.Capacity)
+                {
+                    failures.Add($"Ice signature activated {spawner.ActiveCount} pooled roots; expected 5.");
+                }
+                if (!spawner.CriticalAssetMissing)
+                {
+                    failures.Add("Missing Ice signature prefab was not reported as a critical asset failure.");
+                }
+
+                spawner.Clear();
+                spawner.Begin(ThemeMechanicPatternCatalog.For(ThemeMechanicId.IceInertia, false), 0f);
+                spawner.Tick(10f, 0f);
+                foreach (var child in sceneRoot.GetComponentsInChildren<Transform>(true))
+                {
+                    if (child.name.Contains("floe_bridge"))
+                    {
+                        failures.Add("Mechanic pool retained a floe bridge after normal-pattern reuse.");
+                        break;
+                    }
+                }
+                spawner.Clear();
+                if (spawner.ActiveCount != 0)
+                {
+                    failures.Add("Mechanic pool did not return to zero active roots.");
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(sceneRoot);
+            }
         }
     }
 }

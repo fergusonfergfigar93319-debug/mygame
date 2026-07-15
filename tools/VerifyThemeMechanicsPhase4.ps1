@@ -46,6 +46,14 @@ foreach ($name in 'ThemeMechanicRuntime','Begin','Tick','Cancel','RecordKeypoint
     Require $runtime "\b$name\b" $name
 }
 
+$patterns = Read-Required 'Assets/Scripts/Runtime/PenguinRun/ThemeMechanics/ThemeMechanicPatternCatalog.cs'
+$spawner = Read-Required 'Assets/Scripts/Runtime/PenguinRun/ThemeMechanics/ThemeMechanicSpawner.cs'
+Require $patterns '\bThemeMechanicPatternCatalog\b' 'theme mechanic pattern catalog'
+Require $patterns '\bIceNormal\b' 'Ice Lake normal pattern'
+Require $patterns '\bIceSignature\b' 'Ice Lake signature pattern'
+Require $spawner '\bThemeMechanicSpawner\b' 'bounded theme mechanic spawner'
+Require $spawner '\bCapacity\b' 'apparatus pool capacity'
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1

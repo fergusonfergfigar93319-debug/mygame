@@ -224,4 +224,30 @@ namespace PenguinRun
             ThemeMechanicIntensity.Low,
             false);
     }
+
+    internal readonly struct ThemeMechanicBeat
+    {
+        public ThemeMechanicBeat(
+            float seconds,
+            RunnerLane lane,
+            string apparatusPath,
+            bool requiresJump,
+            bool requiresSlide,
+            bool rewarding)
+        {
+            Seconds = Mathf.Max(0f, seconds);
+            Lane = lane;
+            ApparatusPath = apparatusPath ?? string.Empty;
+            RequiresJump = requiresJump;
+            RequiresSlide = requiresSlide;
+            Rewarding = rewarding;
+        }
+
+        public float Seconds { get; }
+        public RunnerLane Lane { get; }
+        public string ApparatusPath { get; }
+        public bool RequiresJump { get; }
+        public bool RequiresSlide { get; }
+        public bool Rewarding { get; }
+    }
 }

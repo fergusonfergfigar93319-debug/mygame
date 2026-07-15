@@ -55,6 +55,7 @@ namespace PenguinRun
         private bool slideGateTutorialPending;
         private GameObject routeEventRoot;
         private readonly List<GameObject> routeOutcomeRoots = new();
+        private readonly List<GameObject> mechanicObstacleRoots = new();
 
         private readonly GameObjectPool coinPool;
         private readonly GameObjectPool powerUpPool;
@@ -441,6 +442,7 @@ namespace PenguinRun
 
             obstacleYDelta.Clear();
             coinYDelta.Clear();
+            mechanicObstacleRoots.Clear();
         }
 
         private void TickRouteMarkers(float dt, float effectiveSpeed, float runDistance)
@@ -1252,6 +1254,38 @@ namespace PenguinRun
                     BuildHighObstacle(obstacle.transform, palette);
                 RegisterObstacle(obstacle, ObstacleColliderSpec.SmallJumpable, dy, ObstacleKind.StandardHigh);
             }
+        }
+
+        internal bool SpawnMechanicObstacle(string apparatusPath, RunnerLane lane, float z, float runDistance)
+        {
+            if (apparatusPath != "ice/cracked_plate")
+            {
+                return true;
+            }
+
+            var countBefore = obstacles.Count;
+            SpawnStandardObstacle(z, lane, false, waveDirector.CurrentPalette, runDistance);
+            if (obstacles.Count <= countBefore)
+            {
+                return false;
+            }
+
+            mechanicObstacleRoots.Add(obstacles[obstacles.Count - 1]);
+            return true;
+        }
+
+        internal void ClearMechanicVisuals()
+        {
+            for (var index = mechanicObstacleRoots.Count - 1; index >= 0; index--)
+            {
+                var root = mechanicObstacleRoots[index];
+                var obstacleIndex = obstacles.IndexOf(root);
+                if (obstacleIndex >= 0)
+                {
+                    DestroyObstacle(root, obstacleIndex);
+                }
+            }
+            mechanicObstacleRoots.Clear();
         }
 
         /// <summary>尝试用程序化 Mesh 构建障碍外观。返回 false 表示无匹配形状，应回退到 Primitive。</summary>
