@@ -8,6 +8,7 @@ namespace PenguinRun
 
         private readonly RunnerMapTheme theme;
         private readonly JourneyContractDefinition contract;
+        private readonly bool tutorialSeenBeforeRun;
 
         private int eventRequired;
         private int eventCompleted;
@@ -35,6 +36,7 @@ namespace PenguinRun
             bool tutorialSeenBeforeRun)
         {
             this.theme = theme;
+            this.tutorialSeenBeforeRun = tutorialSeenBeforeRun;
             tutorialSeen = tutorialSeenBeforeRun;
             contract = JourneyContractCatalog.Select(
                 mode,
@@ -73,6 +75,27 @@ namespace PenguinRun
             eventSignature = signature;
             showTutorial = !tutorialSeen;
             tutorialSeen = true;
+        }
+
+        public void Reset()
+        {
+            ResetEvent();
+            tutorialSeen = tutorialSeenBeforeRun;
+            eventsCompleted = 0;
+            perfectCount = 0;
+            flawlessCount = 0;
+            currentPerfectStreak = 0;
+            bestPerfectStreak = 0;
+            signatureCompleted = false;
+            flawlessSignatureCompleted = false;
+            contractProgress = 0;
+            resonance01 = 0f;
+            resonanceSecondsRemaining = 0f;
+        }
+
+        public void CancelEvent()
+        {
+            ResetEvent();
         }
 
         public void RecordKeypoint(bool perfect)

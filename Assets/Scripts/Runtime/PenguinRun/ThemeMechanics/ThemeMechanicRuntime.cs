@@ -15,6 +15,8 @@ namespace PenguinRun
         public ThemeMechanicCancelReason LastCancelReason { get; private set; }
         public int CompletedKeypoints { get; private set; }
         public int PerfectKeypoints { get; private set; }
+        public float PhaseElapsedSeconds => phaseTimer;
+        public ThemeMechanicRequest CurrentRequest => request;
 
         public bool Begin(ThemeMechanicRequest nextRequest)
         {

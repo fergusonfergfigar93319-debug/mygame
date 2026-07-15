@@ -73,6 +73,16 @@ foreach ($name in 'Mode','ThemeMechanicMode','RunSeed') {
     Require $sessionConfig "\b$name\b" "session config $name"
 }
 
+$controller = Read-Required 'Assets/Scripts/Runtime/PenguinRun/RunnerGameController.cs'
+$runResult = Read-Required 'Assets/Scripts/Runtime/PenguinRun/Systems/RunnerRunResult.cs'
+foreach ($name in 'mechanicDirector','mechanicRuntime','mechanicSpawner','themeMastery') {
+    Require $controller "\b$name\b" "controller integration $name"
+}
+Require $controller 'Cancel\(ThemeMechanicCancelReason\.Boss\)' 'Boss mechanic cancellation'
+Require $controller 'Cancel\(ThemeMechanicCancelReason\.RouteEvent\)' 'route mechanic cancellation'
+Require $controller 'Cancel\(ThemeMechanicCancelReason\.ThemeTransition\)' 'theme transition mechanic cancellation'
+Require $runResult '\bThemeMasteryRunSnapshot\b' 'mastery run result snapshot'
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1

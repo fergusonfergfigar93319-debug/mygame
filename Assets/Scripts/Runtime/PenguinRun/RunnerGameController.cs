@@ -34,6 +34,10 @@ namespace PenguinRun
         private readonly RouteEventDirector routeEventDirector;
         private readonly RunUpgradeState runUpgradeState;
         private readonly SkillScoreTracker skillScoreTracker = new();
+        private readonly MapMechanicDirector mechanicDirector;
+        private readonly ThemeMechanicRuntime mechanicRuntime;
+        private readonly ThemeMechanicSpawner mechanicSpawner;
+        private readonly ThemeMasteryTracker themeMastery;
         private readonly Transform sceneRoot;
         private readonly System.Action pulseHaptic;
         private readonly System.Action<Color, float> onScreenFlash;
@@ -54,6 +58,9 @@ namespace PenguinRun
         private EntrancePhase entrancePhase;
         private float entranceTimer;
         private int countdownNumber;
+        private int mechanicKeypointIndex;
+        private RunnerAction lastRunnerAction;
+        private float secondsSinceDamage = 99f;
 
         public RunnerGameController(
             RunnerTuning tuning,
@@ -82,6 +89,12 @@ namespace PenguinRun
             runUpgradeState = new RunUpgradeState(config.MapTheme, config.Daily, PlayerSave.TotalRuns);
             motor = new PlayerMotor(playerTransform, runnerAudio, tuning.movement, tuning.powerUp, tuning.combat);
             world = new WorldDirector(tuning.world, tuning.pickup);
+            mechanicDirector = new MapMechanicDirector(config.ThemeMechanicMode, config.RunSeed);
+            mechanicRuntime = new ThemeMechanicRuntime();
+            mechanicSpawner = new ThemeMechanicSpawner(
+                sceneRoot, tuning.movement.laneWidth, tuning.movement.groundY);
+            themeMastery = new ThemeMasteryTracker(
+                config.MapTheme, config.ThemeMechanicMode, config.RunSeed, false);
             pickups = new PickupSystem(tuning.pickup, tuning.powerUp, config, runUpgradeState);
             collisions = new CollisionSystem(runnerAudio, tuning.combat, runUpgradeState);
             bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth, tuning.combat);
@@ -134,6 +147,10 @@ namespace PenguinRun
 
         public SkillScoreSnapshot SkillScore => skillScoreTracker.Snapshot;
 
+        public ThemeMechanicSnapshot ThemeMechanic => mechanicRuntime.Snapshot;
+
+        public ThemeMasteryHudSnapshot ThemeMasteryHud => themeMastery.HudSnapshot;
+
         public RunnerAudio RunnerAudio => runnerAudio;
 
         public string FeedbackText { get => feedbackText; set => feedbackText = value; }
@@ -151,6 +168,15 @@ namespace PenguinRun
             routeEventDirector.Reset();
             runUpgradeState.Reset();
             skillScoreTracker.Reset();
+            themeMastery.Reset();
+            mechanicDirector.Reset();
+            mechanicRuntime.Cancel(ThemeMechanicCancelReason.ThemeTransition);
+            mechanicRuntime.Tick(0f);
+            mechanicSpawner.Clear();
+            spawner.ClearMechanicVisuals();
+            mechanicKeypointIndex = 0;
+            lastRunnerAction = RunnerAction.None;
+            secondsSinceDamage = 99f;
             collisions.Reset();
             stateMachine.ForceTransitionTo(start ? GameStateMachine.State.Running : GameStateMachine.State.Idle);
             finishRequested = false;
@@ -169,15 +195,7 @@ namespace PenguinRun
 
             if (start)
             {
-                if (config.Daily)
-                {
-                    var t = System.DateTime.UtcNow;
-                    Random.InitState(t.Year * 100000 + t.Month * 1000 + t.Day * 13 + 7);
-                }
-                else
-                {
-                    Random.InitState((int)(Time.realtimeSinceStartup * 1000f) ^ (int)(System.DateTime.UtcNow.Ticks % int.MaxValue));
-                }
+                Random.InitState(config.RunSeed);
             }
 
             spawner.SeedInitialObstacles(world.Distance);
@@ -320,7 +338,8 @@ namespace PenguinRun
                 routeEventDirector.CompletedCount, routeEventDirector.RiskyCompletedCount,
                 skill.TotalScore, skill.PeakChain, runUpgradeState.SelectedIds,
                 routeEventDirector.CompletedEventIds,
-                bossSystem.LastThemedRelicId);
+                bossSystem.LastThemedRelicId,
+                themeMastery.RunSnapshot);
             onFinish?.Invoke(result);
         }
 
@@ -421,6 +440,8 @@ namespace PenguinRun
             }
 
             skillScoreTracker.Tick(dt);
+            themeMastery.Tick(dt);
+            secondsSinceDamage += dt;
             var effectiveSpeed = world.Tick(dt);
             var groundY = TrackTerrain.SurfaceY(playerTransform.position.z, world.Distance, tuning.movement.groundY);
             if (action == RunnerAction.Dash)
@@ -430,13 +451,15 @@ namespace PenguinRun
             }
             var laneBeforeAction = motor.Lane;
             motor.ApplyAction(action, ref feedbackText, ref feedbackTimer, world.GlideTimer, groundY);
+            lastRunnerAction = action;
             if (motor.Lane != laneBeforeAction)
             {
                 AwardSkill(SkillAction.LaneChain, 35);
             }
             motor.Tick(dt, tuning.movement.laneWidth,
                 tuning.movement.laneLerp * runUpgradeState.LaneResponseMultiplier,
-                ref feedbackText, ref feedbackTimer, world.GlideTimer, groundY);
+                ref feedbackText, ref feedbackTimer, world.GlideTimer, groundY,
+                mechanicRuntime.Snapshot.Modifiers);
 
             feedbackTimer = Mathf.Max(0f, feedbackTimer - dt);
 
@@ -461,6 +484,25 @@ namespace PenguinRun
         public void TickRunningWorld(float dt, float effectiveSpeed)
         {
             if (world.Paused) return;
+            CancelMechanicForWorldAuthority();
+            var phaseBeforeTick = mechanicRuntime.Snapshot.Phase;
+            mechanicRuntime.Tick(dt);
+            if (phaseBeforeTick == ThemeMechanicPhase.Active
+                && mechanicRuntime.Snapshot.Phase == ThemeMechanicPhase.Resolve)
+            {
+                ResolveThemeMechanic();
+            }
+            if (mechanicRuntime.Snapshot.Phase == ThemeMechanicPhase.Active)
+            {
+                mechanicSpawner.Tick(mechanicRuntime.PhaseElapsedSeconds, world.Distance);
+                EvaluateMechanicKeypoints();
+                if (mechanicSpawner.CriticalAssetMissing)
+                {
+                    mechanicRuntime.Cancel(ThemeMechanicCancelReason.MissingCriticalAsset);
+                    mechanicSpawner.Clear();
+                    spawner.ClearMechanicVisuals();
+                }
+            }
             var routeCanStart =
                 stateMachine.Current == GameStateMachine.State.Running &&
                 !bossSystem.BossActive &&
@@ -478,9 +520,21 @@ namespace PenguinRun
                 }
             }
 
-            spawner.SpawnPaused = bossSystem.ShouldPauseSpawning || routeEventDirector.AwaitingChoice;
+            spawner.SpawnPaused = bossSystem.ShouldPauseSpawning
+                || routeEventDirector.AwaitingChoice
+                || (mechanicRuntime.CurrentRequest.Signature
+                    && mechanicRuntime.Snapshot.Phase == ThemeMechanicPhase.Active);
             spawner.Tick(dt, effectiveSpeed, world.Distance);
-            TickSegmentBanner(dt);
+            var mechanicBeat = TickSegmentBanner(dt, out var segmentKind);
+            if (mechanicBeat)
+            {
+                mechanicDirector.RecordBeat(
+                    segmentKind == SegmentPatternKind.HazardRhythm
+                        || segmentKind == SegmentPatternKind.EnemyAmbush,
+                    segmentKind == SegmentPatternKind.RewardRun
+                        || segmentKind == SegmentPatternKind.PowerUpTrial);
+                TryStartThemeMechanic();
+            }
 
             if (routeEventDirector.AwaitingChoice &&
                 spawner.TryConsumeRouteChoice(motor.Lane, out var choseRisk))
@@ -515,7 +569,8 @@ namespace PenguinRun
 
             pickups.CollectCoins(playerTransform, motor.PlayerY, !motor.Grounded,
                 () => AwardSkill(SkillAction.AirCollection, 60),
-                world, spawner.coins, ref feedbackText, ref feedbackTimer);
+                world, spawner.coins, ref feedbackText, ref feedbackTimer,
+                themeMastery.RecordFish);
             pickups.CollectPowerUps(playerTransform, world, spawner.powerUps, ref feedbackText, ref feedbackTimer);
 
             // ── Boss 战每帧逻辑 ─────────────────────────────────
@@ -590,6 +645,7 @@ namespace PenguinRun
                 }
                 else if (outcome.Kind == HitOutcomeKind.GameOver)
                 {
+                    RecordThemeDamage();
                     BreakSkillChain();
                     EmitRunFeedback(RunFeedbackKind.BossDeath);
                     EnterDeathSequence();
@@ -597,6 +653,7 @@ namespace PenguinRun
                 }
                 else if (outcome.Kind == HitOutcomeKind.Damage)
                 {
+                    RecordThemeDamage();
                     BreakSkillChain();
                     character.TriggerHurtFlash();
                     EventBus.Emit(GameEvents.PlayerHurt);
@@ -635,7 +692,8 @@ namespace PenguinRun
                     ref feedbackTimer,
                     pulseHaptic,
                     motor,
-                    HandlePerfectDodge);
+                    HandlePerfectDodge,
+                    RecordThemeDamage);
 
             if (world.Lives < livesBeforeCollision)
             {
@@ -691,6 +749,121 @@ namespace PenguinRun
             }
         }
 
+        private void CancelMechanicForWorldAuthority()
+        {
+            var activeBeforeCancel = mechanicRuntime.Snapshot.Phase != ThemeMechanicPhase.Idle
+                && mechanicRuntime.Snapshot.Phase != ThemeMechanicPhase.Cancelled;
+            if (bossSystem.BossActive)
+            {
+                mechanicRuntime.Cancel(ThemeMechanicCancelReason.Boss);
+            }
+            else if (routeEventDirector.AwaitingChoice)
+            {
+                mechanicRuntime.Cancel(ThemeMechanicCancelReason.RouteEvent);
+            }
+            else if (IsThemeTransition)
+            {
+                mechanicRuntime.Cancel(ThemeMechanicCancelReason.ThemeTransition);
+            }
+
+            if (activeBeforeCancel && mechanicRuntime.Snapshot.Phase == ThemeMechanicPhase.Cancelled)
+            {
+                themeMastery.CancelEvent();
+                mechanicSpawner.Clear();
+                spawner.ClearMechanicVisuals();
+                mechanicKeypointIndex = 0;
+            }
+        }
+
+        private void TryStartThemeMechanic()
+        {
+            if (mechanicRuntime.Snapshot.Phase != ThemeMechanicPhase.Idle)
+            {
+                return;
+            }
+
+            var context = new ThemeMechanicContext(
+                config.MapTheme,
+                config.ThemeMechanicMode,
+                world.Distance,
+                world.Lives,
+                secondsSinceDamage,
+                bossSystem.BossActive,
+                routeEventDirector.AwaitingChoice,
+                IsThemeTransition,
+                Mathf.Clamp01((int)config.Difficulty / 3f));
+            if (!mechanicDirector.TrySchedule(context, out var request))
+            {
+                return;
+            }
+
+            var pattern = ThemeMechanicPatternCatalog.For(request.Definition.Id, request.Signature);
+            if (pattern.Length == 0 || !mechanicRuntime.Begin(request))
+            {
+                return;
+            }
+
+            mechanicKeypointIndex = 0;
+            mechanicSpawner.Begin(pattern, world.Distance);
+            themeMastery.BeginEvent(pattern.Length, request.Signature);
+            for (var index = 0; index < pattern.Length; index++)
+            {
+                var beat = pattern[index];
+                spawner.SpawnMechanicObstacle(
+                    beat.ApparatusPath,
+                    beat.Lane,
+                    30f + beat.Seconds * 6f,
+                    world.Distance);
+            }
+        }
+
+        private void EvaluateMechanicKeypoints()
+        {
+            var request = mechanicRuntime.CurrentRequest;
+            var pattern = ThemeMechanicPatternCatalog.For(
+                request.Definition.Id, request.Signature);
+            while (mechanicKeypointIndex < pattern.Length
+                && pattern[mechanicKeypointIndex].Seconds <= mechanicRuntime.PhaseElapsedSeconds)
+            {
+                var beat = pattern[mechanicKeypointIndex];
+                var laneCorrect = motor.Lane == beat.Lane;
+                var actionCorrect = (!beat.RequiresJump || !motor.Grounded || lastRunnerAction == RunnerAction.Jump)
+                    && (!beat.RequiresSlide || motor.SlideTimer > 0f || lastRunnerAction == RunnerAction.Slide);
+                var perfect = laneCorrect && actionCorrect;
+                mechanicRuntime.RecordKeypoint(perfect);
+                themeMastery.RecordKeypoint(perfect);
+                if (perfect && beat.Rewarding)
+                {
+                    AwardSkill(SkillAction.NoHitSegment, 90);
+                }
+                mechanicKeypointIndex++;
+            }
+        }
+
+        private void ResolveThemeMechanic()
+        {
+            var grade = themeMastery.ResolveEvent(mechanicRuntime.CurrentRequest.Signature);
+            mechanicSpawner.Clear();
+            spawner.ClearMechanicVisuals();
+            mechanicKeypointIndex = 0;
+            if (grade != ThemeMechanicGrade.None)
+            {
+                feedbackText = grade switch
+                {
+                    ThemeMechanicGrade.Flawless => "环境应对 · 无伤",
+                    ThemeMechanicGrade.Perfect => "环境应对 · 完美",
+                    _ => "环境应对 · 完成",
+                };
+                feedbackTimer = 1.2f;
+            }
+        }
+
+        private void RecordThemeDamage()
+        {
+            secondsSinceDamage = 0f;
+            themeMastery.RecordDamage();
+        }
+
         public bool TryBuildUpgradeOffer(out RunUpgradeOffer offer)
         {
             if (!upgradeOfferPending)
@@ -720,10 +893,14 @@ namespace PenguinRun
         private float segmentBannerTimer;
         private SegmentPatternKind segmentBannerKind;
 
-        private void TickSegmentBanner(float dt)
+        private bool TickSegmentBanner(float dt, out SegmentPatternKind consumedKind)
         {
             segmentBannerTimer = Mathf.Max(0f, segmentBannerTimer - dt);
-            if (!spawner.TryConsumeSegmentBanner(out var kind)) return;
+            if (!spawner.TryConsumeSegmentBanner(out var kind))
+            {
+                consumedKind = default;
+                return false;
+            }
             if (segmentTrackingActive && !segmentDamaged)
             {
                 AwardSkill(SkillAction.NoHitSegment, 180);
@@ -735,6 +912,8 @@ namespace PenguinRun
             EmitRunFeedback(kind == SegmentPatternKind.HazardRhythm
                 ? RunFeedbackKind.SegmentHazard
                 : RunFeedbackKind.SegmentReward);
+            consumedKind = kind;
+            return true;
         }
 
         private void HandlePerfectDodge()
@@ -747,6 +926,7 @@ namespace PenguinRun
         private void AwardSkill(SkillAction action, int baseScore)
         {
             world.AddSkillScore(skillScoreTracker.Record(action, baseScore));
+            themeMastery.RecordSkill(skillScoreTracker.Snapshot.TotalScore, world.Distance);
         }
 
         private void BreakSkillChain()

@@ -32,7 +32,8 @@ namespace PenguinRun
             WorldDirector world,
             List<GameObject> coinObjs,
             ref string feedbackText,
-            ref float feedbackTimer)
+            ref float feedbackTimer,
+            System.Action<int> onFishCollected = null)
         {
             var px = player.position.x;
             var pz = player.position.z;
@@ -59,6 +60,7 @@ namespace PenguinRun
                 feedbackText = nextCombo >= 3 ? $"金币连击 x{nextCombo}" : "+1 金币";
                 feedbackTimer = 0.55f;
                 EventBus.Emit(GameEvents.CoinCollected, nextCombo);
+                onFishCollected?.Invoke(1);
                 if (playerAirborne && !airCollectionReported)
                 {
                     airCollectionReported = true;

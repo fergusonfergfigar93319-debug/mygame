@@ -37,7 +37,8 @@ namespace PenguinRun
             ref float feedbackTimer,
             System.Action pulseHaptic,
             PlayerMotor motor = null,
-            System.Action onPerfectDodge = null)
+            System.Action onPerfectDodge = null,
+            System.Action onPlayerDamaged = null)
         {
             if (world.HitInvulnerabilityTimer > 0f) return false;
 
@@ -99,6 +100,8 @@ namespace PenguinRun
 
                 var outcome = RunnerHitResolver.TryResolveObstacleDefense(world, spec, combat);
                 ApplyOutcome(outcome, world, spawner, obstacle, ref feedbackText, ref feedbackTimer, pulseHaptic);
+                if (outcome.Kind == HitOutcomeKind.Damage || outcome.Kind == HitOutcomeKind.GameOver)
+                    onPlayerDamaged?.Invoke();
                 if (outcome.Kind == HitOutcomeKind.GameOver) return true;
                 if (outcome.Kind != HitOutcomeKind.None) return false;
             }

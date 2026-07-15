@@ -11,7 +11,8 @@ namespace PenguinRun
             int skillScore = 0, int peakSkillChain = 0,
             IReadOnlyList<RunUpgradeId> selectedUpgradeIds = null,
             IReadOnlyList<string> completedRouteEventIds = null,
-            string themedRelicId = "")
+            string themedRelicId = "",
+            ThemeMasteryRunSnapshot themeMastery = default)
         {
             Score = score;
             DistanceMeters = distanceMeters;
@@ -33,6 +34,7 @@ namespace PenguinRun
                 : CopyStrings(completedRouteEventIds);
             CompletedRouteEventIds = Array.AsReadOnly(copiedRouteIds);
             ThemedRelicId = themedRelicId ?? string.Empty;
+            ThemeMastery = themeMastery;
         }
 
         public int Score { get; }
@@ -49,6 +51,7 @@ namespace PenguinRun
         public IReadOnlyList<RunUpgradeId> SelectedUpgradeIds { get; }
         public IReadOnlyList<string> CompletedRouteEventIds { get; }
         public string ThemedRelicId { get; }
+        public ThemeMasteryRunSnapshot ThemeMastery { get; }
 
         private static RunUpgradeId[] CopyIds(IReadOnlyList<RunUpgradeId> source)
         {
