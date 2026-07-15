@@ -12,9 +12,13 @@ namespace PenguinRun.Game.UI
         public readonly string BestComparison;
         public readonly string ReviewHint;
         public readonly string ProgressionPreview;
+        public readonly string ThemeMasteryTitle;
+        public readonly string ThemeMasteryBody;
+        public readonly string ContractBody;
 
         public JourneyResultViewModel(string headline, int score, int distanceMeters, int fish,
-            string bestComparison, string reviewHint, string progressionPreview)
+            string bestComparison, string reviewHint, string progressionPreview,
+            string themeMasteryTitle = "", string themeMasteryBody = "", string contractBody = "")
         {
             Headline = headline ?? string.Empty;
             Score = System.Math.Max(0, score);
@@ -23,6 +27,9 @@ namespace PenguinRun.Game.UI
             BestComparison = bestComparison ?? string.Empty;
             ReviewHint = reviewHint ?? string.Empty;
             ProgressionPreview = progressionPreview ?? string.Empty;
+            ThemeMasteryTitle = themeMasteryTitle ?? string.Empty;
+            ThemeMasteryBody = themeMasteryBody ?? string.Empty;
+            ContractBody = contractBody ?? string.Empty;
         }
 
         public static JourneyResultViewModel FromDeath(int score, int distanceMeters, int fish)
@@ -46,7 +53,12 @@ namespace PenguinRun.Game.UI
                 ? $"{growthSummary} · 加成：鱼干 +{result.BonusCoins} / 得分 +{result.BonusScore}"
                 : string.IsNullOrEmpty(growthSummary) ? "营地已记录本次旅程" : growthSummary;
             return new JourneyResultViewModel(result.NewBest ? "新纪录写入旅程册" : "旅程完成",
-                result.Score, result.DistanceMeters, result.Coins, comparison, review, progression);
+                result.Score, result.DistanceMeters, result.Coins, comparison, review, progression,
+                $"{ThemeLabel(result.ThemeMastery.Theme)}回响",
+                $"完美 {result.ThemeMastery.PerfectCount} · 无伤 {result.ThemeMastery.FlawlessCount}",
+                result.ThemeMastery.ContractCompleted
+                    ? $"旅途契约完成 · {ContractLabel(result.ThemeMastery.ContractKind)}"
+                    : $"旅途契约 · {ContractLabel(result.ThemeMastery.ContractKind)}");
         }
 
         private static string BuildRunDepthReview(RunOutcomeRouter.Result result)
@@ -99,6 +111,25 @@ namespace PenguinRun.Game.UI
             "relic_coral_rebound" => "回弹珊瑚",
             "relic_storm_draft" => "风暴羽片",
             _ => "主题遗物",
+        };
+
+        private static string ThemeLabel(RunnerMapTheme theme) => theme switch
+        {
+            RunnerMapTheme.CedarRuins => "雪松遗迹",
+            RunnerMapTheme.AuroraField => "极光原野",
+            RunnerMapTheme.MistDike => "雾堤",
+            RunnerMapTheme.OceanReef => "潮汐珊瑚",
+            RunnerMapTheme.SkyFlight => "风岛",
+            _ => "冰湖",
+        };
+
+        private static string ContractLabel(JourneyContractKind kind) => kind switch
+        {
+            JourneyContractKind.FlawlessEvents => "无伤穿越",
+            JourneyContractKind.ResonanceFish => "丰收回响",
+            JourneyContractKind.SignatureComplete => "地标征服",
+            JourneyContractKind.SkillBeforeDistance => "技巧冲刺",
+            _ => "连续回响",
         };
     }
 }

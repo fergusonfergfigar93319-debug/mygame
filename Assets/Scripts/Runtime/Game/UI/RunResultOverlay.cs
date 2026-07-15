@@ -256,6 +256,9 @@ namespace PenguinRun.Game.UI
             var hasBossSpeed = r.LastBossSpeedFishBonus > 0 || r.LastBossSpeedScoreBonus > 0;
             var sb = new System.Text.StringBuilder("\u2728  ");
             var parts = new System.Collections.Generic.List<string> { model.ProgressionPreview };
+            if (!string.IsNullOrWhiteSpace(model.ThemeMasteryBody))
+                parts.Add($"{model.ThemeMasteryTitle} · {model.ThemeMasteryBody}");
+            if (!string.IsNullOrWhiteSpace(model.ContractBody)) parts.Add(model.ContractBody);
             if (r.BonusCoins > 0) parts.Add($"鱼干 +{r.BonusCoins}");
             if (r.BonusScore > 0) parts.Add($"得分 +{r.BonusScore}");
             if (r.ConsumedDoubleFishTicket) parts.Add("双倍鱼干券");

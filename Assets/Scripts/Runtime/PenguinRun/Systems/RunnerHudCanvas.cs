@@ -38,6 +38,11 @@ namespace PenguinRun
         private readonly TextMeshProUGUI upgradeText;
         private readonly GameObject skillRoot;
         private readonly TextMeshProUGUI skillText;
+        private readonly GameObject mechanicRoot;
+        private readonly TextMeshProUGUI mechanicTitleText;
+        private readonly TextMeshProUGUI mechanicHintText;
+        private readonly Image resonanceFill;
+        private readonly TextMeshProUGUI contractSummaryText;
 
         private int cachedScore = int.MinValue;
         private int cachedDistance = int.MinValue;
@@ -49,6 +54,7 @@ namespace PenguinRun
         private bool bossMode;
         private int cachedUpgradeSelectionCount = -1;
         private int lastSkillTier = -1;
+        private int cachedContractProgress = -1;
 
         private RunnerHudCanvas(GameObject canvasObject, GameObject normalStatsRoot, GameObject bossRoot,
             GameObject pauseRoot, GameObject feedbackRoot, TextMeshProUGUI modeText,
@@ -58,7 +64,10 @@ namespace PenguinRun
             TextMeshProUGUI bossPatternText, TextMeshProUGUI bossHintText, Image bossHealthFill,
             GameObject routeRoot, TextMeshProUGUI routeTitleText, TextMeshProUGUI routeChoiceText,
             GameObject upgradeRoot, TextMeshProUGUI upgradeText,
-            GameObject skillRoot, TextMeshProUGUI skillText)
+            GameObject skillRoot, TextMeshProUGUI skillText,
+            GameObject mechanicRoot, TextMeshProUGUI mechanicTitleText,
+            TextMeshProUGUI mechanicHintText, Image resonanceFill,
+            TextMeshProUGUI contractSummaryText)
         {
             this.canvasObject = canvasObject;
             this.normalStatsRoot = normalStatsRoot;
@@ -84,6 +93,11 @@ namespace PenguinRun
             this.upgradeText = upgradeText;
             this.skillRoot = skillRoot;
             this.skillText = skillText;
+            this.mechanicRoot = mechanicRoot;
+            this.mechanicTitleText = mechanicTitleText;
+            this.mechanicHintText = mechanicHintText;
+            this.resonanceFill = resonanceFill;
+            this.contractSummaryText = contractSummaryText;
         }
 
         public static RunnerHudCanvas Create(RunnerSessionConfig config, Action onExit)
@@ -138,6 +152,22 @@ namespace PenguinRun
                 new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.52f), TextAlignmentOptions.Center);
             routeRoot.gameObject.SetActive(false);
 
+            var mechanicRoot = CreateHudCard("MechanicBanner", root,
+                new Vector2(0.28f, 0.76f), new Vector2(0.72f, 0.88f));
+            var mechanicTitle = CreateHudText("MechanicTitle", mechanicRoot, string.Empty,
+                UiTheme.Caption, UiTheme.AccentCyan,
+                new Vector2(0.04f, 0.5f), new Vector2(0.96f, 0.94f), TextAlignmentOptions.Center);
+            var mechanicHint = CreateHudText("MechanicHint", mechanicRoot, string.Empty,
+                UiTheme.Micro, UiTheme.TextSecondary,
+                new Vector2(0.04f, 0.06f), new Vector2(0.96f, 0.5f), TextAlignmentOptions.Center);
+            mechanicRoot.gameObject.SetActive(false);
+
+            var resonanceTrack = UiBuilder.CreateProgressFill("Resonance", root,
+                new Color(1f, 1f, 1f, 0.12f), UiTheme.AccentCyan, out var resonanceFill);
+            resonanceFill.gameObject.name = "ResonanceFill";
+            Place(resonanceTrack.rectTransform,
+                new Vector2(0.36f, 0.185f), new Vector2(0.64f, 0.198f));
+
             var exit = UiBuilder.CreateButton("Exit", root, "返回营地", new Color(0.05f, 0.10f, 0.16f, 0.76f),
                 Color.white, UiTheme.Caption, rounded: true);
             Place((RectTransform)exit.transform, new Vector2(0.445f, 0.91f), new Vector2(0.555f, 0.975f));
@@ -161,11 +191,14 @@ namespace PenguinRun
             Place(healthTrack.rectTransform, new Vector2(0.04f, 0.49f), new Vector2(0.96f, 0.59f));
             bossRoot.gameObject.SetActive(false);
 
-            var pauseRoot = UiBuilder.CreateRect("Paused", root, new Vector2(0.39f, 0.44f),
-                new Vector2(0.61f, 0.57f), Vector2.zero, Vector2.zero,
+            var pauseRoot = UiBuilder.CreateRect("Paused", root, new Vector2(0.34f, 0.40f),
+                new Vector2(0.66f, 0.60f), Vector2.zero, Vector2.zero,
                 new Color(0.03f, 0.08f, 0.12f, 0.88f), rounded: true);
             CreateHudText("PausedText", pauseRoot, "已暂停", UiTheme.H2, Color.white,
-                Vector2.zero, Vector2.one, TextAlignmentOptions.Center);
+                new Vector2(0.04f, 0.52f), new Vector2(0.96f, 0.96f), TextAlignmentOptions.Center);
+            var contractSummary = CreateHudText("ContractSummary", pauseRoot, string.Empty,
+                UiTheme.Micro, UiTheme.PaperWarm,
+                new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.48f), TextAlignmentOptions.Center);
             pauseRoot.gameObject.SetActive(false);
 
             var hud = new RunnerHudCanvas(canvasObject, normal.gameObject, bossRoot.gameObject,
@@ -173,14 +206,21 @@ namespace PenguinRun
                 fish, lives, buffs, feedback, bossName, pattern, hint, healthFill,
                 routeRoot.gameObject, routeTitle, routeChoice,
                 upgradeRoot.gameObject, upgradeText,
-                skillRoot.gameObject, skillText);
+                skillRoot.gameObject, skillText,
+                mechanicRoot.gameObject, mechanicTitle, mechanicHint, resonanceFill,
+                contractSummary);
             hud.BindStatic(config);
             return hud;
         }
 
         public void BindStatic(RunnerSessionConfig config)
         {
-            modeText.text = config.Daily ? "每日挑战" : "极夜快跑";
+            modeText.text = config.Mode switch
+            {
+                RunnerRunMode.Story => "章节旅程",
+                RunnerRunMode.Daily => "每日挑战",
+                _ => "极夜快跑",
+            };
         }
 
         public void RefreshDynamic(WorldDirector world, int score, string feedback, float feedbackTimer)
@@ -289,12 +329,34 @@ namespace PenguinRun
             skillText.fontSize = tierChanged || expiring ? UiTheme.Body : UiTheme.Caption;
         }
 
+        public void SetThemeMechanic(ThemeMechanicSnapshot snapshot)
+        {
+            var visible = !bossMode && snapshot.Visible
+                && (snapshot.Phase == ThemeMechanicPhase.Telegraph
+                    || snapshot.Phase == ThemeMechanicPhase.Active
+                    || snapshot.Phase == ThemeMechanicPhase.Reward);
+            mechanicRoot.SetActive(visible);
+            if (!visible) return;
+            mechanicTitleText.text = snapshot.Title;
+            mechanicHintText.text = snapshot.Hint;
+        }
+
+        public void SetThemeMastery(ThemeMasteryHudSnapshot snapshot)
+        {
+            UiBuilder.SetProgress01(resonanceFill, snapshot.Resonance01);
+            var progress = snapshot.Contract.Progress;
+            if (progress == cachedContractProgress) return;
+            cachedContractProgress = progress;
+            contractSummaryText.text = $"旅途契约 · {snapshot.Contract.Title}  {progress}/{snapshot.Contract.Target}";
+        }
+
         public void SetBossMode(BossSystem boss)
         {
             var active = boss != null && boss.BossActive && boss.CurrentBoss != null;
             bossMode = active;
             bossRoot.SetActive(active);
             normalStatsRoot.SetActive(!active);
+            if (active) mechanicRoot.SetActive(false);
             if (!active) return;
 
             bossNameText.text = boss.CurrentBoss.Definition.DisplayName;

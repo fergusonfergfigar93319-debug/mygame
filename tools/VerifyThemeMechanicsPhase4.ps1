@@ -91,6 +91,11 @@ if ($null -ne $masteryStore -and $masteryStore -match 'PlayerSave\.Flush') {
     $failures.Add('ThemeMasteryStore must not flush outside the growth transaction.')
 }
 
+$hud = Read-Required 'Assets/Scripts/Runtime/PenguinRun/Systems/RunnerHudCanvas.cs'
+foreach ($name in 'MechanicBanner','ResonanceFill','ContractSummary','SetThemeMechanic','SetThemeMastery') {
+    Require $hud "\b$name\b" "theme HUD $name"
+}
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1
