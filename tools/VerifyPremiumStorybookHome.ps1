@@ -1,0 +1,46 @@
+param([string]$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path)
+$ErrorActionPreference = 'Stop'
+$failures = [System.Collections.Generic.List[string]]::new()
+
+function Read-Required([string]$relativePath) {
+    $path = Join-Path $ProjectRoot $relativePath
+    if (-not (Test-Path -LiteralPath $path)) {
+        $failures.Add("Missing required file: $relativePath")
+        return $null
+    }
+    Get-Content -Raw -Encoding utf8 -LiteralPath $path
+}
+
+function Require([string]$content, [string]$pattern, [string]$description) {
+    if ($null -eq $content -or $content -notmatch $pattern) {
+        $failures.Add("Missing contract: $description")
+    }
+}
+
+$model = Read-Required 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyViewModel.cs'
+foreach ($field in 'PlayerLevel','RareResource','SeasonLabel','JournalRewardLabel','NextChapterTitle','NextChapterBody','DifficultyLabel','RouteRewardLabel') {
+    Require $model "\b$field\b" "LobbyViewModel.$field"
+}
+
+foreach ($component in 'LobbyTopRibbon','LobbyJournalPage','LobbyChapterPage','LobbyCampScene','CampVisualAssetCatalog') {
+    $text = Read-Required "Assets/Scripts/Runtime/Game/UI/Lobby/$component.cs"
+    Require $text "(class|struct)\s+$component" "premium home component $component"
+}
+
+$campScene = Read-Required 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyCampScene.cs'
+foreach ($method in 'Bind','SetInputEnabled','SetPanelOpen') {
+    Require $campScene "\b$method\s*\(" "LobbyCampScene.$method"
+}
+
+$mainMenu = Read-Required 'Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs'
+foreach ($call in 'LobbyTopRibbon\.Build\(','LobbyJournalPage\.Build\(','LobbyChapterPage\.Build\(','LobbyCampScene\.Build\(') {
+    Require $mainMenu $call "MainMenuBootstrap delegates $call"
+}
+if ($mainMenu -match 'LobbyStoryCard\.Build\(') { $failures.Add('Legacy combined LobbyStoryCard is still constructed.') }
+if ($mainMenu -match 'LobbyCompanionCorner\.Build\(') { $failures.Add('Legacy companion card is still constructed.') }
+
+if ($failures.Count -gt 0) {
+    $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
+    exit 1
+}
+Write-Output 'Premium storybook home static contracts passed.'
