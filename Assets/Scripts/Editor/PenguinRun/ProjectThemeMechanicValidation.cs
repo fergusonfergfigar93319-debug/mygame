@@ -33,9 +33,12 @@ namespace PenguinRun.Editor
             ValidateMechanicCancellation(failures);
             ValidateIcePatterns(failures);
             ValidateMechanicPool(failures);
+            ValidateMasteryGrades(failures);
+            ValidateResonance(failures);
+            ValidateJourneyContracts(failures);
 
             report = failures.Count == 0
-                ? "PASS: six definitions, 10,000 director beats, lifecycle, Ice patterns, and pool reset are valid."
+                ? "PASS: six definitions, 10,000 director beats, lifecycle, Ice pool, five contracts, and resonance are valid."
                 : "FAIL:\n" + string.Join("\n", failures);
             return failures.Count == 0;
         }
@@ -464,6 +467,114 @@ namespace PenguinRun.Editor
             {
                 Object.DestroyImmediate(sceneRoot);
             }
+        }
+
+        private static void ValidateMasteryGrades(List<string> failures)
+        {
+            var completed = NewMastery(11);
+            completed.BeginEvent(3, false);
+            completed.RecordKeypoint(false);
+            completed.RecordKeypoint(false);
+            completed.RecordKeypoint(false);
+            if (completed.ResolveEvent(false) != ThemeMechanicGrade.Completed)
+            {
+                failures.Add("Three completed keypoints did not grade Completed.");
+            }
+
+            var perfect = NewMastery(12);
+            perfect.BeginEvent(3, false);
+            perfect.RecordKeypoint(true);
+            perfect.RecordKeypoint(true);
+            perfect.RecordKeypoint(true);
+            perfect.RecordDamage();
+            if (perfect.ResolveEvent(false) != ThemeMechanicGrade.Perfect)
+            {
+                failures.Add("All-perfect damaged event did not grade Perfect.");
+            }
+
+            var flawless = NewMastery(13);
+            flawless.BeginEvent(3, true);
+            flawless.RecordKeypoint(true);
+            flawless.RecordKeypoint(true);
+            flawless.RecordKeypoint(true);
+            if (flawless.ResolveEvent(true) != ThemeMechanicGrade.Flawless
+                || !flawless.RunSnapshot.FlawlessSignatureCompleted)
+            {
+                failures.Add("All-perfect undamaged signature did not grade Flawless.");
+            }
+        }
+
+        private static void ValidateResonance(List<string> failures)
+        {
+            var tracker = NewMastery(21);
+            CompleteFlawlessEvent(tracker, false);
+            var beforeDamage = tracker.Resonance01;
+            tracker.BeginEvent(1, false);
+            tracker.RecordDamage();
+            if (!Mathf.Approximately(beforeDamage - tracker.Resonance01, 0.35f))
+            {
+                failures.Add("Damage did not remove exactly 35 resonance points.");
+            }
+
+            CompleteFlawlessEvent(tracker, false);
+            CompleteFlawlessEvent(tracker, false);
+            if (!tracker.IsResonating || !Mathf.Approximately(tracker.ResonanceSecondsRemaining, 8f))
+            {
+                failures.Add("Full resonance did not activate for exactly eight seconds.");
+                return;
+            }
+            tracker.Tick(7.99f);
+            if (!tracker.IsResonating)
+            {
+                failures.Add("Resonance ended before eight seconds.");
+            }
+            tracker.Tick(0.02f);
+            if (tracker.IsResonating || tracker.Resonance01 > 0f)
+            {
+                failures.Add("Resonance did not clear after eight seconds.");
+            }
+        }
+
+        private static void ValidateJourneyContracts(List<string> failures)
+        {
+            if (JourneyContractCatalog.Definitions.Length != 5)
+            {
+                failures.Add($"Journey contract catalog contains {JourneyContractCatalog.Definitions.Length}; expected 5.");
+            }
+
+            var first = NewMastery(20260716);
+            var second = NewMastery(20260716);
+            if (first.RunSnapshot.ContractKind != second.RunSnapshot.ContractKind)
+            {
+                failures.Add("Same seed/theme/mode selected different journey contracts.");
+            }
+
+            var tutorial = new ThemeMasteryTracker(
+                RunnerMapTheme.IceLakeEcho,
+                ThemeMechanicMode.Story,
+                99,
+                false);
+            tutorial.BeginEvent(1, false);
+            if (!tutorial.HudSnapshot.ShowTutorial || !tutorial.RunSnapshot.TutorialSeen)
+            {
+                failures.Add("First theme event did not expose its one-time tutorial state.");
+            }
+        }
+
+        private static ThemeMasteryTracker NewMastery(int seed)
+        {
+            return new ThemeMasteryTracker(
+                RunnerMapTheme.IceLakeEcho,
+                ThemeMechanicMode.Daily,
+                seed,
+                true);
+        }
+
+        private static void CompleteFlawlessEvent(ThemeMasteryTracker tracker, bool signature)
+        {
+            tracker.BeginEvent(1, signature);
+            tracker.RecordKeypoint(true);
+            tracker.ResolveEvent(signature);
         }
     }
 }

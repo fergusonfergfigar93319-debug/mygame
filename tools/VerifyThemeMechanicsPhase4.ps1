@@ -54,6 +54,16 @@ Require $patterns '\bIceSignature\b' 'Ice Lake signature pattern'
 Require $spawner '\bThemeMechanicSpawner\b' 'bounded theme mechanic spawner'
 Require $spawner '\bCapacity\b' 'apparatus pool capacity'
 
+$mastery = Read-Required 'Assets/Scripts/Runtime/PenguinRun/ThemeMechanics/ThemeMasteryTracker.cs'
+$contracts = Read-Required 'Assets/Scripts/Runtime/PenguinRun/ThemeMechanics/JourneyContractCatalog.cs'
+foreach ($name in 'ThemeMasteryTracker','RecordKeypoint','RecordDamage','ResolveEvent','Resonance01','RunSnapshot') {
+    Require $mastery "\b$name\b" $name
+}
+Require $contracts '\bJourneyContractCatalog\b' 'journey contract catalog'
+foreach ($kind in 'PerfectStreak','FlawlessEvents','ResonanceFish','SignatureComplete','SkillBeforeDistance') {
+    Require $contracts "JourneyContractKind\.$kind" "journey contract $kind"
+}
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1
