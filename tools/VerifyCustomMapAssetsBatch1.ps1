@@ -46,7 +46,13 @@ Require $prefabBuilder 'Build Batch One Prefabs' 'batch-one prefab builder menu'
 Require $prefabBuilder '\bLODGroup\b' 'batch-one prefab LOD construction'
 $assetValidation = Read-Required 'Assets/Scripts/Editor/PenguinRun/ProjectVisualAssetValidation.cs'
 Require $assetValidation '\bRunNow\s*\(' 'custom visual validation entry point'
+Require $assetValidation 'ValidateFromCommandLine\s*\(' 'non-mutating command-line validation entry point'
 Require $assetValidation 'Validate Batch One' 'custom visual validation menu'
+Require $assetValidation 'ValidateMissingFallback\s*\(' 'missing custom visual fallback regression'
+Require $assetValidation 'ValidatePoolReset\s*\(' 'pooled pickup custom visual reset regression'
+$previewCapture = Read-Required 'Assets/Scripts/Editor/PenguinRun/ProjectVisualPreviewCapture.cs'
+Require $previewCapture 'CaptureAllFromCommandLine\s*\(' 'preview capture command-line entry point'
+Require $previewCapture 'HasVisibleContent\s*\(' 'blank preview rejection'
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }

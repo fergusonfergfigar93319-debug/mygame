@@ -36,6 +36,11 @@ namespace PenguinRun
             }
         }
 
+#if UNITY_EDITOR
+        public bool TryAttachForValidation(Transform root, RunnerVisualDescriptor descriptor) =>
+            TryAttach(root, descriptor);
+#endif
+
         private bool TryAttach(Transform root, RunnerVisualDescriptor descriptor)
         {
             if (root == null || descriptor.IsEmpty) return false;
