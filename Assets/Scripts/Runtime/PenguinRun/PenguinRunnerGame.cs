@@ -23,6 +23,7 @@ namespace PenguinRun
         private readonly Dictionary<string, Texture2D> textureCache = new();
         private readonly Dictionary<string, GameObject> modelPrefabCache = new();
         private readonly RunnerVisualFactory visualFactory = new();
+        private readonly RunSettlementGate settlementGate = new();
 
         private RunnerSessionConfig config;
         private GameObject player;
@@ -139,6 +140,14 @@ namespace PenguinRun
         {
             if (exiting) return;
             exiting = true;
+            TrySettleCurrentAttempt(result, true);
+            SceneTransitionManager.Instance.TransitionTo("MainMenu");
+        }
+
+        private RunOutcomeRouter.Result TrySettleCurrentAttempt(RunnerRunResult result,
+            bool publishAsLastResult)
+        {
+            if (!settlementGate.TryBeginSettlement()) return null;
             var applied = RunOutcomeRouter.Apply(
                 result.Score, result.DistanceMeters, result.Coins, result.SurvivalSeconds, config.Daily,
                 config.Difficulty,
@@ -147,8 +156,8 @@ namespace PenguinRun
                 result.SkillScore, result.PeakSkillChain,
                 result.SelectedUpgradeIds, result.CompletedRouteEventIds, result.ThemedRelicId,
                 result.ThemeMastery);
-            RunSession.LastResult = applied;
-            SceneTransitionManager.Instance.TransitionTo("MainMenu");
+            if (publishAsLastResult) RunSession.LastResult = applied;
+            return applied;
         }
 
         private void OnDestroy()
@@ -405,10 +414,12 @@ namespace PenguinRun
 
         private void RestartRunFromDeathOverlay()
         {
+            TrySettleCurrentAttempt(game.CaptureResult(), false);
             deathOverlay = null;
             deathState = DeathState.None;
             deathStateTimer = 0f;
             game.ResetRun(true);
+            settlementGate.ResetForNextAttempt();
             lastLives = game.World.Lives;
             lastCoinCount = game.World.Coins;
             lastPerfectDodges = game.World.PerfectDodges;

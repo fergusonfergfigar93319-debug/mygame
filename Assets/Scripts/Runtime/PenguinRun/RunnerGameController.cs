@@ -327,22 +327,26 @@ namespace PenguinRun
             stateMachine.TransitionTo(GameStateMachine.State.GameOver);
         }
 
-        /// <summary>结束本局并把结果回调给 PenguinRunnerGame（再由它走 RunOutcomeRouter + 场景切换）。</summary>
-        public void FinishRun()
+        public RunnerRunResult CaptureResult()
         {
-            if (finishRequested) return;
-            finishRequested = true;
-            stateMachine.ForceTransitionTo(GameStateMachine.State.Finished);
             var dist = Mathf.Max(0, Mathf.RoundToInt(world.Distance));
             var skill = skillScoreTracker.Snapshot;
-            var result = new RunnerRunResult(world.Score, dist, world.Coins, world.RunTime,
+            return new RunnerRunResult(world.Score, dist, world.Coins, world.RunTime,
                 world.LastBossSpeedTier, world.LastBossSpeedFishBonus, world.LastBossSpeedScoreBonus,
                 routeEventDirector.CompletedCount, routeEventDirector.RiskyCompletedCount,
                 skill.TotalScore, skill.PeakChain, runUpgradeState.SelectedIds,
                 routeEventDirector.CompletedEventIds,
                 bossSystem.LastThemedRelicId,
                 themeMastery.RunSnapshot);
-            onFinish?.Invoke(result);
+        }
+
+        /// <summary>结束本局并把结果回调给 PenguinRunnerGame（再由它走 RunOutcomeRouter + 场景切换）。</summary>
+        public void FinishRun()
+        {
+            if (finishRequested) return;
+            finishRequested = true;
+            stateMachine.ForceTransitionTo(GameStateMachine.State.Finished);
+            onFinish?.Invoke(CaptureResult());
         }
 
         public bool SetPaused(bool paused, bool playFeedback = true)

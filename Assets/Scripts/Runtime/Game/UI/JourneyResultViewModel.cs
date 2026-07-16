@@ -39,7 +39,7 @@ namespace PenguinRun.Game.UI
                 : "第一段旅程已经写下";
             return new JourneyResultViewModel("旅程暂告一段落", score, distanceMeters, fish,
                 comparison, RunnerDeathOverlay.GetDeathAnalysisHint(distanceMeters),
-                "返回营地后可查看任务、伙伴与图鉴推进");
+                "本次旅程已记录；再来一局会开始新的尝试");
         }
 
         public static JourneyResultViewModel FromRunResult(RunOutcomeRouter.Result result)

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using PenguinRun.Game;
+using PenguinRun.Game.UI;
 using PenguinRun.Game.UI.Lobby;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -22,6 +23,8 @@ namespace PenguinRun.Editor
             ValidateModalStack(failures);
             ValidateHudActions(failures);
             ValidateResponsiveGestures(failures);
+            ValidateSettlementGate(failures);
+            ValidateDeathRetryCopy(failures);
             ValidateSourceContracts(failures);
             ValidateAuditReportContract(failures);
 
@@ -32,6 +35,25 @@ namespace PenguinRun.Editor
             }
 
             Debug.Log("[ProjectPlayerExperienceValidation] PASS: journey experience contracts are covered.");
+        }
+
+        private static void ValidateDeathRetryCopy(List<string> failures)
+        {
+            var model = JourneyResultViewModel.FromDeath(1200, 240, 12);
+            Expect(model.ProgressionPreview.Contains("已记录", StringComparison.Ordinal),
+                "death overlay must explain that the completed attempt is recorded before retry", failures);
+        }
+
+        private static void ValidateSettlementGate(List<string> failures)
+        {
+            var gate = new RunSettlementGate();
+            Expect(gate.TryBeginSettlement(), "first settlement must begin", failures);
+            Expect(gate.IsSettled, "settlement gate must expose settled state", failures);
+            Expect(!gate.TryBeginSettlement(), "duplicate settlement must be rejected", failures);
+            gate.ResetForNextAttempt();
+            Expect(!gate.IsSettled, "retry reset must clear settlement state", failures);
+            Expect(gate.TryBeginSettlement(), "retry attempt must settle once", failures);
+            Expect(!gate.TryBeginSettlement(), "retry duplicate settlement must be rejected", failures);
         }
 
         private static void ValidateResponsiveGestures(List<string> failures)
@@ -164,6 +186,8 @@ namespace PenguinRun.Editor
         {
             RequireSource("Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs",
                 "TrySettleCurrentAttempt", "runner must centralize settlement", failures);
+            RequireSource("Assets/Scripts/Runtime/PenguinRun/RunnerGameController.cs",
+                "CaptureResult", "controller must expose side-effect-free result capture", failures);
             RequireSource("Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs",
                 "ResetPresentationForRetry", "retry must reset presentation state", failures);
             ForbidSource("Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs",
