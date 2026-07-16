@@ -1,7 +1,9 @@
 # Player Experience Audit
 
-Audit date: 2026-07-16  
-Primary target: Android landscape, including 16:9 and 20:9 devices  
+Audit date: 2026-07-16
+
+Primary target: Android landscape, including 16:9 and 20:9 devices
+
 Journey: startup/home -> mode and difficulty -> first run -> mechanics/Boss -> pause/interruption -> death/result -> growth return
 
 ## Issue register
@@ -27,4 +29,3 @@ Journey: startup/home -> mode and difficulty -> first run -> mechanics/Boss -> p
 ## Final evidence
 
 To be completed after implementation: static gates, Unity validators, journey screenshots, soak result, APK path/hash/signature, and any deferred P2/P3 risks.
-

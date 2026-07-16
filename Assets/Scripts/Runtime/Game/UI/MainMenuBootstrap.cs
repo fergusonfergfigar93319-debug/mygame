@@ -51,6 +51,8 @@ namespace PenguinRun.Game.UI
         private LobbyChapterPage lobbyChapterPage;
         private LobbyCampScene lobbyCampScene;
         private LobbyDock lobbyDock;
+        private readonly LobbyModalStack modalStack = new();
+        private readonly RunLaunchGate runLaunchGate = new();
         private RectTransform dockWrap;
         private RectTransform versionLabel;
 
@@ -165,6 +167,7 @@ namespace PenguinRun.Game.UI
 
             var overlay = UiBuilder.CreatePanel("FirstLoginOverlay", canvas.transform,
                 new Color(0f, 0f, 0f, 0.65f));
+            modalStack.Register(overlay);
             overlay.transform.SetAsLastSibling();
 
             var card = UiBuilder.CreateRect("WelcomeCard", overlay.transform,
@@ -229,7 +232,7 @@ namespace PenguinRun.Game.UI
             UiBuilder.AddShadow(checkInBtn.gameObject, new Color(0f, 0f, 0f, 0.4f), new Vector2(0f, -4f));
             checkInBtn.onClick.AddListener(() =>
             {
-                Destroy(overlay);
+                DismissLobbyModal(overlay);
                 OnCheckInClicked();
             });
 
@@ -243,7 +246,7 @@ namespace PenguinRun.Game.UI
             srtt.sizeDelta = new Vector2(260f, 48f);
             srtt.anchoredPosition = new Vector2(0f, -2f);
             UiBuilder.AddOutline(skipBtn.gameObject, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
-            skipBtn.onClick.AddListener(() => Destroy(overlay));
+            skipBtn.onClick.AddListener(() => DismissLobbyModal(overlay));
         }
 
         private void OnEnable()
@@ -255,6 +258,10 @@ namespace PenguinRun.Game.UI
         {
             if (Input.GetKeyDown(KeyCode.Escape))
             {
+                if (modalStack.TryDismissTop())
+                {
+                    return;
+                }
                 if (panelRouter != null && panelRouter.HasOpenPanel)
                 {
                     ClosePanel();
@@ -1055,6 +1062,7 @@ namespace PenguinRun.Game.UI
             var streak = PlayerSave.LoginStreak;
             var overlay = UiBuilder.CreatePanel("CheckInOverlay", canvas.transform,
                 new Color(0f, 0f, 0f, 0.72f));
+            modalStack.Register(overlay);
             overlay.transform.SetAsLastSibling();
 
             // 居中卡片
@@ -1140,7 +1148,7 @@ namespace PenguinRun.Game.UI
             obrt.anchoredPosition = new Vector2(0f, 36f);
             UiBuilder.AddOutline(okBtn.gameObject, new Color(0.5f, 0.35f, 0.08f, 0.7f), new Vector2(2f, -2f));
             UiBuilder.AddShadow(okBtn.gameObject, new Color(0f, 0f, 0f, 0.45f), new Vector2(0f, -5f));
-            okBtn.onClick.AddListener(() => Destroy(overlay));
+            okBtn.onClick.AddListener(() => DismissLobbyModal(overlay));
         }
 
         private void UpdateDockBadges()
@@ -1221,12 +1229,16 @@ namespace PenguinRun.Game.UI
         private void ShowDifficultyOverlay(DifficultyOverlayMode mode)
         {
             difficultyOverlayMode = mode;
-            if (difficultyOverlay != null) Destroy(difficultyOverlay);
+            if (difficultyOverlay != null) DismissLobbyModal(difficultyOverlay);
 
             // 半透明遮罩
             var overlay = UiBuilder.CreatePanel("DifficultyOverlay", canvas.transform,
                 new Color(0f, 0f, 0f, 0.72f));
             difficultyOverlay = overlay;
+            modalStack.Register(overlay, () =>
+            {
+                if (difficultyOverlay == overlay) difficultyOverlay = null;
+            });
             overlay.transform.SetAsLastSibling();
 
             // 居中卡片
@@ -1388,8 +1400,7 @@ namespace PenguinRun.Game.UI
             UiBuilder.AddOutline(cancelBtn.gameObject, UiBuilder.BorderDefault, new Vector2(1f, -1f));
             cancelBtn.onClick.AddListener(() =>
             {
-                Destroy(difficultyOverlay);
-                difficultyOverlay = null;
+                DismissLobbyModal(difficultyOverlay);
             });
 
             var confirmLabel = mode == DifficultyOverlayMode.SettingsOnly ? "确认" : "开始挑战";
@@ -1407,14 +1418,18 @@ namespace PenguinRun.Game.UI
             if (startLabel2 != null) startLabel2.supportRichText = false;
             startFinalBtn.onClick.AddListener(() =>
             {
+                var startsRun = mode != DifficultyOverlayMode.SettingsOnly;
+                if (startsRun && !runLaunchGate.TryBegin()) return;
+                startFinalBtn.interactable = false;
                 PlayerSave.SelectedDifficulty = pendingDifficulty;
                 PlayerSave.Flush();
-                Destroy(difficultyOverlay);
-                difficultyOverlay = null;
-                RefreshHeader();
 
                 if (mode == DifficultyOverlayMode.SettingsOnly)
+                {
+                    DismissLobbyModal(difficultyOverlay);
+                    RefreshHeader();
                     return;
+                }
 
                 if (mode == DifficultyOverlayMode.BeforeDailyRun)
                 {
@@ -1423,6 +1438,8 @@ namespace PenguinRun.Game.UI
                             pendingDifficulty,
                             out var error))
                     {
+                        runLaunchGate.Reset();
+                        startFinalBtn.interactable = true;
                         OnPanelEvent(PanelEvent.Toast, error);
                         return;
                     }
@@ -1431,8 +1448,17 @@ namespace PenguinRun.Game.UI
                     RunSession.PrepareStoryRun(RunSession.NextRunTheme, pendingDifficulty);
                 else
                     RunSession.PrepareEndlessRun(difficulty: pendingDifficulty);
+                DismissLobbyModal(difficultyOverlay);
+                RefreshHeader();
                 SceneTransitionManager.Instance.TransitionTo("PenguinRunner");
             });
+        }
+
+        private void DismissLobbyModal(GameObject overlay)
+        {
+            if (overlay == null) return;
+            modalStack.Dismiss(overlay);
+            if (difficultyOverlay == overlay) difficultyOverlay = null;
         }
 
         private static void RefreshDifficultyHighlights(Image[] highlights, Image[] rowBgs, Color[] colors, int selectedIdx)

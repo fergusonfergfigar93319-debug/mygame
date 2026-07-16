@@ -56,4 +56,3 @@ if ($failures.Count -gt 0) {
 }
 
 Write-Output 'Player experience audit static contracts passed.'
-
