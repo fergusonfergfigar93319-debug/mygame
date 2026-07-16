@@ -16,10 +16,6 @@ namespace PenguinRun
 
     internal sealed class RunnerInput
     {
-        private const float SwipeThreshold = 58f;
-        private const float TapThreshold = 22f;
-        private const float DoubleTapMaxGapSeconds = 0.3f;
-        private const float DoubleTapMaxDistance = 52f;
         private Vector2 start;
         private bool consumed;
         private bool active;
@@ -44,7 +40,8 @@ namespace PenguinRun
                         break;
                     }
                 }
-                if (any) return RunnerAction.Pause;
+                if (RunnerGestureClassifier.IsTwoFingerPause(Input.touchCount, any))
+                    return RunnerAction.Pause;
             }
 
             if (Input.touchCount > 0)
@@ -130,12 +127,12 @@ namespace PenguinRun
         {
             var delta = endPos - start;
             active = false;
-            if (!consumed && Mathf.Abs(delta.x) < TapThreshold && Mathf.Abs(delta.y) < TapThreshold)
+            var thresholds = RunnerGestureThresholds.ForViewport(Screen.width, Screen.height);
+            if (!consumed && RunnerGestureClassifier.IsTap(delta, thresholds))
             {
                 var now = Time.unscaledTime;
-                var isDoubleTap =
-                    now - lastTapTime <= DoubleTapMaxGapSeconds &&
-                    Vector2.Distance(endPos, lastTapPos) <= DoubleTapMaxDistance;
+                var isDoubleTap = RunnerGestureClassifier.IsDoubleTap(
+                    Vector2.Distance(endPos, lastTapPos), now - lastTapTime, thresholds);
                 lastTapPos = endPos;
                 lastTapTime = now;
                 return isDoubleTap ? RunnerAction.Dash : RunnerAction.Start;
@@ -148,13 +145,8 @@ namespace PenguinRun
         private RunnerAction Detect(Vector2 current)
         {
             var delta = current - start;
-            var absX = Mathf.Abs(delta.x);
-            var absY = Mathf.Abs(delta.y);
-            if (absX >= SwipeThreshold && absX > absY * 1.12f)
-                return delta.x > 0 ? RunnerAction.Right : RunnerAction.Left;
-            if (absY >= SwipeThreshold && absY > absX * 0.86f)
-                return delta.y > 0 ? RunnerAction.Jump : RunnerAction.Slide;
-            return RunnerAction.None;
+            var thresholds = RunnerGestureThresholds.ForViewport(Screen.width, Screen.height);
+            return RunnerGestureClassifier.ClassifySwipe(delta, thresholds);
         }
     }
 }

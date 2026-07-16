@@ -21,6 +21,7 @@ namespace PenguinRun.Editor
             ValidateLaunchGate(failures);
             ValidateModalStack(failures);
             ValidateHudActions(failures);
+            ValidateResponsiveGestures(failures);
             ValidateSourceContracts(failures);
             ValidateAuditReportContract(failures);
 
@@ -31,6 +32,48 @@ namespace PenguinRun.Editor
             }
 
             Debug.Log("[ProjectPlayerExperienceValidation] PASS: journey experience contracts are covered.");
+        }
+
+        private static void ValidateResponsiveGestures(List<string> failures)
+        {
+            var viewports = new[]
+            {
+                new Vector2Int(1280, 720),
+                new Vector2Int(1920, 1080),
+                new Vector2Int(2560, 1440),
+            };
+
+            foreach (var viewport in viewports)
+            {
+                var thresholds = RunnerGestureThresholds.ForViewport(viewport.x, viewport.y);
+                var basis = Mathf.Min(viewport.x, viewport.y);
+                Expect(RunnerGestureClassifier.ClassifySwipe(
+                        new Vector2(viewport.x * 0.12f, viewport.y * 0.01f), thresholds) == RunnerAction.Right,
+                    $"right swipe at {viewport}", failures);
+                Expect(RunnerGestureClassifier.ClassifySwipe(
+                        new Vector2(viewport.x * -0.12f, viewport.y * 0.01f), thresholds) == RunnerAction.Left,
+                    $"left swipe at {viewport}", failures);
+                Expect(RunnerGestureClassifier.ClassifySwipe(
+                        new Vector2(viewport.x * 0.01f, viewport.y * 0.12f), thresholds) == RunnerAction.Jump,
+                    $"up swipe at {viewport}", failures);
+                Expect(RunnerGestureClassifier.ClassifySwipe(
+                        new Vector2(basis * 0.08f, basis * 0.08f), thresholds) == RunnerAction.None,
+                    $"ambiguous diagonal at {viewport}", failures);
+                Expect(RunnerGestureClassifier.IsTap(
+                        new Vector2(basis * 0.01f, basis * 0.01f), thresholds),
+                    $"tap at {viewport}", failures);
+                Expect(RunnerGestureClassifier.IsDoubleTap(
+                        basis * 0.03f, 0.2f, thresholds),
+                    $"near double tap at {viewport}", failures);
+                Expect(!RunnerGestureClassifier.IsDoubleTap(
+                        basis * 0.09f, 0.2f, thresholds),
+                    $"far double tap at {viewport}", failures);
+            }
+
+            Expect(RunnerGestureClassifier.IsTwoFingerPause(2, true),
+                "two-finger began must pause", failures);
+            Expect(!RunnerGestureClassifier.IsTwoFingerPause(2, false),
+                "two stationary fingers must not repeat pause", failures);
         }
 
         private static void ValidateHudActions(List<string> failures)
