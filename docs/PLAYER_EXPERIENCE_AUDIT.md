@@ -32,4 +32,13 @@ Journey: startup/home -> mode and difficulty -> first run -> mechanics/Boss -> p
 
 ## Final evidence
 
-To be completed after implementation: static gates, Unity validators, journey screenshots, soak result, APK path/hash/signature, and any deferred P2/P3 risks.
+- Static release gates: all eight passed, including `VerifyPlayerExperienceAudit.ps1` in the Android pre-build chain.
+- Unity validators: player-experience, UI-layout, theme-mechanic, and visual-asset validators passed.
+- Runtime coverage: the fast MainMenu startup probe and the headed home-to-result journey both passed without game errors or exceptions.
+- Journey evidence: five non-blank captures are stored in `Artifacts/PlayerExperienceAudit` for home, difficulty, running, pause, and result states.
+- Stability soak: 18 scenarios x 900 seconds x 60 Hz passed; 373 events, 24 cancellations, 344 rewards, peak apparatus 6/24, peak event FX 0/12, and 0 managed bytes allocated by the measured hot path.
+- Visual assets: 48 prefabs passed dual-LOD validation; LOD0 totals 83,904 triangles and LOD1 totals 44,748 triangles.
+- Android artifact: `Builds/Android/PenguinRun-Latest-Test-v1.1.2-4.apk`, package `com.example.mygame`, 92.81 MB, SHA-256 `B550444F8A6F6B838E6281C7875BD3C1335592AAB02FF437E7368CF6FA06C105`.
+- APK signing: APK Signature Scheme v2 verified, one Android Debug signer.
+- Device acceptance: not executed because `adb devices -l` reported no connected Android device on 2026-07-16.
+- Deferred risk: PX-012 remains a P2 visual-production batch for more detailed runner/set-dressing models with collision authority and mobile LOD budgets validated together.
