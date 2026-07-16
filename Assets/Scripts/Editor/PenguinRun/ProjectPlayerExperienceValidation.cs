@@ -25,6 +25,7 @@ namespace PenguinRun.Editor
             ValidateResponsiveGestures(failures);
             ValidateSettlementGate(failures);
             ValidateDeathRetryCopy(failures);
+            ValidateRetryResetDependencies(failures);
             ValidateSourceContracts(failures);
             ValidateAuditReportContract(failures);
 
@@ -35,6 +36,33 @@ namespace PenguinRun.Editor
             }
 
             Debug.Log("[ProjectPlayerExperienceValidation] PASS: journey experience contracts are covered.");
+        }
+
+        private static void ValidateRetryResetDependencies(List<string> failures)
+        {
+            var events = new WorldEventScheduler();
+            Expect(events.Tick(500f), "world event scheduler must trigger at its first milestone", failures);
+            Expect(events.EventActive, "world event must be active before reset", failures);
+            events.Reset();
+            Expect(!events.EventActive, "world event reset must clear the active event", failures);
+            Expect(!events.Tick(499f), "world event reset must restore the first milestone", failures);
+
+            GameObject parent = null;
+            try
+            {
+                parent = new GameObject("AuditParticlePool");
+                var pool = new ParticleEffectPool(parent.transform, 0f, 4);
+                pool.Emit(Vector3.up, Color.white, 2, lifetime: 2f);
+                Expect(CountActiveChildren(parent.transform) == 2,
+                    "particle pool must activate emitted particles", failures);
+                pool.ReleaseAll();
+                Expect(CountActiveChildren(parent.transform) == 0,
+                    "particle pool reset must release every active particle", failures);
+            }
+            finally
+            {
+                if (parent != null) UnityEngine.Object.DestroyImmediate(parent);
+            }
         }
 
         private static void ValidateDeathRetryCopy(List<string> failures)
@@ -190,8 +218,17 @@ namespace PenguinRun.Editor
                 "CaptureResult", "controller must expose side-effect-free result capture", failures);
             RequireSource("Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs",
                 "ResetPresentationForRetry", "retry must reset presentation state", failures);
+            RequireSource("Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs",
+                "worldEvents.Reset();", "retry must reset world events", failures);
+            RequireSource("Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs",
+                "particlePool.ReleaseAll();", "retry must release pooled particles", failures);
+            RequireSource("Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs",
+                "currentTheme = config.MapTheme;", "retry must restore the configured map theme", failures);
             ForbidSource("Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs",
                 "IsReturnButtonTouch", "invisible corner return must be removed", failures);
+            ForbidSource("Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs",
+                "config.MapTheme = nextTheme;", "runtime visual theme changes must not mutate session identity",
+                failures);
             RequireSource("Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs",
                 "LobbyModalStack", "lobby must own modal back navigation", failures);
             RequireSource("Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs",
@@ -244,6 +281,16 @@ namespace PenguinRun.Editor
             if (target != null) return target.GetComponent<Button>();
             failures.Add("missing HUD action: " + path);
             return null;
+        }
+
+        private static int CountActiveChildren(Transform parent)
+        {
+            var count = 0;
+            for (var i = 0; i < parent.childCount; i++)
+            {
+                if (parent.GetChild(i).gameObject.activeSelf) count++;
+            }
+            return count;
         }
     }
 }

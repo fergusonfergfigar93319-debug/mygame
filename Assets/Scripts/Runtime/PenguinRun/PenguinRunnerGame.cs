@@ -418,11 +418,61 @@ namespace PenguinRun
             deathOverlay = null;
             deathState = DeathState.None;
             deathStateTimer = 0f;
+            ResetPresentationForRetry();
             game.ResetRun(true);
             settlementGate.ResetForNextAttempt();
             lastLives = game.World.Lives;
             lastCoinCount = game.World.Coins;
             lastPerfectDodges = game.World.PerfectDodges;
+        }
+
+        private void ResetPresentationForRetry()
+        {
+            worldEvents.Reset();
+            particlePool.ReleaseAll();
+            worldEventParticleCooldown = 0f;
+
+            if (upgradeOverlay != null)
+            {
+                Destroy(upgradeOverlay.gameObject);
+                upgradeOverlay = null;
+            }
+
+            currentTheme = config.MapTheme;
+            pendingTheme = currentTheme;
+            nextThemeSwitchTime = ThemeSwitchIntervalSeconds;
+            themeTransitionTimer = 0f;
+            themeAppliedInTransition = false;
+            ApplyMapThemeVisuals(currentTheme);
+            RebuildThemeScenery(currentTheme);
+            game.Spawner.ApplyTheme(currentTheme, clearSpawnedEntities: true);
+
+            lastCoinCount = 0;
+            lastPerfectDodges = 0;
+            lastLives = 0;
+            wasGroundedLastFrame = true;
+            wasDodgingLastFrame = false;
+            landingBounceTimer = 0f;
+            landingBounceOffset = 0f;
+            slideHeightSmooth = 0f;
+
+            cameraVelocity = Vector3.zero;
+            cameraYawSmoothed = 0f;
+            cameraYawVel = 0f;
+            cameraShakeTimer = 0f;
+            cameraShakeIntensity = 0f;
+            defeatFreezeTimer = 0f;
+            wasBossDefeated = false;
+#if DOTWEEN
+            if (runnerCamera != null) runnerCamera.transform.DOKill();
+#endif
+
+            screenFlashTimer = 0f;
+            screenFlashDuration = 0f;
+            screenFlashColor = Color.clear;
+            screenFlashCurrent = Color.clear;
+            bossSpawnFlashPending = false;
+            bossSpawnFlashIntensity = 0f;
         }
 
         private void DrawDeathOverlay()
@@ -2108,7 +2158,6 @@ namespace PenguinRun
         private void ApplyRuntimeThemeChange(RunnerMapTheme nextTheme)
         {
             currentTheme = nextTheme;
-            config.MapTheme = nextTheme;
             RunSession.NextRunTheme = nextTheme;
             TrackTerrain.SetThemeProfile(nextTheme);
             ApplyMapThemeVisuals(nextTheme);
