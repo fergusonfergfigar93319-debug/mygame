@@ -103,6 +103,12 @@ Require $prefabBuilder '\bBuildBatch' '18-prefab batch entry point'
 Require $prefabBuilder '\bLODGroup\b' 'dual-LOD prefab construction'
 Require $previewCapture '\bHasVisibleContent\b' 'preview blank-image rejection'
 
+$validation = Read-Required 'Assets/Scripts/Editor/PenguinRun/ProjectThemeMechanicValidation.cs'
+Require $validation '\bSoakSeconds\s*=\s*900\b' '15-minute soak duration'
+Require $validation '\bSoakTicksPerSecond\s*=\s*60\b' '60 Hz soak rate'
+Require $validation '\bGetAllocatedBytesForCurrentThread\b' 'managed allocation evidence'
+Require $validation '\bValidateRuntimeHotPathSources\b' 'theme hot-path source audit'
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }
     exit 1

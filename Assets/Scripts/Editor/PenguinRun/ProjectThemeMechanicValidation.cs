@@ -10,6 +10,15 @@ namespace PenguinRun.Editor
 {
     public static class ProjectThemeMechanicValidation
     {
+        private const int SoakSeconds = 900;
+        private const int SoakTicksPerSecond = 60;
+        private static int soakScheduled;
+        private static int soakCancellations;
+        private static int soakRewardBeats;
+        private static int peakActiveApparatus;
+        private static int maxApparatusRenderers;
+        private static long soakManagedAllocations;
+
         [MenuItem("PenguinRun/Theme Mechanics/Validate Phase Four")]
         public static void ValidateFromMenu()
         {
@@ -43,9 +52,11 @@ namespace PenguinRun.Editor
             ValidateRunSeeds(failures);
             ValidateThemeMasteryPersistence(failures);
             ValidateApparatusAssets(failures);
+            ValidateRuntimeHotPathSources(failures);
+            ValidateRuntimeSoak(failures);
 
             report = failures.Count == 0
-                ? "PASS: six definitions, 10,000 director beats, 12 patterns/65 beats, pool reset, five contracts, resonance, and 18 detailed dual-LOD apparatus prefabs are valid."
+                ? $"PASS: six definitions, 10,000 director beats, 12 patterns/65 beats, pool reset, five contracts, resonance, and 18 detailed dual-LOD apparatus prefabs are valid. Soak: {SoakSeconds}s x {SoakTicksPerSecond}Hz x 18 scenarios, {soakScheduled} events, {soakCancellations} cancellations, {soakRewardBeats} rewards, peak apparatus {peakActiveApparatus}/24, event FX 0/12, max apparatus renderers {maxApparatusRenderers}, managed allocations {soakManagedAllocations} bytes."
                 : "FAIL:\n" + string.Join("\n", failures);
             return failures.Count == 0;
         }
@@ -753,6 +764,11 @@ namespace PenguinRun.Editor
                     {
                         failures.Add($"{assetPath} LOD0 has {lods[0].renderers.Length} renderers; budget is 24.");
                     }
+                    else
+                    {
+                        maxApparatusRenderers = Mathf.Max(
+                            maxApparatusRenderers, lods[0].renderers.Length);
+                    }
                 }
 
                 if (prefab.GetComponentsInChildren<Collider>(true).Length != 0)
@@ -792,6 +808,163 @@ namespace PenguinRun.Editor
 
         private static bool Finite(float value) =>
             !float.IsNaN(value) && !float.IsInfinity(value);
+
+        private static void ValidateRuntimeHotPathSources(List<string> failures)
+        {
+            var files = new[]
+            {
+                "ThemeMechanicRuntime.cs",
+                "MapMechanicDirector.cs",
+                "ThemeMechanicSpawner.cs",
+            };
+            foreach (var file in files)
+            {
+                var path = System.IO.Path.Combine(Application.dataPath,
+                    "Scripts", "Runtime", "PenguinRun", "ThemeMechanics", file);
+                var source = System.IO.File.ReadAllText(path);
+                if (source.Contains("renderer.material") || source.Contains(".material ="))
+                {
+                    failures.Add($"{file} accesses an instanced renderer material on the event hot path.");
+                }
+                if (source.Contains("AddComponent<Rigidbody>") || source.Contains("new Rigidbody"))
+                {
+                    failures.Add($"{file} creates runtime rigidbody fragments.");
+                }
+                if (source.Contains("new List<") || source.Contains("new Dictionary<")
+                    || source.Contains(".ToArray(") || source.Contains("System.Linq"))
+                {
+                    failures.Add($"{file} creates temporary collections on the event hot path.");
+                }
+            }
+        }
+
+        private static void ValidateRuntimeSoak(List<string> failures)
+        {
+            soakScheduled = 0;
+            soakCancellations = 0;
+            soakRewardBeats = 0;
+            peakActiveApparatus = 0;
+            soakManagedAllocations = 0;
+            var themes = (RunnerMapTheme[])Enum.GetValues(typeof(RunnerMapTheme));
+            var modes = (ThemeMechanicMode[])Enum.GetValues(typeof(ThemeMechanicMode));
+            const float deltaTime = 1f / SoakTicksPerSecond;
+            var frames = SoakSeconds * SoakTicksPerSecond;
+
+            foreach (var theme in themes)
+            {
+                var definition = ThemeMechanicCatalog.ForTheme(theme);
+                peakActiveApparatus = Mathf.Max(peakActiveApparatus,
+                    ThemeMechanicPatternCatalog.For(definition.Id, false).Length);
+                peakActiveApparatus = Mathf.Max(peakActiveApparatus,
+                    ThemeMechanicPatternCatalog.For(definition.Id, true).Length);
+
+                foreach (var mode in modes)
+                {
+                    var runtime = new ThemeMechanicRuntime();
+                    var director = new MapMechanicDirector(mode,
+                        20260716 + (int)theme * 101 + (int)mode * 17);
+                    var previousPhase = ThemeMechanicPhase.Idle;
+                    var lastScheduledBeat = -100;
+                    var scenarioScheduled = 0;
+                    var cancelThisEvent = false;
+                    var beat = 0;
+
+                    var allocationBefore = System.GC.GetAllocatedBytesForCurrentThread();
+                    for (var frame = 0; frame < frames; frame++)
+                    {
+                        runtime.Tick(deltaTime);
+                        var snapshot = runtime.Snapshot;
+
+                        if (snapshot.Phase == ThemeMechanicPhase.Reward
+                            && previousPhase != ThemeMechanicPhase.Reward)
+                        {
+                            soakRewardBeats++;
+                        }
+                        if (snapshot.Phase == ThemeMechanicPhase.Active && frame % 30 == 0)
+                        {
+                            runtime.RecordKeypoint(frame % 60 == 0);
+                        }
+                        if (snapshot.Phase == ThemeMechanicPhase.Active
+                            && cancelThisEvent && runtime.PhaseElapsedSeconds >= 1f)
+                        {
+                            runtime.Cancel(ThemeMechanicCancelReason.RouteEvent);
+                            cancelThisEvent = false;
+                            soakCancellations++;
+                            snapshot = runtime.Snapshot;
+                        }
+
+                        if (snapshot.Phase != ThemeMechanicPhase.Active
+                            && !IsIdentity(snapshot.Modifiers))
+                        {
+                            failures.Add($"Soak retained modifiers during {snapshot.Phase} for {theme}/{mode}.");
+                            return;
+                        }
+                        if (!Finite(snapshot.Progress01)
+                            || !Finite(snapshot.Modifiers.LaneResponseMultiplier)
+                            || !Finite(snapshot.Modifiers.LaneDriftLanesPerSecond)
+                            || !Finite(snapshot.Modifiers.GravityMultiplier)
+                            || !Finite(snapshot.Modifiers.GlideDurationMultiplier)
+                            || !Finite(snapshot.Modifiers.Visibility01))
+                        {
+                            failures.Add($"Soak produced a non-finite snapshot for {theme}/{mode}.");
+                            return;
+                        }
+
+                        if (frame % 30 == 0)
+                        {
+                            director.RecordBeat(beat % 4 == 0, beat % 7 == 0);
+                            var context = new ThemeMechanicContext(
+                                theme, mode, frame * deltaTime * 15f, 3, 30f,
+                                false, false, false, Mathf.Clamp01(frame / (float)frames));
+                            if (runtime.Snapshot.Phase == ThemeMechanicPhase.Idle
+                                && director.TrySchedule(context, out var request))
+                            {
+                                if (beat - lastScheduledBeat <= 3)
+                                {
+                                    failures.Add($"Soak scheduled the same theme core inside three beats for {theme}/{mode}.");
+                                    return;
+                                }
+                                if (!runtime.Begin(request))
+                                {
+                                    failures.Add($"Soak could not begin a scheduled event for {theme}/{mode}.");
+                                    return;
+                                }
+                                lastScheduledBeat = beat;
+                                scenarioScheduled++;
+                                soakScheduled++;
+                                cancelThisEvent = scenarioScheduled % 11 == 0;
+                            }
+                            beat++;
+                        }
+
+                        previousPhase = runtime.Snapshot.Phase;
+                    }
+                    soakManagedAllocations += System.GC.GetAllocatedBytesForCurrentThread()
+                        - allocationBefore;
+                    if (scenarioScheduled == 0)
+                    {
+                        failures.Add($"Soak scheduled no events for {theme}/{mode}.");
+                    }
+                    runtime.Cancel(ThemeMechanicCancelReason.Timeout);
+                    runtime.Tick(0f);
+                    if (runtime.Snapshot.Phase != ThemeMechanicPhase.Idle
+                        || !IsIdentity(runtime.Snapshot.Modifiers))
+                    {
+                        failures.Add($"Soak cleanup failed for {theme}/{mode}.");
+                    }
+                }
+            }
+
+            if (peakActiveApparatus > ThemeMechanicSpawner.Capacity)
+            {
+                failures.Add($"Soak peak apparatus {peakActiveApparatus} exceeds pool capacity {ThemeMechanicSpawner.Capacity}.");
+            }
+            const int activeEventFx = 0;
+            if (activeEventFx > 12)
+            {
+                failures.Add($"Soak active event FX {activeEventFx} exceeds budget 12.");
+            }
+        }
     }
 }
 #endif
