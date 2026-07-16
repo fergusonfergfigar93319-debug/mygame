@@ -291,7 +291,7 @@ RequireNoOverlap(resumeButton, returnButton, failures);
 & 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.exe' -batchmode -nographics -quit -projectPath . `
   -executeMethod PenguinRun.Editor.ProjectPlayerExperienceValidation.ValidateFromCommandLine -logFile Artifacts/PlayerExperienceValidation.log
 & 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.exe' -batchmode -nographics -quit -projectPath . `
-  -executeMethod PenguinRun.Editor.ProjectUiLayoutRegressionTest.RunFromCommandLine -logFile Artifacts/UiLayoutRegression.log
+  -executeMethod ProjectUiLayoutRegressionTest.RunFromCommandLine -logFile Artifacts/UiLayoutRegression.log
 git add Assets/Scripts/Runtime/PenguinRun Assets/Scripts/Editor/PenguinRun/ProjectPlayerExperienceValidation.cs Assets/Editor/ProjectUiLayoutRegressionTest.cs
 git commit -m "fix: add explicit mobile pause and return flow"
 ```
