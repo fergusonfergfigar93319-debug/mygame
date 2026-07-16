@@ -494,7 +494,7 @@ Before each `ScreenCapture.CaptureScreenshot`, wait two rendered frames. After c
 Do not use `-nographics` because screenshots are evidence:
 
 ```powershell
-& 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.exe' -batchmode -quit -projectPath . `
+& 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.exe' -projectPath . `
   -executeMethod PenguinRun.Editor.ProjectPlayerJourneySmokeTest.RunFromCommandLine `
   -logFile Artifacts/PlayerJourneySmoke.log
 ```

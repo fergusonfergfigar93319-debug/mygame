@@ -4,7 +4,10 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-/// <summary>Batch-mode play test for the main menu startup path.</summary>
+/// <summary>
+/// Fast startup/crash probe for MainMenu. The complete interactive journey lives in
+/// ProjectPlayerJourneySmokeTest and intentionally remains separate from this eight-second check.
+/// </summary>
 public static class ProjectRuntimeSmokeTest
 {
     private const string MainMenuScene = "Assets/Scenes/MainMenu.unity";
@@ -18,6 +21,8 @@ public static class ProjectRuntimeSmokeTest
     private static bool stopRequested;
     private static bool originalEnterPlayModeOptionsEnabled;
     private static EnterPlayModeOptions originalEnterPlayModeOptions;
+
+    public static void RunFromCommandLine() => RunMainMenu();
 
     public static void RunMainMenu()
     {
@@ -91,7 +96,7 @@ public static class ProjectRuntimeSmokeTest
 
         if (Errors.Count == 0)
         {
-            Debug.Log("[ProjectRuntimeSmokeTest] PASS: main menu ran without errors or exceptions.");
+            Debug.Log("[ProjectRuntimeSmokeTest] PASS: main-menu startup probe ran without errors or exceptions.");
             EditorApplication.Exit(0);
             return;
         }
