@@ -5,6 +5,8 @@ using System.IO;
 using PenguinRun.Game;
 using PenguinRun.Game.UI.Lobby;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 namespace PenguinRun.Editor
 {
@@ -18,6 +20,7 @@ namespace PenguinRun.Editor
             var failures = new List<string>();
             ValidateLaunchGate(failures);
             ValidateModalStack(failures);
+            ValidateHudActions(failures);
             ValidateSourceContracts(failures);
             ValidateAuditReportContract(failures);
 
@@ -28,6 +31,46 @@ namespace PenguinRun.Editor
             }
 
             Debug.Log("[ProjectPlayerExperienceValidation] PASS: journey experience contracts are covered.");
+        }
+
+        private static void ValidateHudActions(List<string> failures)
+        {
+            GameObject eventSystem = null;
+            GameObject canvas = null;
+            var pauseCount = 0;
+            var resumeCount = 0;
+            var returnCount = 0;
+            try
+            {
+                eventSystem = new GameObject("AuditHudEventSystem", typeof(EventSystem),
+                    typeof(StandaloneInputModule));
+                RunnerHudCanvas.Create(new RunnerSessionConfig(),
+                    () => pauseCount++, () => resumeCount++, () => returnCount++);
+                canvas = GameObject.Find("RunnerHudCanvas");
+                Expect(canvas != null, "runner HUD must create a canvas", failures);
+                if (canvas == null) return;
+
+                var pause = FindButton(canvas, "SafeArea/Pause", failures);
+                var resume = FindButton(canvas, "SafeArea/Paused/Resume", failures);
+                var returnToCamp = FindButton(canvas, "SafeArea/Paused/ReturnToCamp", failures);
+                Expect(pause != null && pause.gameObject.activeInHierarchy,
+                    "pause action must be visible during a run", failures);
+                var pausedRoot = canvas.transform.Find("SafeArea/Paused");
+                Expect(pausedRoot != null && !pausedRoot.gameObject.activeSelf,
+                    "pause overlay must start hidden", failures);
+
+                pause?.onClick.Invoke();
+                resume?.onClick.Invoke();
+                returnToCamp?.onClick.Invoke();
+                Expect(pauseCount == 1, "pause button must invoke only pause", failures);
+                Expect(resumeCount == 1, "resume button must invoke only resume", failures);
+                Expect(returnCount == 1, "return button must invoke only return", failures);
+            }
+            finally
+            {
+                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                if (eventSystem != null) UnityEngine.Object.DestroyImmediate(eventSystem);
+            }
         }
 
         private static void ValidateLaunchGate(List<string> failures)
@@ -126,6 +169,14 @@ namespace PenguinRun.Editor
         private static void Expect(bool condition, string message, List<string> failures)
         {
             if (!condition) failures.Add(message);
+        }
+
+        private static Button FindButton(GameObject root, string path, List<string> failures)
+        {
+            var target = root.transform.Find(path);
+            if (target != null) return target.GetComponent<Button>();
+            failures.Add("missing HUD action: " + path);
+            return null;
         }
     }
 }

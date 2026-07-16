@@ -18,6 +18,7 @@ namespace PenguinRun
         private readonly GameObject normalStatsRoot;
         private readonly GameObject bossRoot;
         private readonly GameObject pauseRoot;
+        private readonly GameObject pauseActionRoot;
         private readonly GameObject feedbackRoot;
         private readonly TextMeshProUGUI modeText;
         private readonly TextMeshProUGUI scoreText;
@@ -57,7 +58,8 @@ namespace PenguinRun
         private int cachedContractProgress = -1;
 
         private RunnerHudCanvas(GameObject canvasObject, GameObject normalStatsRoot, GameObject bossRoot,
-            GameObject pauseRoot, GameObject feedbackRoot, TextMeshProUGUI modeText,
+            GameObject pauseRoot, GameObject pauseActionRoot, GameObject feedbackRoot,
+            TextMeshProUGUI modeText,
             TextMeshProUGUI scoreText, TextMeshProUGUI distanceText, TextMeshProUGUI comboText,
             TextMeshProUGUI fishText, TextMeshProUGUI livesText, TextMeshProUGUI buffText,
             TextMeshProUGUI feedbackText, TextMeshProUGUI bossNameText,
@@ -73,6 +75,7 @@ namespace PenguinRun
             this.normalStatsRoot = normalStatsRoot;
             this.bossRoot = bossRoot;
             this.pauseRoot = pauseRoot;
+            this.pauseActionRoot = pauseActionRoot;
             this.feedbackRoot = feedbackRoot;
             this.modeText = modeText;
             this.scoreText = scoreText;
@@ -100,7 +103,8 @@ namespace PenguinRun
             this.contractSummaryText = contractSummaryText;
         }
 
-        public static RunnerHudCanvas Create(RunnerSessionConfig config, Action onExit)
+        public static RunnerHudCanvas Create(RunnerSessionConfig config, Action onPause,
+            Action onResume, Action onReturnToCamp)
         {
             EnsureEventSystem();
             var canvasObject = UiBuilder.CreateCanvas("RunnerHudCanvas", null, 170);
@@ -168,10 +172,10 @@ namespace PenguinRun
             Place(resonanceTrack.rectTransform,
                 new Vector2(0.36f, 0.185f), new Vector2(0.64f, 0.198f));
 
-            var exit = UiBuilder.CreateButton("Exit", root, "返回营地", new Color(0.05f, 0.10f, 0.16f, 0.76f),
+            var pause = UiBuilder.CreateButton("Pause", root, "暂停", new Color(0.05f, 0.10f, 0.16f, 0.88f),
                 Color.white, UiTheme.Caption, rounded: true);
-            Place((RectTransform)exit.transform, new Vector2(0.445f, 0.91f), new Vector2(0.555f, 0.975f));
-            exit.onClick.AddListener(() => onExit?.Invoke());
+            Place((RectTransform)pause.transform, new Vector2(0.445f, 0.89f), new Vector2(0.555f, 0.975f));
+            pause.onClick.AddListener(() => onPause?.Invoke());
 
             var feedbackRoot = UiBuilder.CreateRect("Feedback", root, new Vector2(0.24f, 0.67f),
                 new Vector2(0.76f, 0.80f), Vector2.zero, Vector2.zero,
@@ -191,18 +195,29 @@ namespace PenguinRun
             Place(healthTrack.rectTransform, new Vector2(0.04f, 0.49f), new Vector2(0.96f, 0.59f));
             bossRoot.gameObject.SetActive(false);
 
-            var pauseRoot = UiBuilder.CreateRect("Paused", root, new Vector2(0.34f, 0.40f),
-                new Vector2(0.66f, 0.60f), Vector2.zero, Vector2.zero,
-                new Color(0.03f, 0.08f, 0.12f, 0.88f), rounded: true);
+            var pauseRoot = UiBuilder.CreateRect("Paused", root, new Vector2(0.25f, 0.18f),
+                new Vector2(0.75f, 0.82f), Vector2.zero, Vector2.zero,
+                new Color(0.03f, 0.08f, 0.12f, 0.96f), rounded: true);
+            UiBuilder.AddOutline(pauseRoot.gameObject,
+                new Color(UiTheme.AccentCyan.r, UiTheme.AccentCyan.g, UiTheme.AccentCyan.b, 0.5f),
+                new Vector2(2f, -2f));
             CreateHudText("PausedText", pauseRoot, "已暂停", UiTheme.H2, Color.white,
-                new Vector2(0.04f, 0.52f), new Vector2(0.96f, 0.96f), TextAlignmentOptions.Center);
+                new Vector2(0.04f, 0.72f), new Vector2(0.96f, 0.93f), TextAlignmentOptions.Center);
             var contractSummary = CreateHudText("ContractSummary", pauseRoot, string.Empty,
                 UiTheme.Micro, UiTheme.PaperWarm,
-                new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.48f), TextAlignmentOptions.Center);
+                new Vector2(0.06f, 0.50f), new Vector2(0.94f, 0.70f), TextAlignmentOptions.Center);
+            var resume = UiBuilder.CreateButton("Resume", pauseRoot, "继续奔跑", UiTheme.AccentCyan,
+                new Color(0.02f, 0.10f, 0.14f, 1f), UiTheme.Body, rounded: true);
+            Place((RectTransform)resume.transform, new Vector2(0.08f, 0.25f), new Vector2(0.92f, 0.43f));
+            resume.onClick.AddListener(() => onResume?.Invoke());
+            var returnToCamp = UiBuilder.CreateButton("ReturnToCamp", pauseRoot, "结算并返回营地",
+                new Color(0.12f, 0.20f, 0.30f, 1f), Color.white, UiTheme.Caption, rounded: true);
+            Place((RectTransform)returnToCamp.transform, new Vector2(0.08f, 0.06f), new Vector2(0.92f, 0.21f));
+            returnToCamp.onClick.AddListener(() => onReturnToCamp?.Invoke());
             pauseRoot.gameObject.SetActive(false);
 
             var hud = new RunnerHudCanvas(canvasObject, normal.gameObject, bossRoot.gameObject,
-                pauseRoot.gameObject, feedbackRoot.gameObject, mode, score, distance, combo,
+                pauseRoot.gameObject, pause.gameObject, feedbackRoot.gameObject, mode, score, distance, combo,
                 fish, lives, buffs, feedback, bossName, pattern, hint, healthFill,
                 routeRoot.gameObject, routeTitle, routeChoice,
                 upgradeRoot.gameObject, upgradeText,
@@ -371,6 +386,7 @@ namespace PenguinRun
         public void SetPaused(bool paused)
         {
             pauseRoot.SetActive(paused);
+            pauseActionRoot.SetActive(!paused);
         }
 
         public void SetFeedback(string message, Color color, float seconds)

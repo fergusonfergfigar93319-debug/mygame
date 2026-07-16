@@ -4,8 +4,11 @@ using System.Collections.Generic;
 using System.IO;
 using PenguinRun.Game.UI;
 using PenguinRun.Game.UI.Lobby;
+using PenguinRun;
+using PenguinRun.Game;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 /// <summary>
 /// Marker-driven edit-mode regression checks. This lets the already-open editor
@@ -40,6 +43,7 @@ public static class ProjectUiLayoutRegressionTest
     {
         var failures = new List<string>();
         ValidateRunnerResultTextWidths(failures);
+        ValidateRunnerHudPauseLayout(failures);
         ValidatePanelReplacement(failures);
         ValidatePremiumHomeLayouts(failures);
 
@@ -48,6 +52,43 @@ public static class ProjectUiLayoutRegressionTest
             ? "PASS: UI layout regressions are covered."
             : "FAIL:\n" + string.Join("\n", failures);
         return passed;
+    }
+
+    private static void ValidateRunnerHudPauseLayout(List<string> failures)
+    {
+        GameObject root = null;
+        GameObject eventSystem = null;
+        try
+        {
+            eventSystem = new GameObject("AuditRunnerEventSystem", typeof(EventSystem),
+                typeof(StandaloneInputModule));
+            RunnerHudCanvas.Create(new RunnerSessionConfig(), null, null, null);
+            root = GameObject.Find("RunnerHudCanvas");
+            if (root == null)
+            {
+                failures.Add("Runner HUD canvas was not created.");
+                return;
+            }
+
+            RequireTransform(root, "SafeArea/Pause", failures);
+            RequireTransform(root, "SafeArea/Paused/Resume", failures);
+            RequireTransform(root, "SafeArea/Paused/ReturnToCamp", failures);
+            RequireAnchoredInside(root, "SafeArea/Pause", failures);
+            RequireAnchoredInside(root, "SafeArea/Paused/Resume", failures);
+            RequireAnchoredInside(root, "SafeArea/Paused/ReturnToCamp", failures);
+            RequireReferenceHeight(root, "SafeArea/Pause", 1080f, 88f, failures);
+            RequireReferenceHeight(root, "SafeArea/Paused/Resume", 1080f * 0.64f, 88f, failures);
+            RequireReferenceHeight(root, "SafeArea/Paused/ReturnToCamp", 1080f * 0.64f, 88f, failures);
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Runner pause HUD layout threw: " + ex.Message);
+        }
+        finally
+        {
+            if (root != null) UnityEngine.Object.DestroyImmediate(root);
+            if (eventSystem != null) UnityEngine.Object.DestroyImmediate(eventSystem);
+        }
     }
 
     public static void RunFromCommandLine()
@@ -198,6 +239,34 @@ public static class ProjectUiLayoutRegressionTest
 
         if (target.rect.width < minimum)
             failures.Add($"{path} width is {target.rect.width:F1}; expected at least {minimum:F1}.");
+    }
+
+    private static void RequireTransform(GameObject root, string path, List<string> failures)
+    {
+        if (root.transform.Find(path) == null)
+            failures.Add("Missing UI element: " + path);
+    }
+
+    private static void RequireAnchoredInside(GameObject root, string path, List<string> failures)
+    {
+        var rect = root.transform.Find(path) as RectTransform;
+        if (rect == null) return;
+        if (rect.anchorMin.x < 0f || rect.anchorMin.y < 0f ||
+            rect.anchorMax.x > 1f || rect.anchorMax.y > 1f ||
+            rect.anchorMax.x <= rect.anchorMin.x || rect.anchorMax.y <= rect.anchorMin.y)
+        {
+            failures.Add(path + " escapes or collapses inside its parent.");
+        }
+    }
+
+    private static void RequireReferenceHeight(GameObject root, string path, float parentReferenceHeight,
+        float minimum, List<string> failures)
+    {
+        var rect = root.transform.Find(path) as RectTransform;
+        if (rect == null) return;
+        var height = (rect.anchorMax.y - rect.anchorMin.y) * parentReferenceHeight + rect.sizeDelta.y;
+        if (height < minimum)
+            failures.Add($"{path} reference height is {height:F1}; expected at least {minimum:F1}.");
     }
 }
 #endif

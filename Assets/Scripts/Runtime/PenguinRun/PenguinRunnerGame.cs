@@ -72,8 +72,6 @@ namespace PenguinRun
         private const float ThemeTransitionHoldSeconds = 0.22f;
         private const float ThemeTransitionFadeInSeconds = 0.68f;
 
-        private const float RunnerHudReferenceHeight = 1080f;
-
         // Playable view corridor — scenery must not block the lane sightline near camera/player.
         private const float RoadHalfWidth = 5.1f;
         private const float SceneryMinAbsX = 8.5f;
@@ -86,9 +84,6 @@ namespace PenguinRun
         private readonly Dictionary<GameObject, Renderer[]> sceneryPropRenderers = new();
         private readonly Dictionary<int, float> sceneryRendererBaseAlpha = new();
         private readonly Dictionary<int, bool> sceneryRendererBaseEnabled = new();
-
-        /// <summary>IMGUI HUD：按屏幕高度对齐到 1080p 基准，供边缘触控阈值使用。</summary>
-        private static float RunnerHudLayoutScale => Mathf.Max(Screen.height / RunnerHudReferenceHeight, 1e-4f);
 
         private void ApplyRunnerCameraViewport169()
         {
@@ -130,7 +125,8 @@ namespace PenguinRun
             ApplyMapThemeVisuals(currentTheme);
             game = new RunnerGameController(tuning, config, runnerAudio, player.transform, character, transform, PulseHaptic, TriggerScreenFlash, OnRunFinished);
             game.ResetRun(false);
-            hudCanvas = RunnerHudCanvas.Create(config, RequestFinishRunFromHud);
+            hudCanvas = RunnerHudCanvas.Create(config, RequestPauseFromHud,
+                RequestResumeFromHud, RequestFinishRunFromHud);
             lastLives = game.World.Lives;
 
             // ── 注册核心服务 ──────────────────────────────────────
@@ -174,11 +170,13 @@ namespace PenguinRun
         private void OnApplicationFocus(bool hasFocus)
         {
             ConfigureRuntimePerformance(hasFocus);
+            if (!hasFocus) game?.SetPaused(true, false);
         }
 
         private void OnApplicationPause(bool pauseStatus)
         {
             ConfigureRuntimePerformance(!pauseStatus);
+            if (pauseStatus) game?.SetPaused(true, false);
         }
 
         private void Update()
@@ -206,15 +204,15 @@ namespace PenguinRun
                 return;
             }
 
-            if (game.IsCountdown && (Input.GetKeyDown(KeyCode.Escape) || IsReturnButtonTouch()))
+            if (game.IsCountdown && Input.GetKeyDown(KeyCode.Escape))
             {
                 game.SkipEntranceCountdown();
                 return;
             }
 
-            if (Input.GetKeyDown(KeyCode.Escape) || IsReturnButtonTouch())
+            if (Input.GetKeyDown(KeyCode.Escape))
             {
-                game.FinishRun();
+                game.SetPaused(!game.IsPaused);
                 return;
             }
 
@@ -315,6 +313,16 @@ namespace PenguinRun
         private void RequestFinishRunFromHud()
         {
             if (game != null && !exiting) game.FinishRun();
+        }
+
+        private void RequestPauseFromHud()
+        {
+            game?.SetPaused(true);
+        }
+
+        private void RequestResumeFromHud()
+        {
+            game?.SetPaused(false);
         }
 
         // ── 死亡序列（FSM DeathSequence → GameOver，本地子阶段管 overlay）──
@@ -1939,28 +1947,6 @@ namespace PenguinRun
                         active ? new Color(0.57f, 1f, 0.86f, 0.92f) : new Color(0.82f, 0.93f, 1f, 0.35f),
                         Mathf.Clamp01(dt * 8f)));
             }
-        }
-
-        private static bool IsReturnButtonTouch()
-        {
-            if (!Input.GetMouseButtonDown(0))
-            {
-                return false;
-            }
-
-            var s = RunnerHudLayoutScale;
-            var edgeH = 260f * s;
-            var edgeV = 180f * s;
-
-            var pointer = Input.mousePosition;
-            var yFromTop = Screen.height - pointer.y;
-            var nearHorizontalEdge = pointer.x <= edgeH || pointer.x >= Screen.width - edgeH;
-            var nearVerticalEdge =
-                pointer.y <= edgeV ||
-                pointer.y >= Screen.height - edgeV ||
-                yFromTop <= edgeV ||
-                yFromTop >= Screen.height - edgeV;
-            return nearHorizontalEdge && nearVerticalEdge;
         }
 
         private static void ConfigureRuntimePerformance(bool active)

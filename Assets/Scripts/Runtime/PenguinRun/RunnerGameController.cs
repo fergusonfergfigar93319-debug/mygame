@@ -345,24 +345,28 @@ namespace PenguinRun
             onFinish?.Invoke(result);
         }
 
-        public void TogglePause()
+        public bool SetPaused(bool paused, bool playFeedback = true)
         {
-            if (GameOver || !Running || IsThemeTransition) return;
+            if (GameOver || !Running || IsThemeTransition) return false;
             var cur = stateMachine.Current;
-            if (cur != GameStateMachine.State.Running &&
-                cur != GameStateMachine.State.BossFight &&
-                cur != GameStateMachine.State.Paused)
+            if (paused)
             {
-                return;
+                if (world.Paused ||
+                    (cur != GameStateMachine.State.Running && cur != GameStateMachine.State.BossFight))
+                    return false;
+            }
+            else if (!world.Paused || cur != GameStateMachine.State.Paused)
+            {
+                return false;
             }
 
-            world.Paused = !world.Paused;
-            runnerAudio.PlayPause();
-            feedbackText = world.Paused ? "已暂停" : "继续";
+            world.Paused = paused;
+            if (playFeedback) runnerAudio.PlayPause();
+            feedbackText = paused ? "已暂停" : "继续";
             feedbackTimer = 0.7f;
-            pauseHoldUI = world.Paused ? 0.3f : 0f;
+            pauseHoldUI = paused ? 0.3f : 0f;
 
-            if (world.Paused)
+            if (paused)
             {
                 stateMachine.TransitionTo(GameStateMachine.State.Paused);
             }
@@ -371,7 +375,10 @@ namespace PenguinRun
                 stateMachine.TransitionTo(GameStateMachine.State.Running);
                 SyncBossFightState();
             }
+            return true;
         }
+
+        public void TogglePause() => SetPaused(!world.Paused);
 
         public bool IsPaused => world.Paused;
         public bool IsSimulationFrozen => world.Paused || waitingForGuidedReaction;
