@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -82,6 +83,9 @@ public static class ProjectRuntimeSmokeTest
 
     private static void OnLogMessage(string condition, string stackTrace, LogType type)
     {
+        if (condition.Contains("UnityConnectWebRequestException", StringComparison.Ordinal) &&
+            condition.Contains("Token Exchange", StringComparison.Ordinal))
+            return;
         if (type is LogType.Error or LogType.Exception or LogType.Assert)
             Errors.Add($"{type}: {condition}\n{stackTrace}");
     }

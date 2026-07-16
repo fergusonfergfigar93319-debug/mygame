@@ -34,6 +34,7 @@ $report = Read-Required 'docs/PLAYER_EXPERIENCE_AUDIT.md'
 $runner = Read-Required 'Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs'
 $hud = Read-Required 'Assets/Scripts/Runtime/PenguinRun/Systems/RunnerHudCanvas.cs'
 $menu = Read-Required 'Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs'
+$androidBuild = Read-Required 'tools/BuildLatestAndroidApk.ps1'
 
 Require $modalStack '\bLobbyModalStack\b' 'lobby modal stack helper'
 Require $launchGate '\bRunLaunchGate\b' 'run launch gate helper'
@@ -49,6 +50,7 @@ Require $hud '"Resume"' 'visible resume button object'
 Forbid $runner '\bIsReturnButtonTouch\b' 'invisible corner exit path'
 Require $menu '\bLobbyModalStack\b' 'lobby modal back ownership'
 Require $menu '\bRunLaunchGate\b' 'duplicate run launch protection'
+Require $androidBuild "'VerifyThemeMechanicsPhase4\.ps1'[\s\S]*'VerifyPlayerExperienceAudit\.ps1'" 'player experience audit runs after the theme gate in Android builds'
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { [Console]::Error.WriteLine($_) }

@@ -39,7 +39,8 @@ if (-not $SkipChecks) {
         'VerifyLongTermGrowthPhase3.ps1',
         'VerifyPremiumStorybookHome.ps1',
         'VerifyCustomMapAssetsBatch1.ps1',
-        'VerifyThemeMechanicsPhase4.ps1'
+        'VerifyThemeMechanicsPhase4.ps1',
+        'VerifyPlayerExperienceAudit.ps1'
     )) {
         & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot $script) -ProjectRoot $ProjectRoot
         if ($LASTEXITCODE -ne 0) { throw "Pre-build verification failed: $script" }
