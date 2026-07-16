@@ -151,6 +151,9 @@ namespace PenguinRun.Editor
                 var pausedRoot = canvas.transform.Find("SafeArea/Paused");
                 Expect(pausedRoot != null && !pausedRoot.gameObject.activeSelf,
                     "pause overlay must start hidden", failures);
+                var emptyBuffs = canvas.transform.Find("SafeArea/NormalStats/Buffs");
+                Expect(emptyBuffs != null && !emptyBuffs.gameObject.activeSelf,
+                    "empty buff card must not occupy HUD space", failures);
 
                 pause?.onClick.Invoke();
                 resume?.onClick.Invoke();
@@ -233,6 +236,9 @@ namespace PenguinRun.Editor
                 "LobbyModalStack", "lobby must own modal back navigation", failures);
             RequireSource("Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs",
                 "RunLaunchGate", "lobby must reject duplicate launches", failures);
+            ForbidSource("Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs",
+                "TextAnchor.LowerLeft, UiBuilder.TextTertiary",
+                "difficulty speed and Boss timing must not use low-contrast tertiary text", failures);
         }
 
         private static void ValidateAuditReportContract(List<string> failures)

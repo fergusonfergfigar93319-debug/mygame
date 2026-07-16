@@ -1352,7 +1352,7 @@ namespace PenguinRun.Game.UI
                 // 速度 + Boss 提示
                 var speedStr = $"初速 {preset.StartSpeed:F0}  →  最高 {preset.MaxSpeed:F0} m/s   |   Boss @{preset.FirstBossDistance:F0}m";
                 var statText = UiBuilder.CreateText("Stat", rowBg, speedStr, 17, FontStyle.Normal,
-                    TextAnchor.LowerLeft, UiBuilder.TextTertiary);
+                    TextAnchor.LowerLeft, UiBuilder.TextSecondary);
                 var strt = (RectTransform)statText.transform;
                 strt.anchorMin = new Vector2(0f, 0f);
                 strt.anchorMax = new Vector2(1f, 0.5f);

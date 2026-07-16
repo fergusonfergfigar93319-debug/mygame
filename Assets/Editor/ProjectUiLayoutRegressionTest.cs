@@ -43,6 +43,7 @@ public static class ProjectUiLayoutRegressionTest
     {
         var failures = new List<string>();
         ValidateRunnerResultTextWidths(failures);
+        ValidateRunResultOverlaySpacing(failures);
         ValidateRunnerHudPauseLayout(failures);
         ValidatePanelReplacement(failures);
         ValidatePremiumHomeLayouts(failures);
@@ -52,6 +53,52 @@ public static class ProjectUiLayoutRegressionTest
             ? "PASS: UI layout regressions are covered."
             : "FAIL:\n" + string.Join("\n", failures);
         return passed;
+    }
+
+    private static void ValidateRunResultOverlaySpacing(List<string> failures)
+    {
+        GameObject host = null;
+        try
+        {
+            host = new GameObject("AuditRunResultHost", typeof(RectTransform));
+            var root = (RectTransform)host.transform;
+            root.sizeDelta = new Vector2(1920f, 1080f);
+            RunResultOverlay.Show(root, new PenguinRun.Game.RunOutcomeRouter.Result
+            {
+                Score = 204,
+                DistanceMeters = 13,
+                Coins = 0,
+                SurvivalSeconds = 1f,
+                RankByScore = 1,
+            }, null);
+            Canvas.ForceUpdateCanvases();
+
+            var panel = root.Find("RunResultOverlay/Panel") as RectTransform;
+            var headline = panel?.Find("Headline") as RectTransform;
+            var subline = panel?.Find("Subline") as RectTransform;
+            var scoreCard = panel?.Find("ScoreCard") as RectTransform;
+            if (panel == null || headline == null || subline == null || scoreCard == null)
+            {
+                failures.Add("Run result overlay is missing Panel/Headline/Subline/ScoreCard.");
+                return;
+            }
+
+            var headlineBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(panel, headline);
+            var sublineBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(panel, subline);
+            var scoreBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(panel, scoreCard);
+            if (headlineBounds.max.y > sublineBounds.min.y && headlineBounds.min.y < sublineBounds.max.y)
+                failures.Add("Run result headline overlaps the subline.");
+            if (sublineBounds.max.y > scoreBounds.min.y && sublineBounds.min.y < scoreBounds.max.y)
+                failures.Add("Run result subline overlaps the score card.");
+        }
+        catch (Exception ex)
+        {
+            failures.Add("Run result spacing check threw: " + ex.Message);
+        }
+        finally
+        {
+            if (host != null) UnityEngine.Object.DestroyImmediate(host);
+        }
     }
 
     private static void ValidateRunnerHudPauseLayout(List<string> failures)

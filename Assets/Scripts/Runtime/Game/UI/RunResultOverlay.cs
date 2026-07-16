@@ -139,7 +139,7 @@ namespace PenguinRun.Game.UI
             // 得分大字（中央亮点）
             var scoreCard = UiBuilder.CreateRect("ScoreCard", panel,
                 new Vector2(0.08f, 0.5f), new Vector2(0.92f, 0.5f),
-                new Vector2(0f, 220f), new Vector2(0f, 60f),
+                new Vector2(0f, 220f), new Vector2(0f, 15f),
                 UiTheme.PaperBase, rounded: true);
             UiBuilder.AddOutline(scoreCard.gameObject, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
 

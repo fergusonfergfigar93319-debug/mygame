@@ -26,6 +26,7 @@ namespace PenguinRun
         private readonly TextMeshProUGUI comboText;
         private readonly TextMeshProUGUI fishText;
         private readonly TextMeshProUGUI livesText;
+        private readonly GameObject buffRoot;
         private readonly TextMeshProUGUI buffText;
         private readonly TextMeshProUGUI feedbackText;
         private readonly TextMeshProUGUI bossNameText;
@@ -61,7 +62,8 @@ namespace PenguinRun
             GameObject pauseRoot, GameObject pauseActionRoot, GameObject feedbackRoot,
             TextMeshProUGUI modeText,
             TextMeshProUGUI scoreText, TextMeshProUGUI distanceText, TextMeshProUGUI comboText,
-            TextMeshProUGUI fishText, TextMeshProUGUI livesText, TextMeshProUGUI buffText,
+            TextMeshProUGUI fishText, TextMeshProUGUI livesText, GameObject buffRoot,
+            TextMeshProUGUI buffText,
             TextMeshProUGUI feedbackText, TextMeshProUGUI bossNameText,
             TextMeshProUGUI bossPatternText, TextMeshProUGUI bossHintText, Image bossHealthFill,
             GameObject routeRoot, TextMeshProUGUI routeTitleText, TextMeshProUGUI routeChoiceText,
@@ -83,6 +85,7 @@ namespace PenguinRun
             this.comboText = comboText;
             this.fishText = fishText;
             this.livesText = livesText;
+            this.buffRoot = buffRoot;
             this.buffText = buffText;
             this.feedbackText = feedbackText;
             this.bossNameText = bossNameText;
@@ -134,6 +137,7 @@ namespace PenguinRun
             var buffCard = CreateHudCard("Buffs", normal, new Vector2(0.018f, 0.055f), new Vector2(0.31f, 0.17f));
             var buffs = CreateHudText("BuffSummary", buffCard, string.Empty, UiTheme.Caption, Color.white,
                 new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.92f), TextAlignmentOptions.Left);
+            buffCard.gameObject.SetActive(false);
 
             var upgradeRoot = CreateHudCard("RunBuild", normal, new Vector2(0.69f, 0.055f), new Vector2(0.982f, 0.17f));
             var upgradeText = CreateHudText("UpgradeSummary", upgradeRoot, string.Empty,
@@ -218,7 +222,7 @@ namespace PenguinRun
 
             var hud = new RunnerHudCanvas(canvasObject, normal.gameObject, bossRoot.gameObject,
                 pauseRoot.gameObject, pause.gameObject, feedbackRoot.gameObject, mode, score, distance, combo,
-                fish, lives, buffs, feedback, bossName, pattern, hint, healthFill,
+                fish, lives, buffCard.gameObject, buffs, feedback, bossName, pattern, hint, healthFill,
                 routeRoot.gameObject, routeTitle, routeChoice,
                 upgradeRoot.gameObject, upgradeText,
                 skillRoot.gameObject, skillText,
@@ -258,7 +262,12 @@ namespace PenguinRun
             }
 
             var buffs = BuildBuffSummary(world);
-            if (buffs != cachedBuffs) { cachedBuffs = buffs; buffText.text = buffs; }
+            if (buffs != cachedBuffs)
+            {
+                cachedBuffs = buffs;
+                buffText.text = buffs;
+                buffRoot.SetActive(!string.IsNullOrWhiteSpace(buffs));
+            }
 
             if (Time.unscaledTime >= overrideFeedbackUntil)
             {
