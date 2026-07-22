@@ -1,0 +1,54 @@
+{
+  "proportions": {
+    "total_height": 2.2,
+    "body_height": 1.18,
+    "body_width": 0.78,
+    "head_width": 0.96,
+    "head_to_total": 0.38,
+    "foot_width": 0.42,
+    "forward_lean_degrees": 8.0,
+    "goggle_face_overlap": 0.018,
+    "scarf_neck_overlap": 0.025
+  },
+  "triangles": {
+    "high": 197712,
+    "lod0": 46096,
+    "lod1": 17764,
+    "lod2": 6952
+  },
+  "interfaces": {
+    "goggles_to_face_signed_overlap_m": 0.018,
+    "scarf_to_neck_signed_overlap_m": 0.025,
+    "feet_ground_plane_z_m": 0.095,
+    "socket_names": [
+      "Socket_Head",
+      "Socket_Face",
+      "Socket_Neck",
+      "Socket_Back"
+    ]
+  },
+  "required_actions": [
+    "BossCounter",
+    "Celebrate",
+    "DashActivate",
+    "Defeat",
+    "Fall",
+    "FishPickup",
+    "Hurt",
+    "Idle",
+    "Jump",
+    "Land",
+    "LaneLeft",
+    "LaneRight",
+    "MagnetActivate",
+    "Run",
+    "ShieldActivate",
+    "Slide"
+  ],
+  "validation": {
+    "lod0_under_50000": true,
+    "lod1_under_22000": true,
+    "lod2_under_8000": true,
+    "all_actions_present": true
+  }
+}
