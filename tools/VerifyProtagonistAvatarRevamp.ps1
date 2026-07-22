@@ -21,9 +21,13 @@ foreach ($file in @(
     'Assets/Scripts/Runtime/PenguinRun/Avatar/IPlayerCharacterPresentation.cs',
     'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerAvatarState.cs',
     'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerAvatarDefinition.cs',
+    'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerAnimationSet.cs',
+    'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerAppearanceSet.cs',
+    'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerAccessorySocketSet.cs',
     'Assets/Scripts/Runtime/PenguinRun/Avatar/PlayerAvatarPresenter.cs',
     'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerAnimationDriver.cs',
     'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerCharacterFx.cs',
+    'Assets/Scripts/Editor/PenguinRun/ProjectRunnerAvatarValidation.cs',
     'Assets/Resources/PenguinRun/Characters/Gugugaga/gugugaga_avatar.fbx',
     'Assets/Resources/PenguinRun/Characters/Gugugaga/gugugaga_lod1.fbx',
     'Assets/Resources/PenguinRun/Characters/Gugugaga/gugugaga_lod2.fbx'
