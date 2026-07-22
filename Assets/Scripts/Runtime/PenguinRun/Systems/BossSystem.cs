@@ -266,13 +266,11 @@ namespace PenguinRun
             if (boss.Phase != BossPhase.Active) return false;
             if (boss.Pattern == BossPattern.None) return false;
 
-            return CheckPatternHit(boss, playerX, playerY, groundY, playerSliding,
-                playerDashTimer, playerShieldTimer, ref feedbackText, ref feedbackTimer);
+            return CheckPatternHit(boss, playerX, playerY, groundY, playerSliding, playerDashTimer);
         }
 
         private bool CheckPatternHit(BossEncounter boss, float playerX, float playerY, float groundY,
-            bool playerSliding, float playerDashTimer, float playerShieldTimer,
-            ref string feedbackText, ref float feedbackTimer)
+            bool playerSliding, float playerDashTimer)
         {
             if (!RunnerHitResolver.IsBossPatternHit(
                     boss.Pattern,
@@ -289,24 +287,24 @@ namespace PenguinRun
                 return false;
             }
 
-            // 命中：有护盾则抵消，否则扣命
-            if (playerShieldTimer > 0f)
-            {
-                feedbackText = "护盾抵挡 BOSS 攻击！等破绽出现后再冲刺反击";
-                feedbackTimer = 1f;
-                boss.HitFlashTimer = 0.4f;
-                return false;
-            }
-
-            // 记录被何种招式击中，用于死亡复盘
-            RecordPlayerHit(boss.Pattern);
-
-            feedbackText = guidanceEnabledForCurrentBoss
-                ? $"{boss.Definition.DisplayName} 击中了你！{GetPatternDodgeHint(boss.Pattern)}"
-                : $"{boss.Definition.DisplayName} 击中了你！";
-            feedbackTimer = 1f;
+            // 几何命中。护盾/鱼弹/冰镜/树甲/珊瑚等防御层由外部 RunnerHitResolver.TryResolveBossHit
+            // 统一解算（与障碍命中同一条款）；真实扣血后再经 NotifyBossDamageTaken 记录复盘。
+            lastGeometricHitPattern = boss.Pattern;
             boss.HitFlashTimer = HitInvulnerabilitySeconds;
             return true;
+        }
+
+        /// <summary>外部防御解算确认真实扣血后调用：记录死亡复盘；非致命时给出躲避提示。</summary>
+        public void NotifyBossDamageTaken(bool fatal, ref string feedbackText, ref float feedbackTimer)
+        {
+            RecordPlayerHit(lastGeometricHitPattern);
+            var boss = CurrentBoss;
+            if (fatal || boss == null) return;
+
+            feedbackText = guidanceEnabledForCurrentBoss
+                ? $"{boss.Definition.DisplayName} 击中了你！{GetPatternDodgeHint(lastGeometricHitPattern)}"
+                : $"{boss.Definition.DisplayName} 击中了你！";
+            feedbackTimer = 1f;
         }
 
         private static bool CanCounterBossInVulnerable(BossEncounter boss, float playerX, float laneTolerance)
@@ -708,6 +706,7 @@ namespace PenguinRun
         // 死亡复盘
 
         private BossPattern lastHitPattern = BossPattern.None;
+        private BossPattern lastGeometricHitPattern = BossPattern.None;
         private int hitCountInCurrentFight = 0;
 
         /// <summary>获取死亡复盘提示：分析被哪一招命中并给出建议。</summary>
@@ -745,6 +744,7 @@ namespace PenguinRun
         private void ResetFightStats()
         {
             lastHitPattern = BossPattern.None;
+            lastGeometricHitPattern = BossPattern.None;
             hitCountInCurrentFight = 0;
         }
     }

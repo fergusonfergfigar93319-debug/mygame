@@ -960,6 +960,22 @@ namespace PenguinRun
                 }
             }
 
+            // 动态机关障碍：中后程逐步引入定时门与巡移浮障（IsCollidable 动态开关 / 根节点移动判定）
+            if (runDistance > 500f)
+            {
+                var dynamicRoll = Random.value;
+                if (dynamicRoll < 0.10f)
+                {
+                    SpawnTimedGate(z, lane, m.Palette, runDistance);
+                    return;
+                }
+                if (runDistance > 750f && dynamicRoll < 0.17f)
+                {
+                    SpawnMovingBarrier(z, lane, m.Palette, runDistance);
+                    return;
+                }
+            }
+
             roll = Mathf.InverseLerp(specialtyGate, 1f, roll);
             var rollingGate = m.RollingSpawnChance;
             var wideGate = rollingGate + m.WideWallChance;
@@ -1343,15 +1359,16 @@ namespace PenguinRun
             Vector3 localPos;
             Color tint;
 
+            // 每个调色板使用专属模型（消除 Cedar/Mist、IceLake/Aurora/Ocean 跨主题复用；只换外观不动碰撞规格）
             if (lowBarrier)
             {
                 switch (palette)
                 {
                     case SegmentObstaclePalette.OceanCoral:
-                        modelName = "mushroom_redGroup";
+                        modelName = "mushroom_redGroup"; // 珊瑚簇剪影
                         localScale = new Vector3(0.54f, 0.54f, 0.54f);
                         localPos = new Vector3(0f, -0.12f, 0f);
-                        tint = new Color(0.95f, 0.68f, 0.58f);
+                        tint = new Color(0.96f, 0.55f, 0.6f);
                         break;
                     case SegmentObstaclePalette.SkyCloud:
                         modelName = "stone_2";
@@ -1360,11 +1377,22 @@ namespace PenguinRun
                         tint = new Color(0.84f, 0.9f, 0.98f);
                         break;
                     case SegmentObstaclePalette.CedarWood:
+                        modelName = "log_stackLarge"; // 断木堆
+                        localScale = new Vector3(0.5f, 0.5f, 0.5f);
+                        localPos = new Vector3(0f, -0.1f, 0f);
+                        tint = new Color(0.55f, 0.4f, 0.26f);
+                        break;
                     case SegmentObstaclePalette.MistFog:
-                        modelName = "stone_1";
+                        modelName = "stone_1"; // 湿石
                         localScale = new Vector3(0.74f, 0.74f, 0.74f);
                         localPos = new Vector3(0f, -0.06f, 0f);
-                        tint = new Color(0.58f, 0.52f, 0.46f);
+                        tint = new Color(0.55f, 0.62f, 0.68f);
+                        break;
+                    case SegmentObstaclePalette.AuroraGlow:
+                        modelName = "rock_smallA"; // 磁石碎块
+                        localScale = new Vector3(0.8f, 0.8f, 0.8f);
+                        localPos = new Vector3(0f, -0.06f, 0f);
+                        tint = new Color(0.52f, 0.44f, 0.8f);
                         break;
                     default:
                         modelName = "stone_1";
@@ -1385,29 +1413,34 @@ namespace PenguinRun
                         tint = new Color(0.78f, 0.9f, 1f);
                         break;
                     case SegmentObstaclePalette.CedarWood:
+                        modelName = "log_stackLarge"; // 雪松残木
+                        localScale = new Vector3(0.62f, 0.62f, 0.62f);
+                        localPos = new Vector3(0f, -0.4f, 0f);
+                        tint = new Color(0.52f, 0.38f, 0.24f);
+                        break;
                     case SegmentObstaclePalette.MistFog:
-                        modelName = "tree_simple";
-                        localScale = new Vector3(0.58f, 0.58f, 0.58f);
-                        localPos = new Vector3(0f, -0.48f, 0f);
-                        tint = new Color(0.58f, 0.78f, 0.6f);
+                        modelName = "cliff_block_stone"; // 雾堤残垣石
+                        localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                        localPos = new Vector3(0f, -0.42f, 0f);
+                        tint = new Color(0.56f, 0.64f, 0.7f);
                         break;
                     case SegmentObstaclePalette.AuroraGlow:
-                        modelName = "rock_largeA";
-                        localScale = new Vector3(0.82f, 0.82f, 0.82f);
-                        localPos = new Vector3(0f, -0.22f, 0f);
-                        tint = new Color(0.64f, 0.58f, 0.92f);
+                        modelName = "cliff_block_rock"; // 磁场棱岩
+                        localScale = new Vector3(0.58f, 0.58f, 0.58f);
+                        localPos = new Vector3(0f, -0.42f, 0f);
+                        tint = new Color(0.58f, 0.48f, 0.95f);
                         break;
                     case SegmentObstaclePalette.OceanCoral:
-                        modelName = "rock_largeA";
-                        localScale = new Vector3(0.8f, 0.8f, 0.8f);
-                        localPos = new Vector3(0f, -0.22f, 0f);
-                        tint = new Color(0.62f, 0.86f, 0.88f);
+                        modelName = "mushroom_redGroup"; // 大珊瑚簇
+                        localScale = new Vector3(0.82f, 0.82f, 0.82f);
+                        localPos = new Vector3(0f, -0.5f, 0f);
+                        tint = new Color(0.96f, 0.5f, 0.58f);
                         break;
                     default:
-                        modelName = "rock_largeA";
+                        modelName = "rock_largeA"; // 冰湖巨岩（仅冰湖使用）
                         localScale = new Vector3(0.82f, 0.82f, 0.82f);
                         localPos = new Vector3(0f, -0.22f, 0f);
-                        tint = new Color(0.72f, 0.8f, 0.9f);
+                        tint = new Color(0.68f, 0.85f, 0.98f);
                         break;
                 }
             }
@@ -1425,12 +1458,62 @@ namespace PenguinRun
             var scaleBoost = lowBarrier ? OpenObstacleVisualScaleBoost * 1.08f : OpenObstacleVisualScaleBoost;
             inst.transform.localScale = localScale * scaleBoost;
             TintModel(inst, tint);
+            AddPaletteAccent(root, palette, lowBarrier);
             if (lowBarrier)
             {
                 AddSlideGateGroundStrip(root);
             }
 
             return true;
+        }
+
+        /// <summary>主题读感强化件：每个调色板叠一小组专属发光/氛围装饰（纯表现，不参与判定）。</summary>
+        private static void AddPaletteAccent(Transform root, SegmentObstaclePalette palette, bool lowBarrier)
+        {
+            var topY = lowBarrier ? 0.35f : 1.05f;
+            switch (palette)
+            {
+                case SegmentObstaclePalette.AuroraGlow:
+                    // 发光水晶尖
+                    var crystal = AddChildPrimitive(root, "Accent Crystal", PrimitiveType.Cube,
+                        new Vector3(0.22f, topY, 0f), new Vector3(0.2f, 0.55f, 0.2f),
+                        new Color(0.65f, 0.9f, 1f, 0.85f), true);
+                    crystal.transform.localRotation = Quaternion.Euler(8f, 30f, 42f);
+                    break;
+                case SegmentObstaclePalette.OceanCoral:
+                    // 上浮气泡
+                    AddChildPrimitive(root, "Accent Bubble A", PrimitiveType.Sphere,
+                        new Vector3(-0.3f, topY + 0.25f, 0.1f), Vector3.one * 0.14f,
+                        new Color(0.7f, 0.95f, 1f, 0.5f), true);
+                    AddChildPrimitive(root, "Accent Bubble B", PrimitiveType.Sphere,
+                        new Vector3(0.24f, topY + 0.55f, -0.08f), Vector3.one * 0.1f,
+                        new Color(0.75f, 0.98f, 1f, 0.42f), true);
+                    break;
+                case SegmentObstaclePalette.MistFog:
+                    // 贴地雾盘
+                    AddChildPrimitive(root, "Accent Fog Disc", PrimitiveType.Cylinder,
+                        new Vector3(0f, lowBarrier ? -0.16f : -0.5f, 0f), new Vector3(1.9f, 0.05f, 1.9f),
+                        new Color(0.82f, 0.88f, 0.92f, 0.28f), true);
+                    break;
+                case SegmentObstaclePalette.CedarWood:
+                    // 顶部积雪
+                    AddChildPrimitive(root, "Accent Snow Cap", PrimitiveType.Sphere,
+                        new Vector3(0f, topY, 0f), new Vector3(0.72f, 0.16f, 0.6f),
+                        new Color(0.93f, 0.96f, 0.99f));
+                    break;
+                case SegmentObstaclePalette.SkyCloud:
+                    // 侧向风痕
+                    AddChildPrimitive(root, "Accent Wind Streak", PrimitiveType.Cube,
+                        new Vector3(-0.55f, topY * 0.7f, 0f), new Vector3(0.75f, 0.05f, 0.05f),
+                        new Color(1f, 1f, 1f, 0.5f), true);
+                    break;
+                default:
+                    // 冰湖：冰晶反光条
+                    AddChildPrimitive(root, "Accent Ice Gleam", PrimitiveType.Cube,
+                        new Vector3(0.12f, topY * 0.75f, -0.3f), new Vector3(0.08f, 0.62f, 0.08f),
+                        new Color(0.8f, 0.98f, 1f, 0.75f), true);
+                    break;
+            }
         }
 
         private GameObject LoadModelPrefab(string modelName)
@@ -1463,24 +1546,26 @@ namespace PenguinRun
             return true;
         }
 
+        private static readonly MaterialPropertyBlock TintBlock = new();
+
+        /// <summary>模型主题染色：走 MaterialPropertyBlock，不实例化材质（保住合批与 GPU instancing）。</summary>
         private static void TintModel(GameObject root, Color tint)
         {
             if (root == null) return;
             foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
             {
                 if (renderer == null) continue;
-                var mat = renderer.material;
+                var mat = renderer.sharedMaterial;
                 if (mat == null) continue;
-                if (mat.HasProperty("_BaseColor"))
-                {
-                    var baseColor = mat.GetColor("_BaseColor");
-                    mat.SetColor("_BaseColor", Color.Lerp(baseColor, tint, 0.52f));
-                }
-                if (mat.HasProperty("_Color"))
-                {
-                    var baseColor = mat.GetColor("_Color");
-                    mat.SetColor("_Color", Color.Lerp(baseColor, tint, 0.52f));
-                }
+                var baseColor = mat.HasProperty("_BaseColor") ? mat.GetColor("_BaseColor")
+                    : mat.HasProperty("_Color") ? mat.GetColor("_Color")
+                    : Color.white;
+                var tinted = Color.Lerp(baseColor, tint, 0.52f);
+
+                renderer.GetPropertyBlock(TintBlock);
+                if (mat.HasProperty("_BaseColor")) TintBlock.SetColor("_BaseColor", tinted);
+                if (mat.HasProperty("_Color")) TintBlock.SetColor("_Color", tinted);
+                renderer.SetPropertyBlock(TintBlock);
             }
         }
 
@@ -1490,9 +1575,14 @@ namespace PenguinRun
             switch (palette)
             {
                 case SegmentObstaclePalette.CedarWood:
-                case SegmentObstaclePalette.MistFog:
                     AddChildPrimitive(root, "Wood Crate", PrimitiveType.Cube, new Vector3(0f, 0.05f, 0f), new Vector3(1.48f, 0.32f, 1.2f), new Color(0.45f, 0.32f, 0.2f));
                     AddChildPrimitive(root, "Wood Rim", PrimitiveType.Cube, new Vector3(0f, 0.1f, -0.02f), new Vector3(1.58f, 0.1f, 1.28f), new Color(0.62f, 0.48f, 0.34f));
+                    break;
+                case SegmentObstaclePalette.MistFog:
+                    // 雾堤低障碍：湿石板 + 贴地雾带（与雪松木箱区分）
+                    AddChildPrimitive(root, "Wet Slab", PrimitiveType.Cube, new Vector3(0f, 0.03f, 0f), new Vector3(1.5f, 0.3f, 1.18f), new Color(0.42f, 0.5f, 0.55f));
+                    AddChildPrimitive(root, "Slab Moss", PrimitiveType.Cube, new Vector3(0f, 0.15f, 0f), new Vector3(1.32f, 0.07f, 1.02f), new Color(0.4f, 0.55f, 0.42f));
+                    AddChildPrimitive(root, "Fog Skirt", PrimitiveType.Cylinder, new Vector3(0f, -0.1f, 0f), new Vector3(1.9f, 0.05f, 1.6f), new Color(0.82f, 0.88f, 0.92f, 0.3f), true);
                     break;
                 case SegmentObstaclePalette.OceanCoral:
                     // 海洋主题低障碍：贝壳障碍
@@ -1708,6 +1798,87 @@ namespace PenguinRun
                 }
             }
             RegisterObstacle(obstacle, ObstacleColliderSpec.WideWall, dy, ObstacleKind.WideWall);
+
+            // 冲刺可碎墙：中后程宽墙有概率升级为 ShatterWall，冲刺态撞上直接粉碎。
+            // 裂纹光带作为“可冲刺击碎”的视觉语言（与冲刺道具同色系）。
+            if (runDistance > 350f && Random.value < 0.30f)
+            {
+                var crackA = AddChildPrimitive(obstacle.transform, "Shatter Crack A", PrimitiveType.Cube,
+                    new Vector3(-0.2f, 0.1f, 0.56f), new Vector3(1.9f, 0.08f, 0.05f),
+                    new Color(0.45f, 0.95f, 1f, 0.9f), true);
+                crackA.transform.localRotation = Quaternion.Euler(0f, 0f, 16f);
+                var crackB = AddChildPrimitive(obstacle.transform, "Shatter Crack B", PrimitiveType.Cube,
+                    new Vector3(0.3f, 0.05f, 0.56f), new Vector3(1.3f, 0.06f, 0.05f),
+                    new Color(0.45f, 0.95f, 1f, 0.75f), true);
+                crackB.transform.localRotation = Quaternion.Euler(0f, 0f, -24f);
+
+                var shatter = obstacle.AddComponent<ShatterWall>();
+                shatter.Setup(obstacle.transform);
+                obstacleBehaviors.Add(shatter);
+            }
+        }
+
+        /// <summary>定时开合能量门：周期开/关，看准开门窗口通过，或换道绕行。</summary>
+        private void SpawnTimedGate(float z, RunnerLane lane, SegmentObstaclePalette palette, float runDistance)
+        {
+            var obstacle = new GameObject("Timed Gate");
+            var dy = 0f;
+            var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
+            obstacle.transform.position = new Vector3(lane.ToX(laneWidth), surface + dy, z);
+
+            var frameColor = GetObstaclePaletteTint(palette);
+            var energyColor = palette switch
+            {
+                SegmentObstaclePalette.AuroraGlow => new Color(0.62f, 0.4f, 1f, 0.62f),
+                SegmentObstaclePalette.OceanCoral => new Color(0.2f, 0.85f, 0.9f, 0.62f),
+                SegmentObstaclePalette.CedarWood => new Color(1f, 0.62f, 0.25f, 0.62f),
+                SegmentObstaclePalette.MistFog => new Color(0.72f, 0.82f, 0.95f, 0.62f),
+                SegmentObstaclePalette.SkyCloud => new Color(1f, 0.9f, 0.35f, 0.62f),
+                _ => new Color(0.35f, 0.85f, 1f, 0.62f),
+            };
+
+            AddChildPrimitive(obstacle.transform, "Gate Pillar L", PrimitiveType.Cylinder,
+                new Vector3(-0.92f, 1.05f, 0f), new Vector3(0.18f, 1.05f, 0.18f), frameColor);
+            AddChildPrimitive(obstacle.transform, "Gate Pillar R", PrimitiveType.Cylinder,
+                new Vector3(0.92f, 1.05f, 0f), new Vector3(0.18f, 1.05f, 0.18f), frameColor);
+            AddChildPrimitive(obstacle.transform, "Gate Crown", PrimitiveType.Cube,
+                new Vector3(0f, 2.16f, 0f), new Vector3(2.05f, 0.16f, 0.24f), frameColor);
+
+            var panel = AddChildPrimitive(obstacle.transform, "Gate Energy Panel", PrimitiveType.Cube,
+                new Vector3(0f, 1.0f, 0f), new Vector3(1.62f, 2.0f, 0.16f), energyColor, true);
+
+            var spec = new ObstacleColliderSpec(false, 0.62f, 0.30f, 999f);
+            RegisterObstacle(obstacle, spec, dy, ObstacleKind.StandardHigh);
+
+            var gate = obstacle.AddComponent<TimedGate>();
+            gate.Setup(panel.transform, spec, lane.ToX(laneWidth));
+            obstacleBehaviors.Add(gate);
+        }
+
+        /// <summary>横向巡移浮障：在车道间往返滑动，看准空档换道或直接跳过。</summary>
+        private void SpawnMovingBarrier(float z, RunnerLane lane, SegmentObstaclePalette palette, float runDistance)
+        {
+            var obstacle = new GameObject("Moving Barrier");
+            var dy = 0.5f;
+            var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
+            var laneX = lane.ToX(laneWidth);
+            obstacle.transform.position = new Vector3(laneX, surface + dy, z);
+
+            var bodyColor = GetObstaclePaletteTint(palette);
+            AddChildPrimitive(obstacle.transform, "Barrier Body", PrimitiveType.Cube,
+                new Vector3(0f, 0.05f, 0f), new Vector3(1.05f, 0.85f, 0.55f), bodyColor);
+            AddChildPrimitive(obstacle.transform, "Barrier Glow Rim", PrimitiveType.Cube,
+                new Vector3(0f, 0.05f, 0.3f), new Vector3(1.12f, 0.2f, 0.06f),
+                new Color(1f, 0.45f, 0.2f, 0.85f), true);
+            AddChildPrimitive(obstacle.transform, "Hover Disc", PrimitiveType.Cylinder,
+                new Vector3(0f, -0.52f, 0f), new Vector3(1.15f, 0.04f, 0.7f),
+                new Color(1f, 0.6f, 0.25f, 0.4f), true);
+
+            RegisterObstacle(obstacle, new ObstacleColliderSpec(false, 0.55f, 0.34f, 0.95f), dy, ObstacleKind.Enemy);
+
+            var barrier = obstacle.AddComponent<MovingBarrier>();
+            barrier.Setup(obstacle.transform, laneWidth * 0.6f, 0.33f, laneX);
+            obstacleBehaviors.Add(barrier);
         }
 
         private void SpawnWideSlideGate(float z, RunnerLane obstacleLane, SegmentObstaclePalette palette, float runDistance)
@@ -1957,7 +2128,8 @@ namespace PenguinRun
         private GameObject BuildFishSnackVisual()
         {
             var root = new GameObject("Fish Coin");
-            if (!visualFactory.TryAttachPickup(root.transform, PickupVisualId.FishSnack))
+            var hasCustom = visualFactory.TryAttachPickup(root.transform, PickupVisualId.FishSnack);
+            if (!hasCustom)
             {
                 var meshRoot = new GameObject("FishMesh");
                 meshRoot.transform.SetParent(root.transform, false);
@@ -1968,11 +2140,11 @@ namespace PenguinRun
                 AttachFishSnackFace(meshRoot.transform);
             }
 
+            // 贴地光环：缩小透明度，避免盖过鱼干剪影。
             var glow = RunnerVisuals.CreatePrimitive("PickupGlow", PrimitiveType.Cylinder,
-                new Vector3(0f, -0.2f, 0f), new Vector3(0.62f, 0.025f, 0.62f),
-                new Color(1f, 0.88f, 0.4f, 0.32f), true);
+                new Vector3(0f, -0.42f, 0f), new Vector3(0.48f, 0.01f, 0.48f),
+                new Color(1f, 0.88f, 0.4f, 0.16f), true);
             glow.transform.SetParent(root.transform, false);
-            glow.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
 
             root.AddComponent<FishSnackWobble>();
             return root;
@@ -2152,9 +2324,16 @@ namespace PenguinRun
             var hasCustomVisual = RunnerVisualAssetCatalog.TryGetPickupId(kind, out var visualId)
                 && visualFactory.TryAttachPickup(root.transform, visualId);
             if (hasCustomVisual)
+            {
+                // 自定义雕塑已挂载时隐藏核心光球，否则远看仍像「模糊光点」。
+                SetPickupCoreVisible(root.transform, false);
                 AddPickupRecognitionRing(root.transform, coreColor);
+            }
             else
+            {
+                SetPickupCoreVisible(root.transform, true);
                 AddPowerUpEffects(root.transform, kind, coreColor, secondaryColor);
+            }
             var pulse = root.GetComponent<PowerUpPulse>();
             if (pulse == null) pulse = root.AddComponent<PowerUpPulse>();
             pulse.Configure(visualProfile.PulseScale);
@@ -2178,38 +2357,23 @@ namespace PenguinRun
             for (var i = power.transform.childCount - 1; i >= 0; i--)
             {
                 var child = power.transform.GetChild(i);
-                if (child.name == "Pickup Core") continue;
+                if (child.name == "Pickup Core")
+                {
+                    child.gameObject.SetActive(true);
+                    continue;
+                }
                 Object.Destroy(child.gameObject);
             }
+            power.transform.localScale = Vector3.one;
             power.transform.localRotation = Quaternion.identity;
             powerUpPool.Return(power);
         }
 
-        private static (Color primary, Color secondary) GetPowerUpColors(PowerUpKind kind)
+        /// <summary>道具配色唯一来源为 <see cref="PowerUpVisualProfile"/>（primary=核心色，secondary=光晕色）。</summary>
+        private (Color primary, Color secondary) GetPowerUpColors(PowerUpKind kind)
         {
-            return kind switch
-            {
-                PowerUpKind.Dash => (new Color(0.25f, 1f, 0.82f), new Color(0.15f, 0.8f, 0.65f)),
-                PowerUpKind.Magnet => (new Color(0.52f, 0.68f, 1f), new Color(0.35f, 0.5f, 0.9f)),
-                PowerUpKind.Shield => (new Color(1f, 0.88f, 0.35f), new Color(0.85f, 0.65f, 0.2f)),
-                PowerUpKind.ScoreStar => (new Color(1f, 0.58f, 0.9f), new Color(0.9f, 0.35f, 0.75f)),
-                PowerUpKind.DoubleFishSnack => (new Color(1f, 0.72f, 0.38f), new Color(0.9f, 0.55f, 0.25f)),
-                PowerUpKind.TimeHourglass => (new Color(0.72f, 0.95f, 1f), new Color(0.55f, 0.8f, 0.9f)),
-                PowerUpKind.GlideFeather => (new Color(0.92f, 0.96f, 1f), new Color(0.75f, 0.85f, 0.95f)),
-                PowerUpKind.BubbleShield => (new Color(0.25f, 0.85f, 0.95f), new Color(0.6f, 0.95f, 1f)), // 海洋：蓝绿色泡泡
-                PowerUpKind.SeahorseBoost => (new Color(1f, 0.45f, 0.65f), new Color(1f, 0.7f, 0.55f)), // 海洋：珊瑚粉
-                PowerUpKind.CloudWalk => (new Color(0.95f, 0.98f, 1f), new Color(0.75f, 0.85f, 1f)),     // 天空：云白
-                PowerUpKind.WindRider => (new Color(0.35f, 0.75f, 1f), new Color(0.6f, 0.9f, 1f)),       // 天空：天蓝
-                PowerUpKind.FishBomb => (new Color(1f, 0.4f, 0.3f), new Color(1f, 0.85f, 0.4f)),
-                PowerUpKind.SecondHeart => (new Color(1f, 0.42f, 0.55f), new Color(1f, 0.78f, 0.85f)),
-                PowerUpKind.IceMirror => (new Color(0.75f, 0.95f, 1f), new Color(0.9f, 0.98f, 1f)),       // 冰镜：极冷白蓝
-                PowerUpKind.AuroraChain => (new Color(0.55f, 0.25f, 1f), new Color(0.3f, 1f, 0.8f)),      // 极光连锁：紫绿极光
-                PowerUpKind.FogLantern => (new Color(0.92f, 0.88f, 0.62f), new Color(1f, 0.98f, 0.82f)), // 雾灯：暖黄光
-                PowerUpKind.TreantArmor => (new Color(0.35f, 0.58f, 0.28f), new Color(0.62f, 0.45f, 0.28f)), // 树人护甲：森林棕绿
-                PowerUpKind.CoralBounce => (new Color(1f, 0.35f, 0.65f), new Color(0.4f, 0.95f, 0.88f)),  // 珊瑚回弹：热粉+青
-                PowerUpKind.ThunderFeather => (new Color(1f, 0.95f, 0.2f), new Color(0.4f, 0.7f, 1f)),    // 雷羽：电黄+天蓝
-                _ => (new Color(0.92f, 0.96f, 1f), new Color(0.75f, 0.85f, 0.95f)),
-            };
+            var profile = PowerUpVisualProfile.For(kind, config.MapTheme);
+            return (profile.CoreColor, profile.HaloColor);
         }
 
         private static void AddPowerUpEffects(Transform root, PowerUpKind kind, Color color, Color secondaryColor)
@@ -2385,11 +2549,25 @@ namespace PenguinRun
             }
         }
 
+        private static void SetPickupCoreVisible(Transform root, bool visible)
+        {
+            for (var i = 0; i < root.childCount; i++)
+            {
+                var child = root.GetChild(i);
+                if (child.name != "Pickup Core") continue;
+                child.gameObject.SetActive(visible);
+                return;
+            }
+        }
+
         private static void AddPickupRecognitionRing(Transform root, Color color)
         {
-            var ring = AddChildPrimitive(root, "Pickup Ring", PrimitiveType.Cylinder, Vector3.zero,
-                new Vector3(1.42f, 0.04f, 1.42f), new Color(color.r, color.g, color.b, 0.32f), true);
-            ring.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            // 贴地光环：标记位置但不遮挡模型。
+            // 早期版本是 1.42m 面向镜头的半透明大圆盘，远看像“白色光罩圆顶”，把道具模型整个盖住。
+            var halo = AddChildPrimitive(root, "Pickup Ring", PrimitiveType.Cylinder,
+                new Vector3(0f, -0.48f, 0f), new Vector3(0.72f, 0.012f, 0.72f),
+                new Color(color.r, color.g, color.b, 0.18f), true);
+            halo.transform.localRotation = Quaternion.identity;
         }
 
         private static GameObject AddChildPrimitive(Transform parent, string name, PrimitiveType type, Vector3 localPosition, Vector3 localScale, Color color, bool transparent = false)
@@ -2403,6 +2581,8 @@ namespace PenguinRun
 
         private sealed class PowerUpPulse : MonoBehaviour
         {
+            private const float SpinDegreesPerSecond = 55f;
+
             private float scale = 1.1f;
             private float phase;
             public void Configure(float pulseScale) { scale = pulseScale; phase = Random.value * Mathf.PI * 2f; }
@@ -2410,6 +2590,8 @@ namespace PenguinRun
             {
                 var pulse = 1f + (scale - 1f) * (0.5f + 0.5f * Mathf.Sin(Time.time * 4f + phase));
                 transform.localScale = Vector3.one * pulse;
+                // 统一道具自旋：与脉冲叠加，提升场景动态辨识度
+                transform.Rotate(Vector3.up, SpinDegreesPerSecond * Time.deltaTime, Space.World);
             }
         }
     }

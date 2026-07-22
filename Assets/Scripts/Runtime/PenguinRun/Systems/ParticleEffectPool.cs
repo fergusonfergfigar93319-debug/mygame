@@ -117,6 +117,27 @@ namespace PenguinRun
             }
         }
 
+        /// <summary>沿指定速度方向发射单颗粒子（磁吸飞线等定向视觉）。</summary>
+        public void EmitDirected(Vector3 position, Vector3 velocity, Color color, float lifetime = 0.35f, float size = 0.08f)
+        {
+            var p = Rent();
+            if (p == null) return;
+
+            p.Go.transform.position = position;
+            p.Go.transform.localScale = Vector3.one * size;
+            p.Velocity = velocity;
+            p.Life = lifetime;
+            p.MaxLife = lifetime;
+            p.StartScale = size;
+            p.StartColor = color;
+            p.UseGravity = false;
+            p.Alive = true;
+            p.Go.SetActive(true);
+            EmitParticle(p);
+
+            active.Add(p);
+        }
+
         /// <summary>发射垂直向上飞散粒子（受伤、Boss 受击等）。</summary>
         public void EmitBurst(Vector3 position, Color color, int count = 15, float speed = 4f, float lifetime = 0.7f)
         {

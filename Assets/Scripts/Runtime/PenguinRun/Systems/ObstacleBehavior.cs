@@ -68,15 +68,16 @@ namespace PenguinRun
     /// <summary>左右移动的障碍物：在车道间横向移动，需要看准时机通行。</summary>
     internal sealed class MovingBarrier : ObstacleBehavior
     {
-        private Transform visual;
+        // 移动的是障碍根节点（碰撞判定读根节点世界坐标），保证视觉与判定一致
+        private Transform root;
         private float amplitude;
         private float frequency;
         private float baseX;
         private float phase;
 
-        public void Setup(Transform barrierVisual, float moveAmplitude, float moveFrequency, float laneCenterX)
+        public void Setup(Transform obstacleRoot, float moveAmplitude, float moveFrequency, float laneCenterX)
         {
-            visual = barrierVisual;
+            root = obstacleRoot;
             amplitude = moveAmplitude;
             frequency = moveFrequency;
             baseX = laneCenterX;
@@ -85,10 +86,10 @@ namespace PenguinRun
 
         public override void Tick(float dt, float runDistance, float playerZ)
         {
-            var offset = Mathf.Sin(Time.time * frequency * Mathf.PI * 2f + phase) * amplitude;
-            var pos = visual.localPosition;
-            pos.x = baseX + offset;
-            visual.localPosition = pos;
+            phase += dt * frequency * Mathf.PI * 2f;
+            var pos = root.position;
+            pos.x = baseX + Mathf.Sin(phase) * amplitude;
+            root.position = pos;
         }
 
         public override bool IsCollidable => true;

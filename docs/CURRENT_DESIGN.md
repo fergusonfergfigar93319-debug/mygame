@@ -176,15 +176,32 @@ Boss 活跃时，HUD 应优先显示生命、当前招式、破绽进度和必�
 - `docs/PENGUIN_RUN_RESTRUCTURE.md`：从旧玩法转向跑酷的历史记录和已执行内容。
 - `GAME_DESIGN.md`：旧横版动作冒险历史稿，仅保留世界观参考。
 - `docs/adr/0001-lock-landscape-orientation.md`：横屏构图决策。
+- `docs/adr/0002-cc0-rigged-boss-models.md`：Boss 视觉采用 CC0 骨骼模型 + Legacy Animation 程序化播放的决策。
 - `docs/UI_ART_REVAMP_PLAN.md`：页面设计与美术效果优化方案（UI 统一、局内美术、功能结构重构的分阶段路线）。
 
 ## 后续优先级
 
 1. 减轻首局信息量，只保留核心操作教学。
-2. 压缩 Boss 战 HUD，保护跑道中心和下半屏。
-3. 将移动端输入阈值改成响应式。
-4. 统一 uGUI 大厅与 IMGUI 跑酷 HUD 的颜色、字号和反馈规则。
-5. 为六个主题补足更明显的视觉和音频差异。
+2. 为六个主题补足更明显的音频差异（视觉差异已在 2026-07-20 批次落地）。
+3. Android 实机（骁龙 7 系）60fps 性能实测与 Post Processing 分档校准。
+
+已完成并移出列表：移动端输入阈值响应式（`RunnerGestureThresholds.ForViewport`）、跑酷 HUD 迁 uGUI 并与大厅同一套 `UiTheme` 令牌（IMGUI `RunnerHud` 已裁撤）、Boss 战 HUD 压缩（Boss 态只保留生命/招式/反制提示）。
+
+## 2026-07-20 建模/特效/判定/页面全面优化
+
+本批次四条线完成代码与资产落地：
+
+- **判定手感**：Boss 护盾改消耗制并统一走 `RunnerHitResolver`（Boss 侧补齐冰镜/树甲/珊瑚防御层）；滑铲改蹲姿判定盒（`PlayerMotor.BodyHeight` + `PassUnderMaxHeight`）；空中下滑落地自动衔接滑铲；预输入跳跃补完美窗与音效；`WideWall`/`WideSlideOnly` 半宽收窄至 1.05/1.02；完美滑铲窗口对齐滑铲时长；`TimedGate`/`ShatterWall`/`MovingBarrier` 动态障碍接入生成链。
+- **建模**：6 个 Boss 换用 Quaternius CC0 rigged 模型（Legacy Animation + `BossRigAnimator` 程序化调度，命中判定不读动画；缺模型时回退程序化剪影）；14 种缺失道具补齐双 LOD 预制体；六主题障碍差异化；企鹅双层网格清理并补死亡演出。
+- **特效**：Boss FX 池粒子化（保持租用/归还接口与 48 上限）；Telegraph 专属进入特效与 6 Boss 差异化 Strike；道具拾取粒子、磁铁吸币飞线（纯视觉）、激活态角色特效与 HUD buff 条补全；月亮/极光 Billboard 化；`MaterialPropertyBlock` 合批；Post Processing（Bloom/Vignette，质量分档，Android 中档默认降级）。
+- **页面**：`UiIcons` 图标注册表（Kenney CC0 + 自绘心形/时钟）替代 ♥★◷← Unicode 字符；面板层全面 TMP（`UiBuilder.CreateText` 即 TMP）；删除 `CampPanel`/`ShopPanel` 死代码；`MainMenuBootstrap` 内嵌 Tween 迁出（存活的 3 个移至 `LobbyAmbientTweens`，9 个死类删除，文件 1598 → 约 1200 行）。
+
+修正记录（2026-07-21）：首版雕塑预制体的 LOD 阈值（0.60/0.22/空档 0.03）按"占屏大半"标定，跑酷视距下道具/障碍/机关模型全部落在空渲染档而隐形，画面只剩代码侧光球。已把两个 PrefabBuilder 改为 LOD0≥2.5% 屏高、0.6% 以下剔除并禁止空渲染档，批量重建 80 个预制体（62 障碍/道具/环境 + 18 机关）；`VerifyVisualJudgmentRevamp.ps1` 新增 LOD 阈值与空档断言防回归。
+
+修正记录（2026-07-22）：障碍/环境仍按 2.5%/0.6% 剔除；**道具**因体量更小，远距 LOD1 仍会被裁掉而只剩 `Pickup Core` 光球与贴地环。道具改为 neverCull（LOD1 阈值 0.0001）、挂载缩放 1.85×、挂自定义模型时隐藏核心光球并缩小识别环；鱼干/气泡盾剪影加粗。
+
+当前验证状态：九个静态门禁（含新增 `VerifyVisualJudgmentRevamp.ps1`）全部通过；全量 Roslyn `Assembly-CSharp` 编译通过（148 源文件）；Unity 6000.4.5f1 批处理 `ProjectUiLayoutRegressionTest` 通过；headed `ProjectPlayerJourneySmokeTest` 大厅→难度→跑酷→暂停→结算旅程通过并产出五张非空白截图（`Artifacts/PlayerExperienceAudit`，跑酷截图确认心形图标行、月亮辉光 Billboard、极光带与渐变天空正常渲染）；Android 测试包 `Builds/Android/PenguinRun-Latest-Test-v1.2.0-5.apk`（95.15 MB，APK Signature Scheme 验证通过，SHA-256 `1DF971A40FBC566DEA2E7A8C79FEA6FC4E2F20DA5C672DF6BD78B92F13D8FDE3`）。Android 实机帧率与手感验收仍为待办（本机无连接设备）。
+
 ## 2026-07-16 主题地图机关与精通玩法
 
 阶段四已完成：六张地图现在拥有独立的可操作机关、标志性事件、Story/Endless/Daily 策略、主题精通、8 秒共鸣与自动旅途契约；同时新增 18 个细致双 LOD 机关预制体和 6 张主题预览。确定性、生命周期、取消清理、15 分钟耐久、旧资产、UI 布局及 Android v2 签名构建均已验证。完整规则、性能数据与 APK 信息见 [`THEME_MECHANICS_PHASE4_DELIVERY.md`](THEME_MECHANICS_PHASE4_DELIVERY.md)。

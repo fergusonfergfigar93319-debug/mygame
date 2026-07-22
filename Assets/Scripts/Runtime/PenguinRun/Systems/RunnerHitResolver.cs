@@ -142,8 +142,10 @@ namespace PenguinRun
                 world.ShieldTimer = 0f;
                 return new HitOutcome(
                     HitOutcomeKind.BlockedByDefense,
-                    "护盾抵挡 BOSS 攻击！等破绽出现后再冲刺反击",
-                    1f);
+                    "护盾碎裂，挡下 BOSS 攻击！等破绽出现后再冲刺反击",
+                    1f,
+                    combat.invulnAfterShieldBreak,
+                    consumeShield: true);
             }
 
             if (world.TryConsumeFishBomb())
@@ -153,6 +155,34 @@ namespace PenguinRun
                     "鱼弹反弹 BOSS 攻击！",
                     1f,
                     combat.invulnAfterFishBombBoss);
+            }
+
+            if (world.IceMirrorTimer > 0f)
+            {
+                world.IceMirrorTimer = 0f;
+                return new HitOutcome(
+                    HitOutcomeKind.BlockedByDefense,
+                    "冰镜折射 BOSS 攻击！",
+                    1f,
+                    combat.invulnAfterIceMirror);
+            }
+
+            if (world.TryConsumeTreantArmor())
+            {
+                return new HitOutcome(
+                    HitOutcomeKind.BlockedByDefense,
+                    $"树皮挡下 BOSS 攻击！护甲×{world.TreantArmorHits}",
+                    1f,
+                    combat.invulnAfterTreantArmor);
+            }
+
+            if (world.TryConsumeCoralBounce())
+            {
+                return new HitOutcome(
+                    HitOutcomeKind.BlockedByDefense,
+                    "珊瑚回弹 BOSS 攻击！",
+                    1f,
+                    combat.invulnAfterCoralBounce);
             }
 
             world.SetHitInvulnerability(combat.invulnAfterBossHit);

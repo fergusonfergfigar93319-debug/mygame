@@ -58,7 +58,7 @@ namespace PenguinRun
         public float invulnAfterTreantArmor = 1.1f;
         public float invulnAfterCoralBounce = 1.8f;
         public float perfectWindowJumpSeconds = 0.32f;
-        public float perfectWindowSlideSeconds = 0.32f;
+        public float perfectWindowSlideSeconds = 0.50f;
         public float perfectWindowAirSlideSeconds = 0.28f;
         public float perfectWindowDoubleJumpSeconds = 0.28f;
         public float bossAirDodgeHeight = 0.45f;

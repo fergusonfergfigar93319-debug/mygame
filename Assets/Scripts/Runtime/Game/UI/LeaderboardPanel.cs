@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PenguinRun.Game.Leaderboard;
 using PenguinRun.Game.Save;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -18,8 +19,8 @@ namespace PenguinRun.Game.UI
         /// <summary>true = 只看今日挑战桶（yyyy-MM-dd）。</summary>
         private bool todayOnly;
         private RectTransform contentRoot;
-        private readonly List<(Image img, Text label, LeaderboardSort s)> sortMarkers = new();
-        private readonly List<(Image img, Text label, bool today)> bucketMarkers = new();
+        private readonly List<(Image img, TextMeshProUGUI label, LeaderboardSort s)> sortMarkers = new();
+        private readonly List<(Image img, TextMeshProUGUI label, bool today)> bucketMarkers = new();
 
         // 前三名奖牌色（金/银/铜）
         private static readonly Color GoldMedal = new(1f, 0.84f, 0.32f);
@@ -97,7 +98,7 @@ namespace PenguinRun.Game.UI
             var btn = UiBuilder.CreateButton("Sort_" + s, parent, label,
                 Color.clear, Color.white, 24, rounded: true);
             var img = btn.GetComponent<Image>();
-            var labelText = btn.GetComponentInChildren<Text>();
+            var labelText = btn.GetComponentInChildren<TextMeshProUGUI>();
             sortMarkers.Add((img, labelText, s));
             btn.onClick.AddListener(() =>
             {
@@ -112,7 +113,7 @@ namespace PenguinRun.Game.UI
             var btn = UiBuilder.CreateButton("Bucket_" + label, parent, label,
                 Color.clear, Color.white, 22, rounded: true);
             var img = btn.GetComponent<Image>();
-            var labelText = btn.GetComponentInChildren<Text>();
+            var labelText = btn.GetComponentInChildren<TextMeshProUGUI>();
             bucketMarkers.Add((img, labelText, today));
             btn.onClick.AddListener(() =>
             {
@@ -133,7 +134,7 @@ namespace PenguinRun.Game.UI
                 if (label != null)
                 {
                     label.color = sel ? new Color(0.12f, 0.07f, 0.02f, 1f) : UiBuilder.TextSecondary;
-                    label.fontStyle = sel ? FontStyle.Bold : FontStyle.Normal;
+                    label.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
             }
         }
@@ -149,7 +150,7 @@ namespace PenguinRun.Game.UI
                 {
                     label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f)
                         : UiBuilder.TextSecondary;
-                    label.fontStyle = sel ? FontStyle.Bold : FontStyle.Normal;
+                    label.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
             }
         }

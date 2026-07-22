@@ -20,12 +20,25 @@ namespace PenguinRun
         public bool TryAttachEnvironment(Transform root, RunnerMapTheme theme, EnvironmentPropId id) =>
             TryAttach(root, RunnerVisualAssetCatalog.ForEnvironment(theme, id));
 
-        public bool TryAttachThemeMechanic(Transform root, string apparatusPath) =>
-            TryAttach(root, new RunnerVisualDescriptor(
+        public bool TryAttachThemeMechanic(Transform root, string apparatusPath)
+        {
+            var attached = TryAttach(root, new RunnerVisualDescriptor(
                 $"PenguinRun/Prefabs/ThemeMechanics/{apparatusPath}",
                 Vector3.zero,
                 Vector3.zero,
                 Vector3.one));
+            if (attached)
+            {
+                // 机关表现层动画（摆动/开合/光束脉冲）；只动 CustomVisual，不碰判定
+                var visual = root.Find(AttachmentName);
+                if (visual != null)
+                {
+                    ThemeMechanicMotion.Configure(visual.gameObject, apparatusPath);
+                }
+            }
+
+            return attached;
+        }
 
         public void ClearAttachment(Transform root)
         {

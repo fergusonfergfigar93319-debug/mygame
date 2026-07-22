@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using PenguinRun.Game.UI.Storybook;
 using TMPro;
 using UnityEngine;
@@ -59,7 +59,7 @@ namespace PenguinRun.Game.UI.Lobby
             page.action = UiBuilder.CreateButton("JournalAction", page.Root, string.Empty,
                 WithAlpha(UiTheme.PineGreen, 0.92f), Color.white, UiTheme.Caption, rounded: true);
             Place((RectTransform)page.action.transform, new Vector2(0.08f, 0.06f), new Vector2(0.92f, 0.18f));
-            var legacy = page.action.GetComponentInChildren<Text>();
+            var legacy = page.action.GetComponentInChildren<TextMeshProUGUI>();
             if (legacy != null) StorybookUi.DestroyGeneratedObject(legacy.gameObject);
             page.actionLabel = UiBuilder.CreateTmpText("Label", page.action.transform, string.Empty,
                 UiTheme.Caption, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);

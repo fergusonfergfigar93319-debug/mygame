@@ -477,6 +477,7 @@ namespace PenguinRun
             feedbackTimer = Mathf.Max(0f, feedbackTimer - dt);
 
             var speed01 = world.Speed01();
+            character.SetAuxBuffState(world);
             character.Animate(
                 dt,
                 stateMachine.IsRunning,
@@ -658,6 +659,7 @@ namespace PenguinRun
                 }
                 else if (outcome.Kind == HitOutcomeKind.GameOver)
                 {
+                    bossSystem.NotifyBossDamageTaken(true, ref feedbackText, ref feedbackTimer);
                     RecordThemeDamage();
                     BreakSkillChain();
                     EmitRunFeedback(RunFeedbackKind.BossDeath);
@@ -666,6 +668,7 @@ namespace PenguinRun
                 }
                 else if (outcome.Kind == HitOutcomeKind.Damage)
                 {
+                    bossSystem.NotifyBossDamageTaken(false, ref feedbackText, ref feedbackTimer);
                     RecordThemeDamage();
                     BreakSkillChain();
                     character.TriggerHurtFlash();

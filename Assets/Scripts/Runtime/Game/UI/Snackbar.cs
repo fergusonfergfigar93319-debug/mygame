@@ -1,4 +1,5 @@
-using System.Collections;
+﻿using System.Collections;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -14,7 +15,7 @@ namespace PenguinRun.Game.UI
         public static Snackbar Instance => instance;
 
         private CanvasGroup group;
-        private Text label;
+        private TextMeshProUGUI label;
         private RectTransform rectTransform;
         private Vector2 baseAnchoredPos;
         private Coroutine running;

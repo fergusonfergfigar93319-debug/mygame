@@ -1,6 +1,7 @@
-using PenguinRun;
+﻿using PenguinRun;
 using PenguinRun.Game.Save;
 using PenguinRun.Game.Growth;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -14,7 +15,7 @@ namespace PenguinRun.Game.UI
     {
         private System.Action<MainMenuBootstrap.PanelEvent, string> dispatch;
         private RectTransform contentRoot;
-        private Text progressText;
+        private TextMeshProUGUI progressText;
         private Image progressFill;
         private RectTransform progressContainer;
         private readonly System.Collections.Generic.Dictionary<string, Sprite> iconCache = new();
@@ -92,7 +93,7 @@ namespace PenguinRun.Game.UI
                 progressText.text = $"<color=#00DAF0><b>{u}</b></color>/{total}<size=18><color=#A8B6C8> 故事</color></size>"
                     + $"  ·  <color=#FFB84D><b>{bu}</b></color>/{bt}<size=18><color=#A8B6C8> Boss</color></size>"
                     + $"  <size=18><color=#A8B6C8>· 无尽 / 今日挑战</color></size>";
-                progressText.supportRichText = true;
+                progressText.richText = true;
 
                 if (progressFill != null)
                 {
@@ -253,7 +254,7 @@ namespace PenguinRun.Game.UI
                 rowBgImage.raycastTarget = false;
             UiBuilder.CreateText("Label", row.transform, label, 22, FontStyle.Bold,
                 TextAnchor.MiddleCenter, UiBuilder.AccentCyan);
-            var lt = row.GetComponentInChildren<Text>();
+            var lt = row.GetComponentInChildren<TextMeshProUGUI>();
             if (lt != null)
             {
                 var lrt = (RectTransform)lt.transform;

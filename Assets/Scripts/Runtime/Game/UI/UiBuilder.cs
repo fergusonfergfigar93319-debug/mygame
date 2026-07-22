@@ -400,22 +400,9 @@ namespace PenguinRun.Game.UI
             return rt;
         }
 
-        public static Text CreateText(string name, Transform parent, string content, int fontSize = UiTheme.Body, FontStyle style = FontStyle.Normal, TextAnchor anchor = TextAnchor.MiddleLeft, Color? color = null)
-        {
-            var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            go.transform.SetParent(parent, false);
-            var text = go.GetComponent<Text>();
-            text.text = content;
-            text.fontSize = fontSize;
-            text.fontStyle = style;
-            text.alignment = anchor;
-            text.color = color ?? TextPrimary;
-            text.font = UiTheme.FallbackFont;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
-            text.raycastTarget = false;
-            return text;
-        }
+        /// <summary>创建 TMP 文本（历史签名保留：面板层已全面切换 TextMeshPro，不再产出 legacy Text）。</summary>
+        public static TextMeshProUGUI CreateText(string name, Transform parent, string content, int fontSize = UiTheme.Body, FontStyle style = FontStyle.Normal, TextAnchor anchor = TextAnchor.MiddleLeft, Color? color = null)
+            => CreateTmpText(name, parent, content, fontSize, style, anchor, color);
 
         /// <summary>Creates a dynamic CJK-capable TMP label for newly migrated UI surfaces.</summary>
         public static TextMeshProUGUI CreateTmpText(string name, Transform parent, string content, int fontSize = UiTheme.Body, FontStyle style = FontStyle.Normal, TextAnchor anchor = TextAnchor.MiddleLeft, Color? color = null)
@@ -453,10 +440,10 @@ namespace PenguinRun.Game.UI
         }
 
         /// <summary>支持富文本的标题等（如 &lt;color&gt;、&lt;size&gt;）。</summary>
-        public static Text CreateRichText(string name, Transform parent, string content, int fontSize = UiTheme.Body, FontStyle style = FontStyle.Normal, TextAnchor anchor = TextAnchor.MiddleLeft, Color? color = null)
+        public static TextMeshProUGUI CreateRichText(string name, Transform parent, string content, int fontSize = UiTheme.Body, FontStyle style = FontStyle.Normal, TextAnchor anchor = TextAnchor.MiddleLeft, Color? color = null)
         {
             var text = CreateText(name, parent, content, fontSize, style, anchor, color);
-            text.supportRichText = true;
+            text.richText = true;
             return text;
         }
 
@@ -498,21 +485,12 @@ namespace PenguinRun.Game.UI
             colors.disabledColor = new Color(bg.r, bg.g, bg.b, bg.a * 0.45f);
             btn.colors = colors;
 
-            var labelGo = new GameObject("Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            labelGo.transform.SetParent(go.transform, false);
-            var rt = (RectTransform)labelGo.transform;
+            var t = CreateTmpText("Label", go.transform, label, fontSize, FontStyle.Bold, TextAnchor.MiddleCenter, fg);
+            var rt = (RectTransform)t.transform;
             rt.anchorMin = Vector2.zero;
             rt.anchorMax = Vector2.one;
             rt.sizeDelta = Vector2.zero;
             rt.anchoredPosition = Vector2.zero;
-            var t = labelGo.GetComponent<Text>();
-            t.text = label;
-            t.fontSize = fontSize;
-            t.fontStyle = FontStyle.Bold;
-            t.alignment = TextAnchor.MiddleCenter;
-            t.color = fg;
-            t.font = UiTheme.FallbackFont;
-            t.raycastTarget = false;
             WireClickFeedback(btn);
             return btn;
         }
@@ -734,7 +712,7 @@ namespace PenguinRun.Game.UI
         /// <summary>
         /// 货币胶囊：图标 + 数值（用于顶栏金币、奖励显示）。
         /// </summary>
-        public static (RectTransform pill, Text valueText) CreateCurrencyPill(
+        public static (RectTransform pill, TextMeshProUGUI valueText) CreateCurrencyPill(
             string name, Transform parent,
             Vector2 anchorMin, Vector2 anchorMax,
             Vector2 sizeDelta, Vector2 anchoredPosition,

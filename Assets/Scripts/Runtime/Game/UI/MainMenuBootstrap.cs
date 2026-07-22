@@ -1,10 +1,11 @@
-using PenguinRun.Game.Mission;
+﻿using PenguinRun.Game.Mission;
 using PenguinRun.Game.Save;
 using PenguinRun.Game.Shop;
 using PenguinRun.Game.Leaderboard;
 using PenguinRun.Game;
 using PenguinRun.Game.Growth;
 using PenguinRun.Game.UI.Lobby;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
@@ -21,27 +22,27 @@ namespace PenguinRun.Game.UI
         private Canvas canvas;
         private Snackbar snackbar;
 
-        private Text nicknameText;
-        private Text fishSnacksText;
-        private Text levelText;
+        private TextMeshProUGUI nicknameText;
+        private TextMeshProUGUI fishSnacksText;
+        private TextMeshProUGUI levelText;
 
         /// <summary>顶栏下方单行活动 Ticker。</summary>
-        private Text topTickerText;
+        private TextMeshProUGUI topTickerText;
 
         /// <summary>今日挑战卡片右侧的鱼干预览。</summary>
-        private Text dailyFishRewardChipText;
+        private TextMeshProUGUI dailyFishRewardChipText;
 
-        private Text strategyHeadlineText;
-        private Text strategyDetailText;
-        private Text strategyButtonText;
+        private TextMeshProUGUI strategyHeadlineText;
+        private TextMeshProUGUI strategyDetailText;
+        private TextMeshProUGUI strategyButtonText;
         private Button strategyButton;
         private StrategyAction currentStrategyAction;
 
         private RectTransform mascotArea;
         private RectTransform avatarMiniArea;
-        private Text boosterPreviewText;
+        private TextMeshProUGUI boosterPreviewText;
         /// <summary>主 CTA 上方可点击难度芯片文案。</summary>
-        private Text difficultyHintText;
+        private TextMeshProUGUI difficultyHintText;
         private Button difficultyChipButton;
         private GameObject profileStatsOverlay;
         private Transform panelLayer;
@@ -66,15 +67,15 @@ namespace PenguinRun.Game.UI
         {
             public string panelName;
             public Image iconBg;
-            public Text iconText;
-            public Text labelText;
+            public TextMeshProUGUI iconText;
+            public TextMeshProUGUI labelText;
             public Image labelBg;
             public Image activeLine;
             public Color accentColor;
             public bool wasSelected;
             public GameObject iconGlow;
             public GameObject badgeRoot;
-            public Text badgeCountText;
+            public TextMeshProUGUI badgeCountText;
         }
         private readonly System.Collections.Generic.List<DockItem> dockItems = new();
 
@@ -456,280 +457,6 @@ namespace PenguinRun.Game.UI
             star.GetComponent<Image>().raycastTarget = false;
             var twinkle = star.gameObject.AddComponent<TwinkleTween>();
             twinkle.baseAlpha = 0.9f * intensity;
-        }
-
-        private class PulseTween : MonoBehaviour
-        {
-            public float amplitude = 0.022f;
-            public float speed = 3f;
-            private Vector3 baseScale;
-            private void Start() => baseScale = transform.localScale;
-            private void Update() => transform.localScale = baseScale * (1f + Mathf.Sin(Time.time * speed) * amplitude);
-        }
-
-        private class FloatTween : MonoBehaviour
-        {
-            public float amplitude = 10f;
-            public float speed = 1.6f;
-            private Vector3 basePos;
-            private RectTransform rt;
-            private void Start()
-            {
-                rt = GetComponent<RectTransform>();
-                basePos = rt.anchoredPosition;
-            }
-            private void Update() => rt.anchoredPosition = basePos + new Vector3(0, Mathf.Sin(Time.time * speed) * amplitude, 0);
-        }
-
-        /// <summary>水平漂浮：用于极光等大气元素。</summary>
-        private class DriftTween : MonoBehaviour
-        {
-            public float amplitude = 50f;
-            public float speed = 0.4f;
-            private Vector3 basePos;
-            private RectTransform rt;
-            private float phase;
-            private void Start()
-            {
-                rt = GetComponent<RectTransform>();
-                basePos = rt.anchoredPosition;
-                phase = Random.Range(0f, Mathf.PI * 2f);
-            }
-            private void Update() => rt.anchoredPosition = basePos + new Vector3(
-                Mathf.Sin(Time.time * speed + phase) * amplitude, 0f, 0f);
-        }
-
-        /// <summary>闪烁星点：用于装饰星星。</summary>
-        private class TwinkleTween : MonoBehaviour
-        {
-            public float baseAlpha = 0.9f;
-            public float speed = 2.5f;
-            private Image img;
-            private float phase;
-            private void Start()
-            {
-                img = GetComponent<Image>();
-                phase = Random.Range(0f, Mathf.PI * 2f);
-                speed = Random.Range(1.6f, 3.4f);
-            }
-            private void Update()
-            {
-                if (img == null) return;
-                var c = img.color;
-                c.a = baseAlpha * (0.4f + 0.6f * Mathf.Abs(Mathf.Sin(Time.time * speed + phase)));
-                img.color = c;
-            }
-        }
-
-        /// <summary>点击缩放微动效。</summary>
-        private class ClickScaleTween : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
-        {
-            public float scaleDown = 0.92f;
-            public float speed = 18f;
-            private Vector3 targetScale = Vector3.one;
-            private Vector3 currentScale = Vector3.one;
-            private RectTransform rt;
-            private void Start() => rt = GetComponent<RectTransform>();
-            private void Update()
-            {
-                if (rt == null) return;
-                currentScale = Vector3.Lerp(currentScale, targetScale, Time.deltaTime * speed);
-                rt.localScale = currentScale;
-            }
-            public void OnPointerDown(PointerEventData eventData) => targetScale = Vector3.one * scaleDown;
-            public void OnPointerUp(PointerEventData eventData) => targetScale = Vector3.one;
-        }
-
-        private class RunCycleTween : MonoBehaviour
-        {
-            public RectTransform leftFlipper;
-            public RectTransform rightFlipper;
-            public RectTransform leftFoot;
-            public RectTransform rightFoot;
-            public RectTransform bodyGroup;
-            public float speed = 8.5f;
-            public float limbSwing = 7f;
-            private Vector2 leftFootBase;
-            private Vector2 rightFootBase;
-
-            private void Start()
-            {
-                if (leftFoot != null) leftFootBase = leftFoot.anchoredPosition;
-                if (rightFoot != null) rightFootBase = rightFoot.anchoredPosition;
-            }
-
-            private void Update()
-            {
-                var wave = Mathf.Sin(Time.time * speed);
-                if (leftFlipper != null) leftFlipper.localRotation = Quaternion.Euler(0f, 0f, 10f + wave * limbSwing);
-                if (rightFlipper != null) rightFlipper.localRotation = Quaternion.Euler(0f, 0f, -12f - wave * limbSwing);
-                if (leftFoot != null)
-                {
-                    leftFoot.localRotation = Quaternion.Euler(0f, 0f, 8f + wave * 6f);
-                    leftFoot.anchoredPosition = leftFootBase + new Vector2(0f, Mathf.Max(0f, wave) * 7f);
-                }
-                if (rightFoot != null)
-                {
-                    rightFoot.localRotation = Quaternion.Euler(0f, 0f, -8f - wave * 6f);
-                    rightFoot.anchoredPosition = rightFootBase + new Vector2(0f, Mathf.Max(0f, -wave) * 7f);
-                }
-                if (bodyGroup != null)
-                    bodyGroup.localRotation = Quaternion.Euler(0f, 0f, -2.5f + wave * 0.8f);
-            }
-        }
-
-        private class RunwayScrollTween : MonoBehaviour
-        {
-            public float speed = 180f;
-            public float resetLeft = -680f;
-            public float resetRight = 680f;
-            private RectTransform rt;
-
-            private void Start() => rt = GetComponent<RectTransform>();
-
-            private void Update()
-            {
-                if (rt == null) return;
-                var p = rt.anchoredPosition;
-                p.x -= speed * Time.deltaTime;
-                if (p.x < resetLeft) p.x = resetRight + Random.Range(0f, 100f);
-                rt.anchoredPosition = p;
-            }
-        }
-
-        private class MarqueeTween : MonoBehaviour
-        {
-            public Text[] texts;
-            private void Update()
-            {
-                if (texts == null) return;
-                var active = Mathf.FloorToInt(Time.time * 4f) % texts.Length;
-                for (var i = 0; i < texts.Length; i++)
-                {
-                    if (texts[i] == null) continue;
-                    var c = texts[i].color;
-                    c.a = i == active ? 0.95f : 0.28f;
-                    texts[i].color = c;
-                }
-            }
-        }
-
-        private class BounceTween : MonoBehaviour
-        {
-            public float duration = 0.35f;
-            public float peakScale = 1.18f;
-            private float elapsed;
-
-            private void OnEnable() => elapsed = 0f;
-
-            private void Update()
-            {
-                elapsed += Time.deltaTime;
-                var t = Mathf.Clamp01(elapsed / duration);
-                var pulse = Mathf.Sin(t * Mathf.PI);
-                transform.localScale = Vector3.one * (1f + pulse * (peakScale - 1f));
-                if (t >= 1f)
-                {
-                    transform.localScale = Vector3.one;
-                    enabled = false;
-                }
-            }
-        }
-
-        private class SnowfallEmitter : MonoBehaviour
-        {
-            private readonly System.Collections.Generic.List<RectTransform> flakes = new();
-            private readonly System.Collections.Generic.List<float> phases = new();
-
-            private void Start()
-            {
-                for (var i = 0; i < 10; i++)
-                {
-                    var size = Random.Range(4f, 8f);
-                    var flake = UiBuilder.CreateRect("Snowflake", transform,
-                        new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                        new Vector2(size, size),
-                        new Vector2(Random.Range(-520f, 520f), Random.Range(-120f, 840f)),
-                        new Color(1f, 1f, 1f, Random.Range(0.2f, 0.48f)), circle: true);
-                    flake.GetComponent<Image>().raycastTarget = false;
-                    flakes.Add(flake);
-                    phases.Add(Random.Range(0f, Mathf.PI * 2f));
-                }
-            }
-
-            private void Update()
-            {
-                for (var i = 0; i < flakes.Count; i++)
-                {
-                    var flake = flakes[i];
-                    if (flake == null) continue;
-                    var phase = phases[i];
-                    var p = flake.anchoredPosition;
-                    p.x += Mathf.Sin(Time.time * 1.4f + phase) * 18f * Time.deltaTime;
-                    p.y -= (34f + i * 2.3f) * Time.deltaTime;
-                    if (p.y < -360f)
-                    {
-                        p.x = Random.Range(-520f, 520f);
-                        p.y = Random.Range(760f, 920f);
-                    }
-                    flake.anchoredPosition = p;
-                    var img = flake.GetComponent<Image>();
-                    var c = img.color;
-                    c.a = 0.18f + Mathf.Abs(Mathf.Sin(Time.time * 1.8f + phase)) * 0.28f;
-                    img.color = c;
-                }
-            }
-        }
-
-        private class SpeedLineEmitter : MonoBehaviour
-        {
-            private float nextSpawn;
-
-            private void Update()
-            {
-                if (Time.time < nextSpawn) return;
-                nextSpawn = Time.time + Random.Range(0.55f, 0.9f);
-                var line = UiBuilder.CreateRect("SpeedLine", transform,
-                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                    new Vector2(Random.Range(46f, 92f), Random.Range(2f, 4f)),
-                    new Vector2(Random.Range(120f, 240f), Random.Range(-30f, 130f)),
-                    new Color(0.7f, 1f, 1f, 0.38f), rounded: true);
-                line.GetComponent<Image>().raycastTarget = false;
-                var tween = line.gameObject.AddComponent<SpeedLineTween>();
-                tween.life = Random.Range(0.34f, 0.52f);
-                tween.travel = Random.Range(160f, 240f);
-            }
-        }
-
-        private class SpeedLineTween : MonoBehaviour
-        {
-            public float life = 0.45f;
-            public float travel = 260f;
-            private RectTransform rt;
-            private Image img;
-            private Vector2 start;
-            private float elapsed;
-
-            private void Start()
-            {
-                rt = GetComponent<RectTransform>();
-                img = GetComponent<Image>();
-                start = rt.anchoredPosition;
-            }
-
-            private void Update()
-            {
-                elapsed += Time.deltaTime;
-                var t = Mathf.Clamp01(elapsed / life);
-                if (rt != null) rt.anchoredPosition = start + new Vector2(-travel * t, 0f);
-                if (img != null)
-                {
-                    var c = img.color;
-                    c.a = Mathf.Sin(t * Mathf.PI) * 0.38f;
-                    img.color = c;
-                }
-                if (t >= 1f) Destroy(gameObject);
-            }
         }
 
         /// <summary>底栏导航 Tab：图标 + 文字标签；选中时图标外圈光晕 + 顶部亮条 + 文字加粗。</summary>
@@ -1414,8 +1141,8 @@ namespace PenguinRun.Game.UI
             sfrt.anchoredPosition = new Vector2(-36f, 36f);
             UiBuilder.AddOutline(startFinalBtn.gameObject, new Color(0.5f, 0.35f, 0.08f, 0.7f), new Vector2(2f, -2f));
             UiBuilder.AddShadow(startFinalBtn.gameObject, new Color(0f, 0f, 0f, 0.45f), new Vector2(0f, -6f));
-            var startLabel2 = startFinalBtn.GetComponentInChildren<Text>();
-            if (startLabel2 != null) startLabel2.supportRichText = false;
+            var startLabel2 = startFinalBtn.GetComponentInChildren<TextMeshProUGUI>();
+            if (startLabel2 != null) startLabel2.richText = false;
             startFinalBtn.onClick.AddListener(() =>
             {
                 var startsRun = mode != DifficultyOverlayMode.SettingsOnly;
@@ -1575,7 +1302,7 @@ namespace PenguinRun.Game.UI
                     item.labelText.color = isSelected
                         ? item.accentColor
                         : new Color(0.6f, 0.72f, 0.85f, 0.8f);
-                    item.labelText.fontStyle = isSelected ? FontStyle.Bold : FontStyle.Normal;
+                    item.labelText.fontStyle = isSelected ? FontStyles.Bold : FontStyles.Normal;
                     item.labelText.fontSize = isSelected ? 20 : 19;
                 }
 

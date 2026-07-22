@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using UnityEngine;
 
 namespace PenguinRun.Editor
@@ -50,12 +50,17 @@ namespace PenguinRun.Editor
             switch (id)
             {
                 case PickupVisualId.FishSnack:
-                    Part(root, "FishBody", PrimitiveType.Sphere, new Vector3(0f, 0.02f, 0f),
-                        new Vector3(.38f, .23f, .56f), palette.Accent);
-                    Part(root, "FishTail", PrimitiveType.Cube, new Vector3(0f, 0f, .48f),
-                        new Vector3(.34f, .25f, .08f), palette.Primary, new Vector3(0f, 0f, 45f));
-                    Part(root, "Binding", PrimitiveType.Cylinder, new Vector3(0f, .02f, .15f),
-                        new Vector3(.26f, .05f, .26f), palette.Dark, new Vector3(90f, 0f, 0f));
+                    // 金币/鱼干：加大体量与剪影，避免远看只剩贴地光晕。
+                    Part(root, "FishBody", PrimitiveType.Sphere, new Vector3(0f, 0.04f, 0f),
+                        new Vector3(.62f, .38f, .92f), palette.Accent);
+                    Part(root, "FishTail", PrimitiveType.Cube, new Vector3(0f, 0f, .78f),
+                        new Vector3(.52f, .40f, .12f), palette.Primary, new Vector3(0f, 0f, 45f));
+                    Part(root, "Binding", PrimitiveType.Cylinder, new Vector3(0f, .04f, .22f),
+                        new Vector3(.40f, .07f, .40f), palette.Dark, new Vector3(90f, 0f, 0f));
+                    Part(root, "Eye", PrimitiveType.Sphere, new Vector3(.18f, .10f, -.28f),
+                        Vector3.one * .12f, palette.Snow);
+                    Part(root, "Pupil", PrimitiveType.Sphere, new Vector3(.18f, .10f, -.34f),
+                        Vector3.one * .055f, palette.Dark);
                     if (!lowDetail) AddFishScales(root, palette);
                     break;
                 case PickupVisualId.Dash:
@@ -102,19 +107,251 @@ namespace PenguinRun.Editor
                     Part(root, "CompassRose", PrimitiveType.Cylinder, new Vector3(0f, 0f, -.12f),
                         new Vector3(.24f, .06f, .24f), palette.Secondary, new Vector3(90f, 0f, 0f));
                     break;
-                default:
-                    Beam(root, "FeatherShaft", new Vector3(0f, -.52f, 0f), new Vector3(0f, .56f, 0f), .035f, palette.Accent);
+                case PickupVisualId.GlideFeather:
+                    BuildFeather(root, palette, lowDetail, palette.Snow, palette.Primary);
+                    break;
+                case PickupVisualId.DoubleFishSnack:
+                {
+                    BuildMiniFish(root, "FishA", new Vector3(0f, .17f, 0f), new Vector3(0f, 0f, 14f), palette);
+                    BuildMiniFish(root, "FishB", new Vector3(0f, -.17f, .04f), new Vector3(0f, 180f, -10f), palette);
+                    Part(root, "RopeKnot", PrimitiveType.Cylinder, new Vector3(0f, 0f, .12f),
+                        new Vector3(.16f, .06f, .16f), palette.Dark, new Vector3(90f, 0f, 0f));
+                    Part(root, "GoldTag", PrimitiveType.Cube, new Vector3(.2f, 0f, -.12f),
+                        new Vector3(.12f, .16f, .03f), palette.Accent, new Vector3(0f, 0f, 18f));
+                    break;
+                }
+                case PickupVisualId.TimeHourglass:
+                {
+                    var glass = Mat("M_Pickup_Ice", new Color(.72f, .93f, 1f));
+                    Beam(root, "FramePostA", new Vector3(-.24f, -.4f, 0f), new Vector3(-.24f, .4f, 0f), .035f, palette.Dark);
+                    Beam(root, "FramePostB", new Vector3(.24f, -.4f, 0f), new Vector3(.24f, .4f, 0f), .035f, palette.Dark);
+                    Part(root, "FrameTop", PrimitiveType.Cylinder, new Vector3(0f, .42f, 0f), new Vector3(.56f, .045f, .56f), palette.Dark);
+                    Part(root, "FrameBottom", PrimitiveType.Cylinder, new Vector3(0f, -.42f, 0f), new Vector3(.56f, .045f, .56f), palette.Dark);
+                    Part(root, "GlassTop", PrimitiveType.Sphere, new Vector3(0f, .2f, 0f), new Vector3(.4f, .34f, .4f), glass);
+                    Part(root, "GlassBottom", PrimitiveType.Sphere, new Vector3(0f, -.2f, 0f), new Vector3(.4f, .34f, .4f), glass);
+                    Part(root, "SandCore", PrimitiveType.Sphere, new Vector3(0f, -.2f, 0f), Vector3.one * .2f, palette.Glow);
+                    Part(root, "Waist", PrimitiveType.Cylinder, Vector3.zero, new Vector3(.1f, .07f, .1f), palette.Accent);
+                    if (!lowDetail)
+                    {
+                        Part(root, "SandStream", PrimitiveType.Cylinder, new Vector3(0f, 0f, 0f), new Vector3(.03f, .17f, .03f), palette.Glow);
+                        Part(root, "TopGem", PrimitiveType.Sphere, new Vector3(0f, .5f, 0f), Vector3.one * .09f, palette.Accent);
+                    }
+                    break;
+                }
+                case PickupVisualId.FishBomb:
+                {
+                    var bombRed = Mat("M_Pickup_BombRed", new Color(.86f, .28f, .22f));
+                    Part(root, "BombBody", PrimitiveType.Sphere, Vector3.zero, new Vector3(.5f, .42f, .58f), bombRed);
+                    Part(root, "FishTail", PrimitiveType.Cube, new Vector3(0f, 0f, .4f), new Vector3(.3f, .24f, .08f), palette.Primary, new Vector3(0f, 0f, 45f));
+                    Part(root, "EyeL", PrimitiveType.Sphere, new Vector3(-.13f, .08f, -.24f), Vector3.one * .08f, palette.Snow);
+                    Part(root, "EyeR", PrimitiveType.Sphere, new Vector3(.13f, .08f, -.24f), Vector3.one * .08f, palette.Snow);
+                    Beam(root, "Fuse", new Vector3(0f, .2f, .05f), new Vector3(.06f, .42f, -.03f), .022f, palette.Dark);
+                    Part(root, "FuseSpark", PrimitiveType.Sphere, new Vector3(.08f, .46f, -.05f), Vector3.one * .11f, palette.Glow);
+                    if (!lowDetail) AddFishScales(root, palette);
+                    break;
+                }
+                case PickupVisualId.SecondHeart:
+                {
+                    var heartRed = Mat("M_Pickup_Heart", new Color(.95f, .36f, .5f));
+                    Part(root, "LobeL", PrimitiveType.Sphere, new Vector3(-.14f, .12f, 0f), Vector3.one * .34f, heartRed);
+                    Part(root, "LobeR", PrimitiveType.Sphere, new Vector3(.14f, .12f, 0f), Vector3.one * .34f, heartRed);
+                    Part(root, "Tip", PrimitiveType.Cube, new Vector3(0f, -.12f, 0f), Vector3.one * .38f, heartRed, new Vector3(0f, 0f, 45f));
+                    Part(root, "HeartShine", PrimitiveType.Sphere, new Vector3(-.1f, .2f, -.14f), Vector3.one * .09f, palette.Snow);
+                    if (!lowDetail)
+                    {
+                        Part(root, "Stitch", PrimitiveType.Cube, new Vector3(.02f, .05f, -.17f), new Vector3(.2f, .03f, .02f), palette.Dark, new Vector3(0f, 0f, -24f));
+                        Part(root, "HeartGem", PrimitiveType.Sphere, new Vector3(0f, .02f, -.16f), Vector3.one * .1f, palette.Glow);
+                    }
+                    break;
+                }
+                case PickupVisualId.BubbleShield:
+                {
+                    // 外气泡 + 内盾牌剪影，避免被读成「半透明光罩圆顶」。
+                    var bubble = Mat("M_Pickup_Bubble", new Color(.55f, .9f, 1f));
+                    Part(root, "BubbleShell", PrimitiveType.Sphere, Vector3.zero, Vector3.one * .72f, bubble);
+                    Part(root, "ShieldPlate", PrimitiveType.Cube, Vector3.zero,
+                        new Vector3(.36f, .48f, .08f), palette.Primary);
+                    Part(root, "ShieldBoss", PrimitiveType.Sphere, new Vector3(0f, 0f, -.08f),
+                        Vector3.one * .14f, palette.Accent);
                     for (var i = 0; i < (lowDetail ? 3 : 6); i++)
                     {
-                        var y = -.32f+i*.15f;
-                        Beam(root, $"VaneL_{i}", new Vector3(-.03f, y, 0f), new Vector3(-.36f+i*.025f, y+.18f, 0f), .055f, palette.Snow);
-                        Beam(root, $"VaneR_{i}", new Vector3(.03f, y+.04f, 0f), new Vector3(.34f-i*.02f, y+.21f, 0f), .055f, palette.Primary);
+                        var a = i * Mathf.PI * 2f / (lowDetail ? 3 : 6);
+                        Part(root, $"Droplet_{i}", PrimitiveType.Sphere,
+                            new Vector3(Mathf.Cos(a) * .48f, Mathf.Sin(a) * .48f, 0f), Vector3.one * .09f, palette.Snow);
                     }
-                    Part(root, "BindingRing", PrimitiveType.Cylinder, new Vector3(0f, -.45f, 0f),
-                        new Vector3(.11f, .05f, .11f), palette.Dark, new Vector3(90f, 0f, 0f));
+                    Part(root, "BubbleShine", PrimitiveType.Sphere, new Vector3(-.2f, .22f, -.24f), Vector3.one * .12f, palette.Snow);
+                    break;
+                }
+                case PickupVisualId.SeahorseBoost:
+                {
+                    var coralPink = Mat("M_Pickup_Coral", new Color(.96f, .5f, .62f));
+                    // 寮у舰娴烽┈锛氳韩浣撹妭 + 鍗峰熬 + 鍚婚儴
+                    for (var i = 0; i < (lowDetail ? 3 : 5); i++)
+                    {
+                        var t = i / (float)(lowDetail ? 2 : 4);
+                        var a = Mathf.Lerp(-.5f, 1.3f, t);
+                        Part(root, $"BodySeg_{i}", PrimitiveType.Sphere,
+                            new Vector3(Mathf.Sin(a) * .24f - .05f, Mathf.Lerp(-.28f, .3f, t), 0f),
+                            Vector3.one * Mathf.Lerp(.19f, .3f, t), coralPink);
+                    }
+                    Part(root, "Head", PrimitiveType.Sphere, new Vector3(-.12f, .4f, 0f), Vector3.one * .24f, coralPink);
+                    Beam(root, "Snout", new Vector3(-.2f, .4f, 0f), new Vector3(-.4f, .36f, 0f), .045f, palette.Accent);
+                    Part(root, "TailCoil", PrimitiveType.Cylinder, new Vector3(.16f, -.36f, 0f), new Vector3(.2f, .05f, .2f), coralPink, new Vector3(0f, 0f, 90f));
+                    if (!lowDetail)
+                    {
+                        Beam(root, "DorsalFin", new Vector3(.08f, .18f, 0f), new Vector3(.28f, .3f, 0f), .05f, palette.Accent);
+                        Part(root, "Eye", PrimitiveType.Sphere, new Vector3(-.18f, .44f, -.12f), Vector3.one * .06f, palette.Dark);
+                    }
+                    break;
+                }
+                case PickupVisualId.CloudWalk:
+                {
+                    Part(root, "CloudMain", PrimitiveType.Sphere, new Vector3(0f, -.08f, 0f), new Vector3(.62f, .4f, .55f), palette.Snow);
+                    Part(root, "CloudL", PrimitiveType.Sphere, new Vector3(-.3f, .02f, .05f), Vector3.one * .34f, palette.Snow);
+                    Part(root, "CloudR", PrimitiveType.Sphere, new Vector3(.28f, .05f, -.04f), Vector3.one * .38f, palette.Snow);
+                    Part(root, "BootL", PrimitiveType.Capsule, new Vector3(-.13f, .3f, 0f), new Vector3(.15f, .16f, .15f), palette.Accent);
+                    Part(root, "BootR", PrimitiveType.Capsule, new Vector3(.13f, .33f, 0f), new Vector3(.15f, .16f, .15f), palette.Primary);
+                    if (!lowDetail)
+                    {
+                        Beam(root, "WindStreakA", new Vector3(-.5f, -.2f, 0f), new Vector3(-.75f, -.16f, 0f), .03f, palette.Glow);
+                        Beam(root, "WindStreakB", new Vector3(.48f, -.12f, 0f), new Vector3(.75f, -.08f, 0f), .03f, palette.Glow);
+                    }
+                    break;
+                }
+                case PickupVisualId.WindRider:
+                {
+                    var sky = Mat("M_Pickup_Sky", new Color(.42f, .74f, .96f));
+                    Part(root, "Hub", PrimitiveType.Sphere, Vector3.zero, Vector3.one * .17f, palette.Accent);
+                    for (var i = 0; i < 4; i++)
+                    {
+                        var a = i * 90f;
+                        Part(root, $"Vane_{i}", PrimitiveType.Cube,
+                            Quaternion.Euler(0f, 0f, a) * new Vector3(.24f, .06f, 0f),
+                            new Vector3(.4f, .16f, .04f), i % 2 == 0 ? sky : palette.Snow, new Vector3(0f, 0f, a + 18f));
+                    }
+                    Beam(root, "Stick", new Vector3(0f, -.5f, .05f), new Vector3(0f, -.02f, .02f), .035f, palette.Dark);
+                    if (!lowDetail)
+                    {
+                        Beam(root, "GustA", new Vector3(.34f, .4f, 0f), new Vector3(.6f, .46f, 0f), .025f, palette.Glow);
+                        Beam(root, "GustB", new Vector3(-.38f, -.34f, 0f), new Vector3(-.62f, -.42f, 0f), .025f, palette.Glow);
+                    }
+                    break;
+                }
+                case PickupVisualId.IceMirror:
+                {
+                    var ice = Mat("M_Pickup_Ice", new Color(.72f, .93f, 1f));
+                    Part(root, "MirrorFace", PrimitiveType.Cylinder, Vector3.zero, new Vector3(.62f, .035f, .62f), ice, new Vector3(90f, 0f, 0f));
+                    Part(root, "MirrorFrame", PrimitiveType.Cylinder, new Vector3(0f, 0f, .035f), new Vector3(.7f, .028f, .7f), palette.Primary, new Vector3(90f, 0f, 0f));
+                    Part(root, "MirrorGem", PrimitiveType.Sphere, new Vector3(0f, .38f, 0f), Vector3.one * .1f, palette.Glow);
+                    for (var i = 0; i < (lowDetail ? 2 : 4); i++)
+                    {
+                        var a = 40f + i * 80f;
+                        Part(root, $"Shard_{i}", PrimitiveType.Cube,
+                            Quaternion.Euler(0f, 0f, a) * new Vector3(0f, .44f, 0f),
+                            new Vector3(.09f, .24f, .06f), ice, new Vector3(0f, 0f, a + 45f));
+                    }
+                    break;
+                }
+                case PickupVisualId.AuroraChain:
+                {
+                    var aurora = Mat("M_Pickup_Aurora", new Color(.62f, .4f, 1f), emission: true);
+                    var auroraGreen = Mat("M_Pickup_AuroraGreen", new Color(.32f, .96f, .76f), emission: true);
+                    Part(root, "RingA", PrimitiveType.Cylinder, new Vector3(-.14f, .06f, 0f), new Vector3(.5f, .035f, .5f), aurora, new Vector3(90f, 0f, 24f));
+                    Part(root, "RingB", PrimitiveType.Cylinder, new Vector3(.14f, -.06f, .03f), new Vector3(.44f, .035f, .44f), auroraGreen, new Vector3(90f, 0f, -20f));
+                    Part(root, "ChainCore", PrimitiveType.Sphere, Vector3.zero, Vector3.one * .16f, palette.Glow);
+                    if (!lowDetail)
+                    {
+                        Part(root, "SparkA", PrimitiveType.Sphere, new Vector3(-.34f, .3f, 0f), Vector3.one * .06f, auroraGreen);
+                        Part(root, "SparkB", PrimitiveType.Sphere, new Vector3(.34f, -.28f, 0f), Vector3.one * .06f, aurora);
+                    }
+                    break;
+                }
+                case PickupVisualId.FogLantern:
+                {
+                    Part(root, "LanternCage", PrimitiveType.Cylinder, Vector3.zero, new Vector3(.36f, .3f, .36f), palette.Primary);
+                    Part(root, "WarmCore", PrimitiveType.Sphere, Vector3.zero, Vector3.one * .3f, palette.Glow);
+                    Part(root, "Cap", PrimitiveType.Cylinder, new Vector3(0f, .34f, 0f), new Vector3(.4f, .06f, .4f), palette.Dark);
+                    Part(root, "Base", PrimitiveType.Cylinder, new Vector3(0f, -.32f, 0f), new Vector3(.4f, .05f, .4f), palette.Dark);
+                    Beam(root, "Handle", new Vector3(-.2f, .38f, 0f), new Vector3(.2f, .38f, 0f), .028f, palette.Dark);
+                    if (!lowDetail) AddCageBars(root, palette.Dark);
+                    break;
+                }
+                case PickupVisualId.TreantArmor:
+                {
+                    var bark = Mat("M_Pickup_Bark", new Color(.4f, .27f, .16f));
+                    var leaf = Mat("M_Pickup_Leaf", new Color(.32f, .66f, .3f));
+                    Part(root, "ChestPlate", PrimitiveType.Cube, Vector3.zero, new Vector3(.56f, .62f, .16f), bark, new Vector3(0f, 0f, 3f));
+                    Part(root, "PlateRidge", PrimitiveType.Cube, new Vector3(0f, .05f, -.1f), new Vector3(.14f, .56f, .05f), palette.Dark);
+                    Part(root, "ShoulderLeafL", PrimitiveType.Sphere, new Vector3(-.34f, .3f, 0f), new Vector3(.3f, .22f, .3f), leaf);
+                    Part(root, "ShoulderLeafR", PrimitiveType.Sphere, new Vector3(.34f, .26f, 0f), new Vector3(.26f, .2f, .26f), leaf);
+                    Part(root, "HeartKnot", PrimitiveType.Sphere, new Vector3(0f, .02f, -.12f), Vector3.one * .12f, palette.Glow);
+                    if (!lowDetail)
+                    {
+                        Beam(root, "GrainA", new Vector3(-.2f, -.24f, -.09f), new Vector3(-.14f, .22f, -.09f), .02f, palette.Dark);
+                        Beam(root, "GrainB", new Vector3(.18f, -.28f, -.09f), new Vector3(.22f, .18f, -.09f), .02f, palette.Dark);
+                    }
+                    break;
+                }
+                case PickupVisualId.CoralBounce:
+                {
+                    var coral = Mat("M_Pickup_Coral", new Color(.96f, .5f, .62f));
+                    var teal = Mat("M_Pickup_Teal", new Color(.36f, .9f, .84f));
+                    Beam(root, "Stem", new Vector3(0f, -.42f, 0f), new Vector3(0f, -.05f, 0f), .07f, coral);
+                    Beam(root, "BranchL", new Vector3(0f, -.14f, 0f), new Vector3(-.26f, .3f, 0f), .05f, coral);
+                    Beam(root, "BranchR", new Vector3(0f, -.1f, 0f), new Vector3(.24f, .34f, .06f), .05f, coral);
+                    Beam(root, "BranchMid", new Vector3(0f, -.06f, 0f), new Vector3(.02f, .42f, -.05f), .045f, coral);
+                    Part(root, "TipL", PrimitiveType.Sphere, new Vector3(-.26f, .32f, 0f), Vector3.one * .1f, teal);
+                    Part(root, "TipR", PrimitiveType.Sphere, new Vector3(.24f, .36f, .06f), Vector3.one * .1f, teal);
+                    Part(root, "TipMid", PrimitiveType.Sphere, new Vector3(.02f, .44f, -.05f), Vector3.one * .09f, palette.Glow);
+                    if (!lowDetail)
+                    {
+                        Part(root, "SpringRing", PrimitiveType.Cylinder, new Vector3(0f, -.42f, 0f), new Vector3(.46f, .03f, .46f), teal);
+                    }
+                    break;
+                }
+                case PickupVisualId.ThunderFeather:
+                {
+                    var storm = Mat("M_Pickup_Storm", new Color(1f, .9f, .3f), emission: true);
+                    BuildFeather(root, palette, lowDetail, palette.Snow, Mat("M_Pickup_Sky", new Color(.42f, .74f, .96f)));
+                    // 闂數绗﹀彿锛氫笁娈垫姌绾?                    Beam(root, "BoltA", new Vector3(.1f, .34f, -.12f), new Vector3(-.04f, .1f, -.12f), .035f, storm);
+                    Beam(root, "BoltB", new Vector3(-.04f, .1f, -.12f), new Vector3(.08f, -.02f, -.12f), .035f, storm);
+                    Beam(root, "BoltC", new Vector3(.08f, -.02f, -.12f), new Vector3(-.06f, -.3f, -.12f), .035f, storm);
+                    break;
+                }
+                default:
+                    BuildFeather(root, palette, lowDetail, palette.Snow, palette.Primary);
                     break;
             }
         }
+
+        /// <summary>缇芥瘺鍩虹褰細GlideFeather 涓?ThunderFeather 澶嶇敤銆?/summary>
+        private static void BuildFeather(Transform root, SculpturePalette palette, bool lowDetail,
+            Material vaneLeft, Material vaneRight)
+        {
+            Beam(root, "FeatherShaft", new Vector3(0f, -.52f, 0f), new Vector3(0f, .56f, 0f), .035f, palette.Accent);
+            for (var i = 0; i < (lowDetail ? 3 : 6); i++)
+            {
+                var y = -.32f+i*.15f;
+                Beam(root, $"VaneL_{i}", new Vector3(-.03f, y, 0f), new Vector3(-.36f+i*.025f, y+.18f, 0f), .055f, vaneLeft);
+                Beam(root, $"VaneR_{i}", new Vector3(.03f, y+.04f, 0f), new Vector3(.34f-i*.02f, y+.21f, 0f), .055f, vaneRight);
+            }
+            Part(root, "BindingRing", PrimitiveType.Cylinder, new Vector3(0f, -.45f, 0f),
+                new Vector3(.11f, .05f, .11f), palette.Dark, new Vector3(90f, 0f, 0f));
+        }
+
+        /// <summary>灏忓彿楸煎共褰細DoubleFishSnack 澶嶇敤銆?/summary>
+        private static void BuildMiniFish(Transform root, string name, Vector3 position, Vector3 euler, SculpturePalette palette)
+        {
+            var fish = new GameObject(name);
+            fish.transform.SetParent(root, false);
+            fish.transform.localPosition = position;
+            fish.transform.localEulerAngles = euler;
+            Part(fish.transform, "Body", PrimitiveType.Sphere, Vector3.zero, new Vector3(.3f, .18f, .44f), palette.Accent);
+            Part(fish.transform, "Tail", PrimitiveType.Cube, new Vector3(0f, 0f, .38f), new Vector3(.26f, .2f, .06f), palette.Primary, new Vector3(0f, 0f, 45f));
+        }
+
+        private static Material Mat(string name, Color color, bool metallic = false, bool emission = false) =>
+            PenguinVisualPrefabBuilder.Material(name, color, metallic, emission);
 
         public static void BuildEnvironment(Transform root, RunnerMapTheme theme, EnvironmentPropId id,
             SculpturePalette palette, bool lowDetail)

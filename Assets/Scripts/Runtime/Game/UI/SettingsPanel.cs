@@ -1,4 +1,5 @@
-using PenguinRun.Game.Save;
+﻿using PenguinRun.Game.Save;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,16 +13,16 @@ namespace PenguinRun.Game.UI
     {
         private System.Action<MainMenuBootstrap.PanelEvent, string> dispatch;
         private RectTransform contentRoot;
-        private InputField nicknameField;
+        private TMP_InputField nicknameField;
         private Toggle bgmToggle;
         private Toggle sfxToggle;
         private Slider hapticSlider;
-        private Text hapticValueText;
+        private TextMeshProUGUI hapticValueText;
 
-        private readonly System.Collections.Generic.List<(Button btn, Image img, Text label, string trackId)> lobbyPickButtons = new();
-        private readonly System.Collections.Generic.List<(Button btn, Image img, Text label, string trackId)> runPickButtons = new();
-        private readonly System.Collections.Generic.List<(Button btn, Image img, Text label, string ambienceId)> ambiencePickButtons = new();
-        private readonly System.Collections.Generic.List<(Button btn, Image img, Text label, string styleId)> sfxStylePickButtons = new();
+        private readonly System.Collections.Generic.List<(Button btn, Image img, TextMeshProUGUI label, string trackId)> lobbyPickButtons = new();
+        private readonly System.Collections.Generic.List<(Button btn, Image img, TextMeshProUGUI label, string trackId)> runPickButtons = new();
+        private readonly System.Collections.Generic.List<(Button btn, Image img, TextMeshProUGUI label, string ambienceId)> ambiencePickButtons = new();
+        private readonly System.Collections.Generic.List<(Button btn, Image img, TextMeshProUGUI label, string styleId)> sfxStylePickButtons = new();
 
         public static GameObject Build(Transform parent, System.Action<MainMenuBootstrap.PanelEvent, string> dispatch)
         {
@@ -84,7 +85,7 @@ namespace PenguinRun.Game.UI
         {
             var row = NewRow("昵称", "在排行榜上展示的名字。");
             var fieldGo = new GameObject("NicknameField",
-                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(InputField));
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(TMP_InputField));
             fieldGo.transform.SetParent(row.transform, false);
             var rt = (RectTransform)fieldGo.transform;
             rt.anchorMin = new Vector2(0.55f, 0.22f);
@@ -98,23 +99,32 @@ namespace PenguinRun.Game.UI
             fieldImg.type = Image.Type.Sliced;
             UiBuilder.AddOutline(fieldGo, UiBuilder.BorderDefault, new Vector2(1f, -1f));
 
-            var textGo = new GameObject("Text", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            textGo.transform.SetParent(fieldGo.transform, false);
+            // TMP_InputField 需要 viewport + 文本组件的层级
+            var viewportGo = new GameObject("Text Area", typeof(RectTransform), typeof(RectMask2D));
+            viewportGo.transform.SetParent(fieldGo.transform, false);
+            var vrt = (RectTransform)viewportGo.transform;
+            vrt.anchorMin = Vector2.zero;
+            vrt.anchorMax = Vector2.one;
+            vrt.sizeDelta = Vector2.zero;
+            vrt.offsetMin = new Vector2(20f, 8f);
+            vrt.offsetMax = new Vector2(-20f, -8f);
+
+            var textGo = new GameObject("Text", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+            textGo.transform.SetParent(viewportGo.transform, false);
             var trt = (RectTransform)textGo.transform;
             trt.anchorMin = Vector2.zero;
             trt.anchorMax = Vector2.one;
             trt.sizeDelta = Vector2.zero;
-            trt.offsetMin = new Vector2(20f, 8f);
-            trt.offsetMax = new Vector2(-20f, -8f);
-            var t = textGo.GetComponent<Text>();
-            t.alignment = TextAnchor.MiddleLeft;
+            var t = textGo.GetComponent<TextMeshProUGUI>();
+            t.alignment = TextAlignmentOptions.Left;
             t.color = Color.white;
             t.fontSize = 26;
-            t.fontStyle = FontStyle.Bold;
-            t.font = UiTheme.FallbackFont;
-            t.supportRichText = false;
+            t.fontStyle = FontStyles.Bold;
+            t.font = UiTheme.TmpFont;
+            t.richText = false;
 
-            var input = fieldGo.GetComponent<InputField>();
+            var input = fieldGo.GetComponent<TMP_InputField>();
+            input.textViewport = vrt;
             input.textComponent = t;
             input.text = PlayerSave.PlayerNickname;
             input.characterLimit = 14;
@@ -174,7 +184,7 @@ namespace PenguinRun.Game.UI
             var btn = UiBuilder.CreateButton("Pick_" + trackId, parent, label,
                 Color.clear, UiBuilder.TextSecondary, 20, rounded: true);
             var img = btn.GetComponent<Image>();
-            var labelText = btn.GetComponentInChildren<Text>();
+            var labelText = btn.GetComponentInChildren<TextMeshProUGUI>();
             lobbyPickButtons.Add((btn, img, labelText, trackId));
             btn.onClick.AddListener(() =>
             {
@@ -196,7 +206,7 @@ namespace PenguinRun.Game.UI
                 if (label != null)
                 {
                     label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
-                    label.fontStyle = sel ? FontStyle.Bold : FontStyle.Normal;
+                    label.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
             }
         }
@@ -241,7 +251,7 @@ namespace PenguinRun.Game.UI
             var btn = UiBuilder.CreateButton("RunPick_" + trackId, parent, label,
                 Color.clear, UiBuilder.TextSecondary, 19, rounded: true);
             var img = btn.GetComponent<Image>();
-            var labelText = btn.GetComponentInChildren<Text>();
+            var labelText = btn.GetComponentInChildren<TextMeshProUGUI>();
             runPickButtons.Add((btn, img, labelText, trackId));
             btn.onClick.AddListener(() =>
             {
@@ -262,7 +272,7 @@ namespace PenguinRun.Game.UI
                 if (label != null)
                 {
                     label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
-                    label.fontStyle = sel ? FontStyle.Bold : FontStyle.Normal;
+                    label.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
             }
         }
@@ -304,7 +314,7 @@ namespace PenguinRun.Game.UI
             var btn = UiBuilder.CreateButton("Ambience_" + ambienceId, parent, label,
                 Color.clear, UiBuilder.TextSecondary, 20, rounded: true);
             var img = btn.GetComponent<Image>();
-            var labelText = btn.GetComponentInChildren<Text>();
+            var labelText = btn.GetComponentInChildren<TextMeshProUGUI>();
             ambiencePickButtons.Add((btn, img, labelText, ambienceId));
             btn.onClick.AddListener(() =>
             {
@@ -325,7 +335,7 @@ namespace PenguinRun.Game.UI
                 if (label != null)
                 {
                     label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
-                    label.fontStyle = sel ? FontStyle.Bold : FontStyle.Normal;
+                    label.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
             }
         }
@@ -366,7 +376,7 @@ namespace PenguinRun.Game.UI
             var btn = UiBuilder.CreateButton("SfxStyle_" + styleId, parent, label,
                 Color.clear, UiBuilder.TextSecondary, 20, rounded: true);
             var img = btn.GetComponent<Image>();
-            var labelText = btn.GetComponentInChildren<Text>();
+            var labelText = btn.GetComponentInChildren<TextMeshProUGUI>();
             sfxStylePickButtons.Add((btn, img, labelText, styleId));
             btn.onClick.AddListener(() =>
             {
@@ -387,7 +397,7 @@ namespace PenguinRun.Game.UI
                 if (label != null)
                 {
                     label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
-                    label.fontStyle = sel ? FontStyle.Bold : FontStyle.Normal;
+                    label.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
             }
         }

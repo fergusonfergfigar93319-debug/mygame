@@ -1,5 +1,6 @@
-using PenguinRun.Game.Save;
+﻿using PenguinRun.Game.Save;
 using PenguinRun.Game.UI.Storybook;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -17,7 +18,7 @@ namespace PenguinRun.Game.UI
             bar.pivot = new Vector2(0.5f, 1f);
             UiBuilder.AddShadow(bar.gameObject, UiTheme.ShadowWarm, new Vector2(0f, -6f));
 
-            var back = UiBuilder.CreateButton("Back", bar, "←",
+            var back = UiBuilder.CreateButton("Back", bar, string.Empty,
                 new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.75f),
                 UiTheme.InkPrimary, 34, rounded: true);
             var backRect = (RectTransform)back.transform;
@@ -28,6 +29,12 @@ namespace PenguinRun.Game.UI
             backRect.anchoredPosition = new Vector2(28f, -8f);
             back.onClick.AddListener(() => onBack?.Invoke());
             StorybookUi.AddStitchedOutline(back.gameObject);
+            var backIcon = UiIcons.CreateImage("BackIcon", back.transform, UiIcons.Back, UiTheme.InkPrimary);
+            var backIconRect = (RectTransform)backIcon.transform;
+            backIconRect.anchorMin = new Vector2(0.26f, 0.26f);
+            backIconRect.anchorMax = new Vector2(0.74f, 0.74f);
+            backIconRect.offsetMin = Vector2.zero;
+            backIconRect.offsetMax = Vector2.zero;
 
             var eyebrow = UiBuilder.CreateText("Eyebrow", bar, "营地手记 · 新的一页",
                 UiTheme.Micro, FontStyle.Bold, TextAnchor.LowerLeft, UiTheme.CoralAction);
@@ -65,7 +72,7 @@ namespace PenguinRun.Game.UI
         {
             if (headerBar == null) return;
             var value = headerBar.Find("CurrencyPill/Value");
-            var text = value != null ? value.GetComponent<Text>() : null;
+            var text = value != null ? value.GetComponent<TextMeshProUGUI>() : null;
             if (text != null) text.text = $"{PlayerSave.TotalFishSnacks}";
         }
 

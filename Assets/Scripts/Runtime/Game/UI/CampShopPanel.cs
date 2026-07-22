@@ -1,7 +1,8 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PenguinRun.Game.Save;
 using PenguinRun.Game.Growth;
 using PenguinRun.Game.Shop;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -17,16 +18,19 @@ namespace PenguinRun.Game.UI
         private RectTransform contentRoot;
 
         // Tab 状态
+        /// <summary>营地强化分类过滤（原 CampPanel.CategoryFilter，旧面板删除后收编于此）。</summary>
+        public enum CampCategoryFilter { All, Action, Survival, Reward }
+
         public enum MainTab { Camp, Shop, Records }
         private MainTab activeTab = MainTab.Camp;
-        private readonly List<(Button btn, Image bg, Text text, MainTab tab)> tabButtons = new();
+        private readonly List<(Button btn, Image bg, TextMeshProUGUI text, MainTab tab)> tabButtons = new();
 
         // 子 Tab（商店内部）
         private ShopCategory activeShopCategory = ShopCategory.DailyDeals;
-        private readonly List<(Button btn, Image bg, Text text, ShopCategory cat)> shopTabs = new();
+        private readonly List<(Button btn, Image bg, TextMeshProUGUI text, ShopCategory cat)> shopTabs = new();
 
         // 营地子状态
-        private CampPanel.CategoryFilter activeCampFilter = CampPanel.CategoryFilter.All;
+        private CampCategoryFilter activeCampFilter = CampCategoryFilter.All;
 
         // 常量
         private const float TabsHeight = 84f;
@@ -36,7 +40,7 @@ namespace PenguinRun.Game.UI
         // Shop 确认弹窗
         private GameObject confirmOverlay;
         private RectTransform countdownContainer;
-        private Text countdownText;
+        private TextMeshProUGUI countdownText;
         private float countdownTickAcc;
 
         public static GameObject Build(Transform parent, System.Action<MainMenuBootstrap.PanelEvent, string> dispatch)
@@ -174,7 +178,7 @@ namespace PenguinRun.Game.UI
                 if (text != null)
                 {
                     text.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
-                    text.fontStyle = sel ? FontStyle.Bold : FontStyle.Normal;
+                    text.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
                 var outline = btn.gameObject.GetComponent<Outline>();
                 if (sel)
@@ -197,7 +201,7 @@ namespace PenguinRun.Game.UI
         private void Refresh()
         {
             // 更新顶栏货币
-            var fishText = transform.Find("Header/CurrencyPill/Value")?.GetComponent<Text>();
+            var fishText = transform.Find("Header/CurrencyPill/Value")?.GetComponent<TextMeshProUGUI>();
             if (fishText != null) fishText.text = $"{PlayerSave.TotalFishSnacks}";
 
             // 清空内容区
@@ -239,13 +243,13 @@ namespace PenguinRun.Game.UI
 
             foreach (var cat in order)
             {
-                if (filter != CampPanel.CategoryFilter.All && !MatchesCampFilter(cat)) continue;
+                if (filter != CampCategoryFilter.All && !MatchesCampFilter(cat)) continue;
 
                 var shownAny = false;
                 foreach (var k in CampUpgrades.AllKinds)
                 {
                     if (CampUpgrades.GetCategory(k) != cat) continue;
-                    if (!shownAny && filter == CampPanel.CategoryFilter.All)
+                    if (!shownAny && filter == CampCategoryFilter.All)
                     {
                         BuildCampSectionHeader(cat);
                         shownAny = true;
@@ -352,13 +356,13 @@ namespace PenguinRun.Game.UI
             hlg.childForceExpandWidth = true;
             hlg.childForceExpandHeight = true;
 
-            var campTabs = new List<(Button btn, Image bg, Text text, CampPanel.CategoryFilter filter)>();
-            System.Action<RectTransform, string, CampPanel.CategoryFilter> addTab = (parent, lbl, f) =>
+            var campTabs = new List<(Button btn, Image bg, TextMeshProUGUI text, CampCategoryFilter filter)>();
+            System.Action<RectTransform, string, CampCategoryFilter> addTab = (parent, lbl, f) =>
             {
                 var btn = UiBuilder.CreateButton("SubTab_" + f, parent.transform, lbl,
                     Color.clear, UiBuilder.TextSecondary, 20, rounded: true);
                 var img = btn.GetComponent<Image>();
-                var txt = btn.GetComponentInChildren<Text>();
+                var txt = btn.GetComponentInChildren<TextMeshProUGUI>();
                 campTabs.Add((btn, img, txt, f));
                 btn.onClick.AddListener(() =>
                 {
@@ -371,7 +375,7 @@ namespace PenguinRun.Game.UI
                         if (t.text != null)
                         {
                             t.text.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
-                            t.text.fontStyle = sel ? FontStyle.Bold : FontStyle.Normal;
+                            t.text.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                         }
                         var ol = t.btn.gameObject.GetComponent<Outline>();
                         if (sel)
@@ -387,10 +391,10 @@ namespace PenguinRun.Game.UI
                 });
             };
 
-            addTab(tabsBg, "全部", CampPanel.CategoryFilter.All);
-            addTab(tabsBg, "跑酷", CampPanel.CategoryFilter.Action);
-            addTab(tabsBg, "防守", CampPanel.CategoryFilter.Survival);
-            addTab(tabsBg, "收益", CampPanel.CategoryFilter.Reward);
+            addTab(tabsBg, "全部", CampCategoryFilter.All);
+            addTab(tabsBg, "跑酷", CampCategoryFilter.Action);
+            addTab(tabsBg, "防守", CampCategoryFilter.Survival);
+            addTab(tabsBg, "收益", CampCategoryFilter.Reward);
 
             // 应用初始样式
             foreach (var t in campTabs)
@@ -400,7 +404,7 @@ namespace PenguinRun.Game.UI
                 if (t.text != null)
                 {
                     t.text.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
-                    t.text.fontStyle = sel ? FontStyle.Bold : FontStyle.Normal;
+                    t.text.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
                 if (sel) UiBuilder.AddOutline(t.btn.gameObject, new Color(0.3f, 1f, 1f, 0.5f), new Vector2(1f, -1f));
             }
@@ -409,9 +413,9 @@ namespace PenguinRun.Game.UI
         private bool MatchesCampFilter(CampUpgradeCategory cat) =>
             activeCampFilter switch
             {
-                CampPanel.CategoryFilter.Action => cat == CampUpgradeCategory.Action,
-                CampPanel.CategoryFilter.Survival => cat == CampUpgradeCategory.Survival,
-                CampPanel.CategoryFilter.Reward => cat == CampUpgradeCategory.Reward,
+                CampCategoryFilter.Action => cat == CampUpgradeCategory.Action,
+                CampCategoryFilter.Survival => cat == CampUpgradeCategory.Survival,
+                CampCategoryFilter.Reward => cat == CampUpgradeCategory.Reward,
                 _ => true,
             };
 
@@ -782,7 +786,7 @@ namespace PenguinRun.Game.UI
                 var btn = UiBuilder.CreateButton("ShopTab_" + cat, tabsBg.transform, lbl,
                     Color.clear, UiBuilder.TextSecondary, 20, rounded: true);
                 var img = btn.GetComponent<Image>();
-                var txt = btn.GetComponentInChildren<Text>();
+                var txt = btn.GetComponentInChildren<TextMeshProUGUI>();
                 shopTabs.Add((btn, img, txt, cat));
                 btn.onClick.AddListener(() =>
                 {
@@ -794,7 +798,7 @@ namespace PenguinRun.Game.UI
                         if (t.text != null)
                         {
                             t.text.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
-                            t.text.fontStyle = sel ? FontStyle.Bold : FontStyle.Normal;
+                            t.text.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                         }
                         var ol = t.btn.gameObject.GetComponent<Outline>();
                         if (sel) { if (ol == null) UiBuilder.AddOutline(t.btn.gameObject, new Color(0.3f, 1f, 1f, 0.5f), new Vector2(1f, -1f)); }
@@ -816,7 +820,7 @@ namespace PenguinRun.Game.UI
                 if (t.text != null)
                 {
                     t.text.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
-                    t.text.fontStyle = sel ? FontStyle.Bold : FontStyle.Normal;
+                    t.text.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
                 if (sel) UiBuilder.AddOutline(t.btn.gameObject, new Color(0.3f, 1f, 1f, 0.5f), new Vector2(1f, -1f));
             }
@@ -1000,7 +1004,7 @@ namespace PenguinRun.Game.UI
             // 价格
             var orig = UiBuilder.CreateText("Orig", row, $"<s>{deal.OriginalPrice}</s>", 17, FontStyle.Normal,
                 TextAnchor.LowerRight, new Color(0.6f, 0.7f, 0.82f, 0.7f));
-            orig.supportRichText = true;
+            orig.richText = true;
             var ort = (RectTransform)orig.transform;
             ort.anchorMin = new Vector2(1f, 0.5f);
             ort.anchorMax = new Vector2(1f, 0.5f);
@@ -1179,7 +1183,7 @@ namespace PenguinRun.Game.UI
                 {
                     var bImg = btn.GetComponent<Image>();
                     bImg.color = new Color(0.18f, 0.28f, 0.4f, 0.9f);
-                    btn.GetComponentInChildren<Text>().color = new Color(1f, 1f, 1f, 0.55f);
+                    btn.GetComponentInChildren<TextMeshProUGUI>().color = new Color(1f, 1f, 1f, 0.55f);
                 }
                 else
                 {

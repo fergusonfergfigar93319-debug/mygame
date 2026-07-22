@@ -150,6 +150,9 @@ namespace PenguinRun
         private readonly List<TelegraphMarker> telegraphs = new();
         private readonly BossPatternVfxPlayer patternVfxPlayer = new();
         private readonly BossBodyAnimator bodyAnimator = new();
+        private readonly BossRigAnimator rigAnimator = new();
+        private bool usesRiggedModel;
+        private BossPhase lastTickPhase = BossPhase.Spawning;
         private BossThemeTrait themeTrait;
         private static readonly Dictionary<string, Texture2D> textureCache = new();
         private int patternDiveLaneIdx;
@@ -216,7 +219,8 @@ namespace PenguinRun
             Root.transform.position = new Vector3(0f, startSurface, BossSystem.BossSpawnAheadZ);
 
             body = BuildSilhouette(def, out bodyRenderer, out leftArm, out rightArm);
-            head = body.Find("Head") ?? body.Find("EagleHead");
+            // rigged 模型的头由骨骼动画驱动，不做程序化 head 覆盖（会与动画采样互相覆盖）
+            head = usesRiggedModel ? null : body.Find("Head") ?? body.Find("EagleHead");
             bodyAnimator.CaptureHeadBaseline(head);
             patternVfxPlayer.SetStrikeCallback(OnPatternStrikeMoment);
             ApplyOpenTextures(def);
@@ -284,6 +288,13 @@ namespace PenguinRun
             bobPhase += dt;
             elapsedInPhase += dt;
             attackAnimPunch = ComputeAttackAnimPunch();
+
+            if (Phase != lastTickPhase)
+            {
+                OnPhaseChangedForRig(lastTickPhase, Phase);
+                lastTickPhase = Phase;
+            }
+            rigAnimator.Tick(dt);
 
             // boss 跟随路面前进（保持在玩家前方），落地高度跟随地形
             var holdZ = Phase == BossPhase.Retreating ? BossSystem.BossActiveZ + 4f : BossSystem.BossActiveZ;
@@ -402,11 +413,47 @@ namespace PenguinRun
                     RetreatTimer -= dt;
                     if (Root != null)
                     {
-                        var p = Root.transform.position;
-                        p.y += dt * 4.2f; // 向上飞走
-                        Root.transform.position = p;
-                        Root.transform.Rotate(Vector3.up, 240f * dt, Space.World);
+                        if (usesRiggedModel)
+                        {
+                            // 击败演出：倒地片段（PlayDeath 已触发）+ 后仰下沉 + 收缩离场
+                            var defeat01 = 1f - Mathf.Clamp01(RetreatTimer / BossSystem.DefeatRetreatSeconds);
+                            var p = Root.transform.position;
+                            p.z += dt * 2.6f;
+                            p.y -= dt * Mathf.Lerp(0f, 2.2f, Mathf.Max(0f, defeat01 - 0.45f) / 0.55f);
+                            Root.transform.position = p;
+                            if (body != null && defeat01 > 0.55f)
+                            {
+                                var shrink = 1f - (defeat01 - 0.55f) / 0.45f * 0.85f;
+                                body.localScale = Vector3.one * Mathf.Max(0.15f, shrink);
+                            }
+                        }
+                        else
+                        {
+                            var p = Root.transform.position;
+                            p.y += dt * 4.2f; // 向上飞走
+                            Root.transform.position = p;
+                            Root.transform.Rotate(Vector3.up, 240f * dt, Space.World);
+                        }
                     }
+                    break;
+            }
+        }
+
+        /// <summary>rigged 模型的阶段切换动画：入场移动 → 待机；破绽眩晕；击败倒地。</summary>
+        private void OnPhaseChangedForRig(BossPhase from, BossPhase to)
+        {
+            if (!usesRiggedModel) return;
+            switch (to)
+            {
+                case BossPhase.Active:
+                    rigAnimator.PlayIdle(from == BossPhase.Spawning ? 0.3f : 0.18f);
+                    break;
+                case BossPhase.Vulnerable:
+                    rigAnimator.PlayDazed();
+                    break;
+                case BossPhase.Retreating:
+                case BossPhase.Defeated:
+                    rigAnimator.PlayDeath();
                     break;
             }
         }
@@ -550,6 +597,7 @@ namespace PenguinRun
             patternTimer = 0f;
             vulnerableTimer = 0f;
             patternVfxPlayer.PlayThemePhaseCue(this, themeTrait, BossPhase.Active);
+            rigAnimator.PlayHit();
         }
 
         private void BeginAttackInterval(bool afterBreak = false)
@@ -654,6 +702,9 @@ namespace PenguinRun
             patternVfxPlayer.Begin(this, Pattern, patternDuration, patternDiveLaneIdx, patternSweepSafeLaneIdx);
             SpawnDeceptiveDecoyTelegraphsIfNeeded();
             ApplySignatureWindup();
+
+            // 骨骼攻击动画：片段收势对齐危险窗结束（速度缩放，判定不读动画）
+            rigAnimator.PlayAttack(Pattern, patternDangerDelay + patternActiveWindow);
         }
 
         private void OnPatternStrikeMoment(BossPattern p, BossPatternVfxProfile prof)
@@ -678,6 +729,11 @@ namespace PenguinRun
                 BossSilhouette.StormEagle => new Vector3(0.82f, 1.18f, 0.82f),
                 _ => Vector3.one * 1.06f,
             };
+            // rigged 模型自带攻击动画，程序化 squash 减半避免过度扭曲角色
+            if (usesRiggedModel)
+            {
+                patternWindupScale = Vector3.Lerp(Vector3.one, patternWindupScale, 0.45f);
+            }
             body.localScale = patternWindupScale;
         }
 
@@ -831,6 +887,9 @@ namespace PenguinRun
 
         private void ApplyOpenTextures(BossDefinition def)
         {
+            // rigged 模型自带 Atlas 贴图材质，不再叠加表面贴图
+            if (usesRiggedModel) return;
+
             var texName = def.Silhouette switch
             {
                 BossSilhouette.SnowKing => "tex_ice_surface",
@@ -1113,6 +1172,15 @@ namespace PenguinRun
             bodyGo.transform.SetParent(Root.transform, false);
             bodyGo.transform.localPosition = new Vector3(0f, 1.2f, 0f);
 
+            // 优先使用 CC0 rigged 模型（Quaternius Ultimate Monsters）；缺失时回退程序化剪影
+            if (TryBuildRiggedModel(def, bodyGo.transform, out mainRenderer))
+            {
+                usesRiggedModel = true;
+                armL = null;
+                armR = null;
+                return bodyGo.transform;
+            }
+
             switch (def.Silhouette)
             {
                 case BossSilhouette.SnowKing:
@@ -1138,6 +1206,118 @@ namespace PenguinRun
                     break;
             }
             return bodyGo.transform;
+        }
+
+        internal static string RiggedModelName(BossSilhouette silhouette) => silhouette switch
+        {
+            BossSilhouette.SnowKing => "boss_snow_king",
+            BossSilhouette.CedarSentinel => "boss_cedar_sentinel",
+            BossSilhouette.AuroraSerpent => "boss_aurora_serpent",
+            BossSilhouette.MistGuardian => "boss_mist_guardian",
+            BossSilhouette.CoralKraken => "boss_coral_kraken",
+            BossSilhouette.StormEagle => "boss_storm_eagle",
+            _ => null,
+        };
+
+        private static float RiggedTargetHeight(BossSilhouette silhouette) => silhouette switch
+        {
+            BossSilhouette.SnowKing => 3.9f,
+            BossSilhouette.CedarSentinel => 3.6f,
+            BossSilhouette.AuroraSerpent => 3.4f,
+            BossSilhouette.MistGuardian => 3.3f,
+            BossSilhouette.CoralKraken => 3.4f,
+            BossSilhouette.StormEagle => 3.2f,
+            _ => 3.5f,
+        };
+
+        private bool TryBuildRiggedModel(BossDefinition def, Transform parent, out Renderer mainRenderer)
+        {
+            mainRenderer = null;
+            var modelName = RiggedModelName(def.Silhouette);
+            if (string.IsNullOrEmpty(modelName)) return false;
+
+            var prefab = Resources.Load<GameObject>($"PenguinRun/Models/Bosses/{modelName}");
+            if (prefab == null) return false;
+
+            var model = Object.Instantiate(prefab, parent, false);
+            model.name = "RiggedModel";
+            model.transform.localPosition = Vector3.zero;
+            // Quaternius 模型出厂面朝 +Z；body 容器基础偏航 180°，模型局部保持 0° 时面部正对玩家（已用预览图核对）
+            model.transform.localRotation = Quaternion.identity;
+
+            var renderers = model.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0)
+            {
+                Object.Destroy(model);
+                return false;
+            }
+
+            // 体型归一：按网格绑定姿态包围盒把模型高度缩放到目标身高，脚底对齐跑道地面（body 原点离地 1.2）。
+            // 不能用 Renderer.bounds：实例化当帧蒙皮包围盒尚未更新，会得到错误尺寸。
+            if (!TryComputeMeshBounds(model.transform, parent, out var localBounds))
+            {
+                Object.Destroy(model);
+                return false;
+            }
+
+            var scale = RiggedTargetHeight(def.Silhouette) / Mathf.Max(0.01f, localBounds.size.y);
+            model.transform.localScale = Vector3.one * scale;
+            model.transform.localPosition = new Vector3(0f, -1.2f - localBounds.min.y * scale, 0f);
+
+            foreach (var r in renderers)
+            {
+                if (r is SkinnedMeshRenderer smr)
+                {
+                    smr.updateWhenOffscreen = true;
+                    if (mainRenderer == null) mainRenderer = r;
+                }
+                tintRenderers.Add(r);
+            }
+            mainRenderer ??= renderers[0];
+
+            rigAnimator.Bind(model);
+            rigAnimator.PlayMove();
+            return true;
+        }
+
+        /// <summary>在 parent 局部空间（模型未缩放前）用网格数据求绑定姿态包围盒。</summary>
+        private static bool TryComputeMeshBounds(Transform model, Transform parent, out Bounds localBounds)
+        {
+            var bounds = default(Bounds);
+            var hasAny = false;
+            var toParent = parent.worldToLocalMatrix;
+
+            foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                EncapsulateMesh(smr.sharedMesh, smr.transform, toParent, ref bounds, ref hasAny);
+            foreach (var mf in model.GetComponentsInChildren<MeshFilter>(true))
+                EncapsulateMesh(mf.sharedMesh, mf.transform, toParent, ref bounds, ref hasAny);
+
+            localBounds = bounds;
+            return hasAny && localBounds.size.y > 0.001f;
+        }
+
+        private static void EncapsulateMesh(Mesh mesh, Transform owner, Matrix4x4 toParent, ref Bounds bounds, ref bool hasAny)
+        {
+            if (mesh == null) return;
+            var b = mesh.bounds;
+            var l2p = toParent * owner.localToWorldMatrix;
+            for (var i = 0; i < 8; i++)
+            {
+                var corner = new Vector3(
+                    (i & 1) == 0 ? b.min.x : b.max.x,
+                    (i & 2) == 0 ? b.min.y : b.max.y,
+                    (i & 4) == 0 ? b.min.z : b.max.z);
+                var p = l2p.MultiplyPoint3x4(corner);
+                if (!hasAny)
+                {
+                    bounds = new Bounds(p, Vector3.zero);
+                    hasAny = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(p);
+                }
+            }
         }
 
         private void BuildSnowKing(Transform root, BossDefinition def, out Renderer mainRenderer, out Transform armL, out Transform armR)

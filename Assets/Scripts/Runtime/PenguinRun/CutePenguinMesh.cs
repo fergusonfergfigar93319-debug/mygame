@@ -153,9 +153,9 @@ namespace PenguinRun
             out GameObject leftEye, out GameObject rightEye,
             out GameObject leftPupil, out GameObject rightPupil)
         {
-            var headCenter = headParent.localPosition;
-            var eyeY = headCenter.y + HeadRadius * 0.08f;
-            var eyeZ = headCenter.z - HeadRadius * 0.62f;
+            // 父节点即头部：所有面部件相对头部原点定位（修复此前叠加 head.localPosition 的双重偏移）
+            var eyeY = HeadRadius * 0.08f;
+            var eyeZ = -HeadRadius * 0.62f;
             var eyeX = HeadRadius * 0.32f;
 
             // 左眼白
@@ -203,9 +203,8 @@ namespace PenguinRun
         // ═══════════════════════════════════════════════════════
         private static GameObject CreateBeakMesh(Transform headParent)
         {
-            var headCenter = headParent.localPosition;
             var go = CreateMeshObject("Beak", headParent, BeakOrange,
-                new Vector3(0f, headCenter.y - HeadRadius * 0.18f, headCenter.z - HeadRadius * 0.85f));
+                new Vector3(0f, -HeadRadius * 0.18f, -HeadRadius * 0.85f));
 
             var mf = go.GetComponent<MeshFilter>();
             mf.sharedMesh = BuildBeakShape();
@@ -258,10 +257,9 @@ namespace PenguinRun
         // ═══════════════════════════════════════════════════════
         private static GameObject CreateCheekMesh(Transform headParent, bool left)
         {
-            var headCenter = headParent.localPosition;
             var x = left ? -HeadRadius * 0.58f : HeadRadius * 0.58f;
-            var y = headCenter.y - HeadRadius * 0.22f;
-            var z = headCenter.z - HeadRadius * 0.55f;
+            var y = -HeadRadius * 0.22f;
+            var z = -HeadRadius * 0.55f;
 
             var go = CreateMeshObject(left ? "LeftCheek" : "RightCheek", headParent, CheekPink,
                 new Vector3(x, y, z));
@@ -348,9 +346,8 @@ namespace PenguinRun
         // ═══════════════════════════════════════════════════════
         private static GameObject CreateHatMesh(Transform headParent)
         {
-            var headCenter = headParent.localPosition;
             var go = CreateMeshObject("Hat", headParent, HatBlue,
-                new Vector3(0f, headCenter.y + HeadRadius * 0.65f, headCenter.z - HeadRadius * 0.05f));
+                new Vector3(0f, HeadRadius * 0.65f, -HeadRadius * 0.05f));
 
             var mf = go.GetComponent<MeshFilter>();
             mf.sharedMesh = BuildHatShape();
@@ -396,8 +393,9 @@ namespace PenguinRun
         // ═══════════════════════════════════════════════════════
         private static GameObject CreateScarfMesh(Transform parent)
         {
+            // 围巾在颈部（身体与头的衔接处），而不是腹部中段
             var go = CreateMeshObject("Scarf", parent, ScarfRed,
-                new Vector3(0f, BodyHeight * 0.62f, -BodyDepth * 0.35f));
+                new Vector3(0f, BodyHeight * 0.82f, -BodyDepth * 0.08f));
 
             var mf = go.GetComponent<MeshFilter>();
             mf.sharedMesh = BuildScarfShape();
@@ -463,10 +461,11 @@ namespace PenguinRun
             {
                 for (var lon = 0; lon < lonSegs; lon++)
                 {
+                    // 外向绕向（此前内外翻转导致从背面可透视看到前侧部件）
                     var cur = lat * (lonSegs + 1) + lon;
                     var nxt = cur + lonSegs + 1;
-                    tris[t++] = cur; tris[t++] = nxt; tris[t++] = cur + 1;
-                    tris[t++] = cur + 1; tris[t++] = nxt; tris[t++] = nxt + 1;
+                    tris[t++] = cur; tris[t++] = cur + 1; tris[t++] = nxt;
+                    tris[t++] = cur + 1; tris[t++] = nxt + 1; tris[t++] = nxt;
                 }
             }
             var mesh = new Mesh { name = $"Sphere_{radius}", vertices = verts, triangles = tris };
@@ -506,10 +505,11 @@ namespace PenguinRun
             {
                 for (var lon = 0; lon < lonSegs; lon++)
                 {
+                    // 外向绕向（与 BuildSphere 同步修正）
                     var cur = lat * (lonSegs + 1) + lon;
                     var nxt = cur + lonSegs + 1;
-                    tris[t++] = cur; tris[t++] = nxt; tris[t++] = cur + 1;
-                    tris[t++] = cur + 1; tris[t++] = nxt; tris[t++] = nxt + 1;
+                    tris[t++] = cur; tris[t++] = cur + 1; tris[t++] = nxt;
+                    tris[t++] = cur + 1; tris[t++] = nxt + 1; tris[t++] = nxt;
                 }
             }
             var mesh = new Mesh { name = "RoundedShape", vertices = verts, triangles = tris };
@@ -539,10 +539,11 @@ namespace PenguinRun
             {
                 for (var lon = 0; lon < lonSegs; lon++)
                 {
+                    // 外向绕向（与 BuildRoundedShape 同步修正）
                     var cur = baseIdx + lat * (lonSegs + 1) + lon;
                     var nxt = cur + lonSegs + 1;
-                    tris.Add(cur); tris.Add(nxt); tris.Add(cur + 1);
-                    tris.Add(cur + 1); tris.Add(nxt); tris.Add(nxt + 1);
+                    tris.Add(cur); tris.Add(cur + 1); tris.Add(nxt);
+                    tris.Add(cur + 1); tris.Add(nxt + 1); tris.Add(nxt);
                 }
             }
         }

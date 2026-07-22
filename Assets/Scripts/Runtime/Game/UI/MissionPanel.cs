@@ -1,6 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PenguinRun.Game.Mission;
 using PenguinRun.Game.Save;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -16,7 +17,7 @@ namespace PenguinRun.Game.UI
         private MissionTrack track = MissionTrack.Daily;
         private RectTransform contentRoot;
         private RectTransform headerBar;
-        private Text countdownText;
+        private TextMeshProUGUI countdownText;
         private GameObject countdownRow;
         private float countdownTickAcc;
         private Image tabDailyBg;
@@ -104,8 +105,13 @@ namespace PenguinRun.Game.UI
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
                 new Vector2(36f, 36f), new Vector2(20f, 0f),
                 new Color(0f, 0.75f, 0.85f, 0.9f), circle: true);
-            var iconText = UiBuilder.CreateText("Icon", iconRect, "◷", 20, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
-            
+            var timerIcon = UiIcons.CreateImage("Icon", iconRect, UiIcons.Timer, Color.white);
+            var timerIconRect = (RectTransform)timerIcon.transform;
+            timerIconRect.anchorMin = new Vector2(0.15f, 0.15f);
+            timerIconRect.anchorMax = new Vector2(0.85f, 0.85f);
+            timerIconRect.offsetMin = Vector2.zero;
+            timerIconRect.offsetMax = Vector2.zero;
+
             var clabel = UiBuilder.CreateText("Label", countdownRow.transform, "今日任务刷新", 24, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.85f, 0.9f, 0.95f, 0.9f));
             var crt = (RectTransform)clabel.transform;
             crt.anchorMin = new Vector2(0f, 0f);
@@ -170,8 +176,8 @@ namespace PenguinRun.Game.UI
             // 更新文字颜色
             var activeTextColor = new Color(0.02f, 0.06f, 0.1f, 1f);
             var inactiveTextColor = new Color(0.75f, 0.82f, 0.9f, 0.9f);
-            tabDailyBg.GetComponentInChildren<Text>().color = dailySel ? activeTextColor : inactiveTextColor;
-            tabAchBg.GetComponentInChildren<Text>().color = dailySel ? inactiveTextColor : activeTextColor;
+            tabDailyBg.GetComponentInChildren<TextMeshProUGUI>().color = dailySel ? activeTextColor : inactiveTextColor;
+            tabAchBg.GetComponentInChildren<TextMeshProUGUI>().color = dailySel ? inactiveTextColor : activeTextColor;
             
             // 添加切换动画效果
             var dailyRt = tabDailyBg.transform as RectTransform;
@@ -219,16 +225,21 @@ namespace PenguinRun.Game.UI
             UiBuilder.AddOutline(empty.gameObject, new Color(0.2f, 0.45f, 0.65f, 0.15f), new Vector2(1f, -1f));
             
             var (title, body, icon) = t == MissionTrack.Daily
-                ? ("暂无每日任务", "当前没有可展示的每日目标，请稍后再试或检查配置。", "◷")
-                : ("暂无成就任务", "成就列表为空，完成任务后将在此汇总进度与奖励。", "★");
+                ? ("暂无每日任务", "当前没有可展示的每日目标，请稍后再试或检查配置。", UiIcons.Timer)
+                : ("暂无成就任务", "成就列表为空，完成任务后将在此汇总进度与奖励。", UiIcons.Star);
 
             // 中央图标
             var iconRect = UiBuilder.CreateRect("EmptyIcon", empty.transform,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(80f, 80f), new Vector2(0f, 30f),
                 new Color(0.15f, 0.35f, 0.55f, 0.5f), circle: true);
-            UiBuilder.CreateText("IconText", iconRect.transform, icon, 40, FontStyle.Bold, TextAnchor.MiddleCenter, 
+            var emptyIcon = UiIcons.CreateImage("IconImage", iconRect.transform, icon,
                 new Color(0.5f, 0.75f, 0.9f, 0.8f));
+            var emptyIconRect = (RectTransform)emptyIcon.transform;
+            emptyIconRect.anchorMin = new Vector2(0.2f, 0.2f);
+            emptyIconRect.anchorMax = new Vector2(0.8f, 0.8f);
+            emptyIconRect.offsetMin = Vector2.zero;
+            emptyIconRect.offsetMax = Vector2.zero;
 
             var titleText = UiBuilder.CreateText("Title", empty.transform, title, 32, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
             var trt = (RectTransform)titleText.transform;

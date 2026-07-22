@@ -6,13 +6,16 @@ namespace PenguinRun
 {
     internal sealed class CollisionSystem
     {
-        private const float PlayerMarginX = 0.06f;
-        private const float PlayerMarginZ = 0.10f;
+        private const float PlayerMarginX = 0.04f;
+        private const float PlayerMarginZ = 0.02f;
 
         private readonly RunnerAudio audio;
         private readonly RunnerCombatTuning combat;
         private readonly RunUpgradeState upgrades;
         private readonly HashSet<GameObject> perfectDodged = new();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private readonly HashSet<string> warnedMissingSpecs = new();
+#endif
 
         public CollisionSystem(RunnerAudio audio, RunnerCombatTuning combat, RunUpgradeState upgrades)
         {
@@ -42,14 +45,22 @@ namespace PenguinRun
         {
             if (world.HitInvulnerabilityTimer > 0f) return false;
 
+            // 蹲姿判定盒：滑铲立即压低、结束后逐渐起身；无 motor 时按站姿处理
+            var bodyHeight = motor?.BodyHeight ?? 1.56f;
+
             var px = player.position.x;
             var pz = player.position.z;
             for (var i = obstacles.Count - 1; i >= 0; i--)
             {
                 var obstacle = obstacles[i];
-                var spec = obstacleSpecs.TryGetValue(obstacle, out var s)
-                    ? s
-                    : ObstacleColliderSpec.SmallJumpable;
+                var hasSpec = obstacleSpecs.TryGetValue(obstacle, out var s);
+                var spec = hasSpec ? s : ObstacleColliderSpec.SmallJumpable;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                if (!hasSpec && warnedMissingSpecs.Add(obstacle.name))
+                {
+                    Debug.LogWarning($"[CollisionSystem] 障碍 \"{obstacle.name}\" 未注册 ObstacleColliderSpec，回退 SmallJumpable（违反领域规则）");
+                }
+#endif
 
                 var dz = Mathf.Abs(obstacle.transform.position.z - pz);
                 if (dz > spec.HalfDz + PlayerMarginZ) continue;
@@ -60,6 +71,7 @@ namespace PenguinRun
                     continue;
 
                 var clearedByJump = playerY > obstacle.transform.position.y + spec.FeetClearanceAboveRoot;
+                var clearedByCrouch = spec.IsLow && bodyHeight <= spec.PassUnderMaxHeight;
 
                 if (dashTimerSeconds > 0f && obstacle.TryGetComponent<ShatterWall>(out var shatterWall))
                 {
@@ -75,7 +87,7 @@ namespace PenguinRun
 
                 if (motor != null && motor.PerfectActionWindow > 0f && !perfectDodged.Contains(obstacle))
                 {
-                    if (slideTimerSeconds > 0f && spec.IsLow && motor.LastCriticalAction == RunnerAction.Slide)
+                    if (clearedByCrouch && slideTimerSeconds > 0f && motor.LastCriticalAction == RunnerAction.Slide)
                     {
                         perfectDodged.Add(obstacle);
                         world.AddPerfectDodge();
@@ -95,7 +107,7 @@ namespace PenguinRun
                     }
                 }
 
-                if (slideTimerSeconds > 0f && spec.IsLow) continue;
+                if (clearedByCrouch) continue;
                 if (clearedByJump) continue;
 
                 var outcome = RunnerHitResolver.TryResolveObstacleDefense(world, spec, combat);

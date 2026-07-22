@@ -62,12 +62,13 @@ namespace PenguinRun.Editor
                 lod1.transform.SetParent(root.transform, false);
                 ThemeMechanicSculptureBuilder.Build(lod1.transform, apparatusPath, palette, true);
 
+                // 阈值按跑酷真实视距标定（与 PenguinVisualPrefabBuilder 一致）：
+                // LOD0 覆盖到 2.5% 屏高，0.6% 以下剔除；禁止空渲染器档（会造成隐形区间）。
                 var lodGroup = root.AddComponent<LODGroup>();
                 lodGroup.SetLODs(new[]
                 {
-                    new LOD(.60f, lod0.GetComponentsInChildren<Renderer>(true)),
-                    new LOD(.22f, lod1.GetComponentsInChildren<Renderer>(true)),
-                    new LOD(.03f, Array.Empty<Renderer>()),
+                    new LOD(0.025f, lod0.GetComponentsInChildren<Renderer>(true)),
+                    new LOD(0.006f, lod1.GetComponentsInChildren<Renderer>(true)),
                 });
                 lodGroup.fadeMode = LODFadeMode.CrossFade;
                 lodGroup.animateCrossFading = true;

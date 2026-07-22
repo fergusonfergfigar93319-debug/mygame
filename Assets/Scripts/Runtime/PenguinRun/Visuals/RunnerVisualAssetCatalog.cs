@@ -52,6 +52,20 @@ namespace PenguinRun
             PickupVisualId.Shield,
             PickupVisualId.ScoreStar,
             PickupVisualId.GlideFeather,
+            PickupVisualId.DoubleFishSnack,
+            PickupVisualId.TimeHourglass,
+            PickupVisualId.FishBomb,
+            PickupVisualId.SecondHeart,
+            PickupVisualId.BubbleShield,
+            PickupVisualId.SeahorseBoost,
+            PickupVisualId.CloudWalk,
+            PickupVisualId.WindRider,
+            PickupVisualId.IceMirror,
+            PickupVisualId.AuroraChain,
+            PickupVisualId.FogLantern,
+            PickupVisualId.TreantArmor,
+            PickupVisualId.CoralBounce,
+            PickupVisualId.ThunderFeather,
         };
 
         private static readonly EnvironmentPropId[] BatchEnvironmentKinds =
@@ -80,8 +94,9 @@ namespace PenguinRun
                 position, Vector3.zero, Vector3.one);
         }
 
+        /// <summary>道具视觉放大：跑酷镜头下 1× 雕塑过小，易被读成光点；1.85× 保持可读且不挡道。</summary>
         public static RunnerVisualDescriptor ForPickup(PickupVisualId id) =>
-            new($"PenguinRun/Prefabs/Pickups/{PickupSlug(id)}", Vector3.zero, Vector3.zero, Vector3.one);
+            new($"PenguinRun/Prefabs/Pickups/{PickupSlug(id)}", Vector3.zero, Vector3.zero, Vector3.one * 1.85f);
 
         public static RunnerVisualDescriptor ForEnvironment(RunnerMapTheme theme, EnvironmentPropId id) =>
             new($"PenguinRun/Prefabs/Environment/{ThemeSlug(theme)}/{EnvironmentSlug(id)}",
@@ -108,17 +123,29 @@ namespace PenguinRun
 
         public static bool TryGetPickupId(PowerUpKind kind, out PickupVisualId id)
         {
-            id = kind switch
+            switch (kind)
             {
-                PowerUpKind.Dash => PickupVisualId.Dash,
-                PowerUpKind.Magnet => PickupVisualId.Magnet,
-                PowerUpKind.Shield => PickupVisualId.Shield,
-                PowerUpKind.ScoreStar => PickupVisualId.ScoreStar,
-                PowerUpKind.GlideFeather => PickupVisualId.GlideFeather,
-                _ => PickupVisualId.FishSnack,
-            };
-            return kind is PowerUpKind.Dash or PowerUpKind.Magnet or PowerUpKind.Shield or
-                PowerUpKind.ScoreStar or PowerUpKind.GlideFeather;
+                case PowerUpKind.Dash: id = PickupVisualId.Dash; return true;
+                case PowerUpKind.Magnet: id = PickupVisualId.Magnet; return true;
+                case PowerUpKind.Shield: id = PickupVisualId.Shield; return true;
+                case PowerUpKind.ScoreStar: id = PickupVisualId.ScoreStar; return true;
+                case PowerUpKind.GlideFeather: id = PickupVisualId.GlideFeather; return true;
+                case PowerUpKind.DoubleFishSnack: id = PickupVisualId.DoubleFishSnack; return true;
+                case PowerUpKind.TimeHourglass: id = PickupVisualId.TimeHourglass; return true;
+                case PowerUpKind.FishBomb: id = PickupVisualId.FishBomb; return true;
+                case PowerUpKind.SecondHeart: id = PickupVisualId.SecondHeart; return true;
+                case PowerUpKind.BubbleShield: id = PickupVisualId.BubbleShield; return true;
+                case PowerUpKind.SeahorseBoost: id = PickupVisualId.SeahorseBoost; return true;
+                case PowerUpKind.CloudWalk: id = PickupVisualId.CloudWalk; return true;
+                case PowerUpKind.WindRider: id = PickupVisualId.WindRider; return true;
+                case PowerUpKind.IceMirror: id = PickupVisualId.IceMirror; return true;
+                case PowerUpKind.AuroraChain: id = PickupVisualId.AuroraChain; return true;
+                case PowerUpKind.FogLantern: id = PickupVisualId.FogLantern; return true;
+                case PowerUpKind.TreantArmor: id = PickupVisualId.TreantArmor; return true;
+                case PowerUpKind.CoralBounce: id = PickupVisualId.CoralBounce; return true;
+                case PowerUpKind.ThunderFeather: id = PickupVisualId.ThunderFeather; return true;
+                default: id = PickupVisualId.FishSnack; return false;
+            }
         }
 
         public static string ThemeSlug(RunnerMapTheme theme) => theme switch
@@ -147,6 +174,20 @@ namespace PenguinRun
             PickupVisualId.Magnet => "magnet",
             PickupVisualId.Shield => "shield",
             PickupVisualId.ScoreStar => "score_star",
+            PickupVisualId.DoubleFishSnack => "double_fish_snack",
+            PickupVisualId.TimeHourglass => "time_hourglass",
+            PickupVisualId.FishBomb => "fish_bomb",
+            PickupVisualId.SecondHeart => "second_heart",
+            PickupVisualId.BubbleShield => "bubble_shield",
+            PickupVisualId.SeahorseBoost => "seahorse_boost",
+            PickupVisualId.CloudWalk => "cloud_walk",
+            PickupVisualId.WindRider => "wind_rider",
+            PickupVisualId.IceMirror => "ice_mirror",
+            PickupVisualId.AuroraChain => "aurora_chain",
+            PickupVisualId.FogLantern => "fog_lantern",
+            PickupVisualId.TreantArmor => "treant_armor",
+            PickupVisualId.CoralBounce => "coral_bounce",
+            PickupVisualId.ThunderFeather => "thunder_feather",
             _ => "glide_feather",
         };
 

@@ -30,6 +30,7 @@ namespace PenguinRun
         private PenguinCharacter character;
         private RunnerAudio runnerAudio;
         private Camera runnerCamera;
+        private RunnerPostFx postFx;
         private Material gradientSkyboxMaterial;
         private GameObject deathOverlay;
         private Vector3 cameraVelocity;
@@ -130,10 +131,22 @@ namespace PenguinRun
                 RequestResumeFromHud, RequestFinishRunFromHud);
             lastLives = game.World.Lives;
 
+            // 道具拾取专属粒子环（音效由 RunnerAudio 处理，这里只做视觉）
+            EventBus.On<PowerUpKind>(GameEvents.PowerUpCollected, OnPowerUpCollectedFx);
+
             // ── 注册核心服务 ──────────────────────────────────────
             ServiceLocator.Register(runnerAudio);
             ServiceLocator.Register(config);
             EventBus.Emit(GameEvents.SceneTransitionComplete);
+        }
+
+        private void OnPowerUpCollectedFx(PowerUpKind kind)
+        {
+            if (player == null || particlePool == null) return;
+            var profile = PowerUpVisualProfile.For(kind, currentTheme);
+            var pos = player.transform.position;
+            particlePool.EmitRing(pos, profile.CoreColor, 12, 1.1f, 3.2f, 0.55f);
+            particlePool.EmitBurst(pos + Vector3.up * 0.6f, profile.HaloColor, 8, 2.6f, 0.6f);
         }
 
         private void OnRunFinished(RunnerRunResult result)
@@ -162,6 +175,9 @@ namespace PenguinRun
 
         private void OnDestroy()
         {
+            EventBus.Off<PowerUpKind>(GameEvents.PowerUpCollected, OnPowerUpCollectedFx);
+            postFx?.Dispose();
+            postFx = null;
             hudCanvas?.Dispose();
             hudCanvas = null;
             if (upgradeOverlay != null)
@@ -371,6 +387,7 @@ namespace PenguinRun
                     character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
                     UpdateCamera(dt);
 
+                    postFx?.SetDeathEmphasis(Mathf.Clamp01(deathStateTimer / 0.6f));
                     if (deathStateTimer >= 0.6f)
                     {
                         deathState = DeathState.ShowResult;
@@ -397,6 +414,7 @@ namespace PenguinRun
         {
             deathState = DeathState.None;
             deathStateTimer = 0f;
+            postFx?.SetDeathEmphasis(0f);
 
             if (!exiting)
             {
@@ -418,6 +436,7 @@ namespace PenguinRun
             deathOverlay = null;
             deathState = DeathState.None;
             deathStateTimer = 0f;
+            postFx?.SetDeathEmphasis(0f);
             ResetPresentationForRetry();
             game.ResetRun(true);
             settlementGate.ResetForNextAttempt();
@@ -553,6 +572,38 @@ namespace PenguinRun
                 particlePool.Emit(slidePos, new Color(0.6f, 0.9f, 1f), 3, 0.8f, 0.3f, false);
             }
             wasDodgingLastFrame = motor.SlideTimer > 0f;
+
+            TickMagnetStreaks(dt, world, playerPos);
+        }
+
+        // 磁吸飞线节流
+        private float magnetStreakCooldown;
+
+        /// <summary>磁力生效时，附近鱼干向玩家射出金色流光（纯视觉，不改收集半径判定）。</summary>
+        private void TickMagnetStreaks(float dt, WorldDirector world, Vector3 playerPos)
+        {
+            if (world.MagnetTimer <= 0f) return;
+            magnetStreakCooldown -= dt;
+            if (magnetStreakCooldown > 0f) return;
+            magnetStreakCooldown = 0.08f;
+
+            var coins = game.Spawner.coins;
+            var emitted = 0;
+            for (var i = 0; i < coins.Count && emitted < 3; i++)
+            {
+                var coin = coins[i];
+                if (coin == null || !coin.activeSelf) continue;
+                var cp = coin.transform.position;
+                var dz = cp.z - playerPos.z;
+                if (dz < 0.5f || dz > 7.5f) continue;
+                if (Mathf.Abs(cp.x - playerPos.x) > 5f) continue;
+
+                var flightTime = 0.28f;
+                var target = playerPos + Vector3.up * 0.7f;
+                particlePool.EmitDirected(cp, (target - cp) / flightTime,
+                    new Color(1f, 0.86f, 0.35f, 0.9f), flightTime, 0.07f);
+                emitted++;
+            }
         }
 
         private float worldEventParticleCooldown;
@@ -617,12 +668,13 @@ namespace PenguinRun
 
             if (isDefeated && !wasBossDefeated)
             {
-                // Boss 首次被击败：定格 + 震动 + 金色闪屏
+                // Boss 首次被击败：定格 + 震动 + 金色闪屏 + 企鹅庆祝演出
                 defeatFreezeTimer = 0.25f;
                 cameraShakeTimer = 0.5f;
                 cameraShakeIntensity = 0.15f;
                 TriggerScreenFlash(new Color(1f, 0.85f, 0.2f, 0.45f), 0.55f);
                 wasBossDefeated = true;
+                character?.TriggerCelebration();
 
                 // 金色粒子爆发（音效由 BossSystem → EventBus → RunnerAudio）
                 if (player != null)
@@ -827,6 +879,7 @@ namespace PenguinRun
             runnerCamera.backgroundColor = new Color(0.54f, 0.77f, 0.95f);
             SetupGradientSkybox();
             ApplyRunnerCameraViewport169();
+            postFx = RunnerPostFx.TryAttach(runnerCamera);
 
             RenderSettings.ambientLight = new Color(0.42f, 0.58f, 0.68f);
             RenderSettings.fog = true;
@@ -839,6 +892,14 @@ namespace PenguinRun
             light.type = LightType.Directional;
             light.intensity = 1.2f;
             light.transform.rotation = Quaternion.Euler(48f, -28f, 0f);
+
+            // 反向低强度补光（冷色 Rim），提升角色与障碍立体感
+            var rimLight = new GameObject("Rim Fill Light").AddComponent<Light>();
+            rimLight.type = LightType.Directional;
+            rimLight.intensity = 0.35f;
+            rimLight.color = new Color(0.6f, 0.74f, 1f);
+            rimLight.transform.rotation = Quaternion.Euler(24f, 152f, 0f);
+            rimLight.shadows = LightShadows.None;
 
             player = new GameObject("Penguin Character");
             // 使用程序化 Mesh 生成的可爱卡通企鹅，替代 Primitive 拼接版本
@@ -935,17 +996,21 @@ namespace PenguinRun
                 trackMarkers.Add(marker);
             }
 
-            sceneryProps.Add(RunnerVisuals.CreatePrimitive("Moon", PrimitiveType.Sphere, new Vector3(8.6f, 13f, 58f), Vector3.one * 3.2f, new Color(0.9f, 0.95f, 0.96f)));
-            sceneryProps.Add(RunnerVisuals.CreatePrimitive("Moon Glow", PrimitiveType.Sphere, new Vector3(8.6f, 13f, 58f), Vector3.one * 4.3f, new Color(0.74f, 0.92f, 1f, 0.14f), true));
+            // 月亮：辉光贴图 Billboard（替代双 Sphere），柔边光晕
+            sceneryProps.Add(SceneryBillboards.CreateGlowQuad("Moon", new Vector3(8.6f, 13f, 58f),
+                new Vector2(6.4f, 6.4f), new Color(0.95f, 0.97f, 1f, 0.98f), SceneryBillboards.MoonTexture()));
+            sceneryProps.Add(SceneryBillboards.CreateGlowQuad("Moon Glow", new Vector3(8.6f, 13f, 58.2f),
+                new Vector2(11f, 11f), new Color(0.74f, 0.92f, 1f, 0.3f), SceneryBillboards.HaloTexture()));
             for (var i = 0; i < 5; i++)
             {
-                var aurora = RunnerVisuals.CreatePrimitive(
+                // 极光：柔边长条贴图（保留原脉动缩放逻辑，Cube→柔光带）
+                var aurora = SceneryBillboards.CreateGlowQuad(
                     $"Aurora Ribbon {i}",
-                    PrimitiveType.Cube,
                     new Vector3(-7f + i * 3.6f, 9.2f + i * 0.42f, 50f + i * 7f),
-                    new Vector3(0.9f, 8.5f, 0.08f),
-                    i % 2 == 0 ? new Color(0.25f, 1f, 0.78f, 0.22f) : new Color(0.58f, 0.46f, 1f, 0.2f),
-                    true);
+                    new Vector2(0.9f, 8.5f),
+                    i % 2 == 0 ? new Color(0.25f, 1f, 0.78f, 0.4f) : new Color(0.58f, 0.46f, 1f, 0.36f),
+                    SceneryBillboards.AuroraBandTexture(),
+                    billboard: false);
                 aurora.transform.rotation = Quaternion.Euler(0f, 0f, -18f + i * 13f);
                 sceneryProps.Add(aurora);
             }

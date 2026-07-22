@@ -123,7 +123,8 @@ namespace PenguinRun
 
         [Header("Perfect Action Window")]
         public float PerfectWindowJumpSeconds = 0.32f;
-        public float PerfectWindowSlideSeconds = 0.32f;
+        // 与 SlideDuration(0.56s) 对齐：滑铲过门的大部分时段都可判完美，消除“早滑安全却不记完美”的错配
+        public float PerfectWindowSlideSeconds = 0.50f;
         public float PerfectWindowAirSlideSeconds = 0.28f;
         public float PerfectWindowDoubleJumpSeconds = 0.28f;
 

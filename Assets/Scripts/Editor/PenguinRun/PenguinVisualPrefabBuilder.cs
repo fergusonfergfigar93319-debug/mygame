@@ -11,6 +11,22 @@ namespace PenguinRun.Editor
     {
         private const string MaterialFolder = "Assets/Art/PenguinRun/Materials";
 
+        /// <summary>批处理入口：重建全部雕塑预制体（障碍/道具/环境 + 18 个主题机关）。</summary>
+        public static void RebuildAllLodPrefabsFromCommandLine()
+        {
+            try
+            {
+                BuildBatchOnePrefabs();
+                ThemeMechanicPrefabBuilder.BuildBatch();
+                EditorApplication.Exit(0);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                EditorApplication.Exit(1);
+            }
+        }
+
         [MenuItem("PenguinRun/Visuals/Build Batch One Prefabs")]
         public static void BuildBatchOnePrefabs()
         {
@@ -29,8 +45,9 @@ namespace PenguinRun.Editor
             foreach (var id in RunnerVisualAssetCatalog.AllBatchOnePickupKeys())
             {
                 var descriptor = RunnerVisualAssetCatalog.ForPickup(id);
+                // 道具体量小（~0.5–1m），跑酷视距下屏占比极低；禁止远距剔除，否则只剩运行时核心光球。
                 BuildPrefab(descriptor.ResourcePath, (root, low) =>
-                    RunnerSculptureBuilder.BuildPickup(root, id, pickupPalette, low));
+                    RunnerSculptureBuilder.BuildPickup(root, id, pickupPalette, low), neverCull: true);
                 count++;
             }
 
@@ -48,7 +65,7 @@ namespace PenguinRun.Editor
             Debug.Log($"[PenguinVisualPrefabBuilder] Built {count} detailed prefabs with LOD0/LOD1.");
         }
 
-        private static void BuildPrefab(string resourcePath, Action<Transform, bool> build)
+        private static void BuildPrefab(string resourcePath, Action<Transform, bool> build, bool neverCull = false)
         {
             var assetPath = $"Assets/Resources/{resourcePath}.prefab";
             EnsureFolder(Path.GetDirectoryName(assetPath)?.Replace('\\', '/'));
@@ -64,12 +81,14 @@ namespace PenguinRun.Editor
                 lod1.transform.SetParent(root.transform, false);
                 build(lod1.transform, true);
 
+                // 障碍/环境：LOD0 覆盖到 2.5% 屏高，LOD1 到 0.6%。禁止空渲染器档。
+                // 道具：neverCull — LOD1 一直保留到几乎看不见，避免远距只剩 Pickup Core 光球。
+                var lod1RelativeHeight = neverCull ? 0.0001f : 0.006f;
                 var lodGroup = root.AddComponent<LODGroup>();
                 lodGroup.SetLODs(new[]
                 {
-                    new LOD(0.60f, lod0.GetComponentsInChildren<Renderer>(true)),
-                    new LOD(0.22f, lod1.GetComponentsInChildren<Renderer>(true)),
-                    new LOD(0.03f, Array.Empty<Renderer>()),
+                    new LOD(0.025f, lod0.GetComponentsInChildren<Renderer>(true)),
+                    new LOD(lod1RelativeHeight, lod1.GetComponentsInChildren<Renderer>(true)),
                 });
                 lodGroup.fadeMode = LODFadeMode.CrossFade;
                 lodGroup.animateCrossFading = true;

@@ -1,4 +1,4 @@
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -26,7 +26,7 @@ namespace PenguinRun.Game.UI.Storybook
         {
             var button = UiBuilder.CreateButton(name, parent, text, UiTheme.CoralAction,
                 Color.white, UiTheme.Body, rounded: true);
-            var legacyLabel = button.GetComponentInChildren<Text>();
+            var legacyLabel = button.GetComponentInChildren<TextMeshProUGUI>();
             if (legacyLabel != null) DestroyGeneratedObject(legacyLabel.gameObject);
             var storyLabel = UiBuilder.CreateTmpText("StoryLabel", button.transform, text, UiTheme.Body,
                 FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);

@@ -14,6 +14,7 @@ namespace PenguinRun
     internal sealed class RunnerHudCanvas
     {
         private const int MaxVisibleUpgrades = 3;
+        private const int MaxHeartSlots = 5;
         private readonly GameObject canvasObject;
         private readonly GameObject normalStatsRoot;
         private readonly GameObject bossRoot;
@@ -25,7 +26,7 @@ namespace PenguinRun
         private readonly TextMeshProUGUI distanceText;
         private readonly TextMeshProUGUI comboText;
         private readonly TextMeshProUGUI fishText;
-        private readonly TextMeshProUGUI livesText;
+        private readonly Image[] heartIcons;
         private readonly GameObject buffRoot;
         private readonly TextMeshProUGUI buffText;
         private readonly TextMeshProUGUI feedbackText;
@@ -51,6 +52,7 @@ namespace PenguinRun
         private int cachedCombo = int.MinValue;
         private int cachedFish = int.MinValue;
         private int cachedLives = int.MinValue;
+        private int cachedMaxLives = int.MinValue;
         private string cachedBuffs;
         private float overrideFeedbackUntil;
         private bool bossMode;
@@ -62,7 +64,7 @@ namespace PenguinRun
             GameObject pauseRoot, GameObject pauseActionRoot, GameObject feedbackRoot,
             TextMeshProUGUI modeText,
             TextMeshProUGUI scoreText, TextMeshProUGUI distanceText, TextMeshProUGUI comboText,
-            TextMeshProUGUI fishText, TextMeshProUGUI livesText, GameObject buffRoot,
+            TextMeshProUGUI fishText, Image[] heartIcons, GameObject buffRoot,
             TextMeshProUGUI buffText,
             TextMeshProUGUI feedbackText, TextMeshProUGUI bossNameText,
             TextMeshProUGUI bossPatternText, TextMeshProUGUI bossHintText, Image bossHealthFill,
@@ -84,7 +86,7 @@ namespace PenguinRun
             this.distanceText = distanceText;
             this.comboText = comboText;
             this.fishText = fishText;
-            this.livesText = livesText;
+            this.heartIcons = heartIcons;
             this.buffRoot = buffRoot;
             this.buffText = buffText;
             this.feedbackText = feedbackText;
@@ -131,8 +133,26 @@ namespace PenguinRun
             var right = CreateHudCard("Resources", normal, new Vector2(0.72f, 0.82f), new Vector2(0.982f, 0.975f));
             var fish = CreateHudText("Fish", right, "鱼干 0", UiTheme.Body, UiTheme.WarmGold,
                 new Vector2(0.06f, 0.50f), new Vector2(0.94f, 0.92f), TextAlignmentOptions.Right);
-            var lives = CreateHudText("Lives", right, "♥♥♥", UiTheme.Body, UiTheme.Danger,
-                new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.50f), TextAlignmentOptions.Right);
+
+            // 生命：心形图标行（Sprite 染色），替代 Unicode ♥♡ 文本
+            var livesRow = UiBuilder.CreateRect("LivesRow", right,
+                new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.50f),
+                Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0f));
+            var livesLayout = livesRow.gameObject.AddComponent<HorizontalLayoutGroup>();
+            livesLayout.childAlignment = TextAnchor.MiddleRight;
+            livesLayout.spacing = 5f;
+            livesLayout.childControlWidth = false;
+            livesLayout.childControlHeight = false;
+            livesLayout.childForceExpandWidth = false;
+            livesLayout.childForceExpandHeight = false;
+            var hearts = new Image[MaxHeartSlots];
+            for (var i = 0; i < hearts.Length; i++)
+            {
+                var heart = UiIcons.CreateImage($"Heart{i}", livesRow, UiIcons.HeartFull, UiTheme.Danger);
+                ((RectTransform)heart.transform).sizeDelta = new Vector2(30f, 30f);
+                heart.gameObject.SetActive(i < 3);
+                hearts[i] = heart;
+            }
 
             var buffCard = CreateHudCard("Buffs", normal, new Vector2(0.018f, 0.055f), new Vector2(0.31f, 0.17f));
             var buffs = CreateHudText("BuffSummary", buffCard, string.Empty, UiTheme.Caption, Color.white,
@@ -222,7 +242,7 @@ namespace PenguinRun
 
             var hud = new RunnerHudCanvas(canvasObject, normal.gameObject, bossRoot.gameObject,
                 pauseRoot.gameObject, pause.gameObject, feedbackRoot.gameObject, mode, score, distance, combo,
-                fish, lives, buffCard.gameObject, buffs, feedback, bossName, pattern, hint, healthFill,
+                fish, hearts, buffCard.gameObject, buffs, feedback, bossName, pattern, hint, healthFill,
                 routeRoot.gameObject, routeTitle, routeChoice,
                 upgradeRoot.gameObject, upgradeText,
                 skillRoot.gameObject, skillText,
@@ -254,11 +274,21 @@ namespace PenguinRun
                 comboText.text = cachedCombo > 1 ? $"连续收集 ×{cachedCombo}" : string.Empty;
             }
             if (world.Coins != cachedFish) { cachedFish = world.Coins; fishText.text = $"鱼干 {cachedFish:N0}"; }
-            if (world.Lives != cachedLives)
+            if (world.Lives != cachedLives || world.MaxLives != cachedMaxLives)
             {
                 cachedLives = world.Lives;
-                livesText.text = new string('♥', Mathf.Max(0, world.Lives)) +
-                    new string('♡', Mathf.Max(0, world.MaxLives - world.Lives));
+                cachedMaxLives = world.MaxLives;
+                for (var i = 0; i < heartIcons.Length; i++)
+                {
+                    var visible = i < world.MaxLives;
+                    heartIcons[i].gameObject.SetActive(visible);
+                    if (!visible) continue;
+                    var full = i < world.Lives;
+                    heartIcons[i].sprite = UiIcons.Load(full ? UiIcons.HeartFull : UiIcons.HeartEmpty);
+                    heartIcons[i].color = full
+                        ? UiTheme.Danger
+                        : new Color(UiTheme.Danger.r, UiTheme.Danger.g, UiTheme.Danger.b, 0.42f);
+                }
             }
 
             var buffs = BuildBuffSummary(world);
@@ -457,16 +487,32 @@ namespace PenguinRun
 
         private static string BuildBuffSummary(WorldDirector world)
         {
-            var sb = new StringBuilder(96);
+            var sb = new StringBuilder(128);
             AppendBuff(sb, "冲刺", world.DashTimer);
             AppendBuff(sb, "磁力", world.MagnetTimer);
             AppendBuff(sb, "护盾", world.ShieldTimer);
             AppendBuff(sb, "滑翔", world.GlideTimer);
             AppendBuff(sb, "双倍鱼干", world.DoubleFishTimer);
+            AppendBuff(sb, "星光", world.ScoreBoostTimer);
+            AppendBuff(sb, "沙漏", world.SlowMoTimer);
+            AppendBuff(sb, "冰镜", world.IceMirrorTimer);
+            AppendBuff(sb, "极光连锁", world.AuroraChainTimer);
+            AppendBuff(sb, "雾灯", world.FogLanternTimer);
+            AppendBuff(sb, "雷羽", world.ThunderFeatherTimer);
             if (world.TreantArmorHits > 0)
             {
                 if (sb.Length > 0) sb.Append(" · ");
                 sb.Append("树甲 ×").Append(world.TreantArmorHits);
+            }
+            if (world.CoralBounceReady)
+            {
+                if (sb.Length > 0) sb.Append(" · ");
+                sb.Append("珊瑚回弹");
+            }
+            if (world.FishBombs > 0)
+            {
+                if (sb.Length > 0) sb.Append(" · ");
+                sb.Append("鱼弹 ×").Append(world.FishBombs);
             }
             return sb.ToString();
         }

@@ -104,9 +104,8 @@ foreach ($kind in 'ClaimGoal', 'ReviewDiscovery', 'RebuildCamp', 'UpgradeCamp', 
 }
 Require-Pattern $recommendation '\bBuild\s*\(' 'single lobby recommendation builder'
 
-$campPanel = Require-File 'Assets/Scripts/Runtime/Game/UI/CampPanel.cs'
-Require-Pattern $campPanel '\bBuildReconstructionSection\s*\(' 'camp panel reconstruction section'
-Require-Pattern $campPanel 'CampRebuildStore\.TryPurchase' 'camp panel routes rebuild purchases through store'
+# 2026-07-20 revamp: legacy CampPanel.cs was dead code and has been deleted;
+# the reconstruction contracts live on in the active CampShopPanel checked below.
 $campShopPanel = Require-File 'Assets/Scripts/Runtime/Game/UI/CampShopPanel.cs'
 Require-Pattern $campShopPanel '\bBuildReconstructionSection\s*\(' 'active camp/shop panel reconstruction section'
 Require-Pattern $campShopPanel 'CampRebuildStore\.TryPurchase' 'active camp/shop panel routes rebuild purchases through store'

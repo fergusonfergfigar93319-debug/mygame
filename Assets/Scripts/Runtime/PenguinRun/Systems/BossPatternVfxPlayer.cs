@@ -243,6 +243,9 @@ namespace PenguinRun
     {
       switch (newPhase)
       {
+        case BossAttackPhase.Telegraph:
+          FireTelegraphVfx();
+          break;
         case BossAttackPhase.Strike when !strikeFired:
           strikeFired = true;
           FireStrikeVfx();
@@ -250,6 +253,53 @@ namespace PenguinRun
           break;
         case BossAttackPhase.Recovery:
           FadePersistentFx();
+          break;
+      }
+    }
+
+    /// <summary>Telegraph 阶段专属进入特效：危险车道亮起收束环 + Boss 蓄力闪核（纯表现，不改判定）。</summary>
+    private void FireTelegraphVfx()
+    {
+      if (host == null) return;
+
+      foreach (var laneX in EnumerateDangerLaneX())
+      {
+        var ring = RentWorldFx("TelegraphFocusRing", PrimitiveType.Cylinder,
+          new Vector3(laneX, TrackY(BossSystem.PlayerTelegraphZ) + 0.1f, BossSystem.PlayerTelegraphZ),
+          new Vector3(1.9f, 0.04f, 1.9f),
+          new Color(1f, 0.62f, 0.18f, 0.5f), 0.1f);
+        if (ring != null) persistentFx.Add(ring);
+      }
+
+      var flare = RentBossFx("TelegraphChargeFlare", PrimitiveType.Sphere,
+        new Vector3(0f, 1.15f, -0.4f), Vector3.one * 0.5f, HostGlow(0.55f));
+      if (flare != null) bossAttachedFx.Add(flare);
+    }
+
+    /// <summary>当前招式的危险车道 X 列表（与命中几何同源的车道语义，仅用于表现）。</summary>
+    private IEnumerable<float> EnumerateDangerLaneX()
+    {
+      switch (pattern)
+      {
+        case BossPattern.SweepLow:
+        case BossPattern.ChargeAcross:
+          for (var lane = -1; lane <= 1; lane++)
+          {
+            if (lane == patternContextSafeLane) continue;
+            yield return lane * host.LaneWidthInternal;
+          }
+          break;
+        case BossPattern.DiveHigh:
+          yield return patternContextLane * host.LaneWidthInternal;
+          break;
+        case BossPattern.RangedSalvo:
+          foreach (var lx in host.SalvoLaneX) yield return lx;
+          break;
+        case BossPattern.CenterBeam:
+          yield return 0f;
+          break;
+        case BossPattern.QuakePulse:
+          for (var lane = -1; lane <= 1; lane++) yield return lane * host.LaneWidthInternal;
           break;
       }
     }
@@ -291,9 +341,34 @@ namespace PenguinRun
 		  // 击发瞬间：Boss 周身冲击波扩散环
 		  SpawnShockwavePulse(def.GlowColor, profile.ImpactBurstScale);
 
-      if (def.Silhouette == BossSilhouette.SnowKing)
-        SpawnSnowKingIceStrike();
+      SpawnSignatureStrike(def.Silhouette);
 		}
+
+    /// <summary>每个 Boss 的专属击发造型：只从 FX 池租用表现件，绝不参与碰撞。</summary>
+    private void SpawnSignatureStrike(BossSilhouette silhouette)
+    {
+      switch (silhouette)
+      {
+        case BossSilhouette.SnowKing:
+          SpawnSnowKingIceStrike();
+          break;
+        case BossSilhouette.CedarSentinel:
+          SpawnCedarRootStrike();
+          break;
+        case BossSilhouette.AuroraSerpent:
+          SpawnAuroraPolarityStrike();
+          break;
+        case BossSilhouette.MistGuardian:
+          SpawnMistVeilStrike();
+          break;
+        case BossSilhouette.CoralKraken:
+          SpawnCoralSplashStrike();
+          break;
+        case BossSilhouette.StormEagle:
+          SpawnStormBoltStrike();
+          break;
+      }
+    }
 
     /// <summary>雪王击发只从现有 FX 池租用冰核脉冲和碎冰，绝不参与碰撞。</summary>
     private void SpawnSnowKingIceStrike()
@@ -313,6 +388,95 @@ namespace PenguinRun
         shard.transform.localRotation = Quaternion.Euler(0f, i * 90f, 28f);
         bossAttachedFx.Add(shard);
       }
+    }
+
+    /// <summary>雪松哨兵：预警带喷发三根盘根尖刺。</summary>
+    private void SpawnCedarRootStrike()
+    {
+      var z = BossSystem.PlayerTelegraphZ - 0.3f;
+      for (var i = 0; i < 3; i++)
+      {
+        var x = host.WorldX + (i - 1) * 0.85f;
+        var root = RentWorldFx($"CedarRootSpike{i}", PrimitiveType.Capsule,
+          new Vector3(x, TrackY(z) + 0.55f, z),
+          new Vector3(0.2f, 0.75f + (i % 2) * 0.3f, 0.2f),
+          new Color(0.52f, 0.34f, 0.18f, 0.85f), 0.55f);
+        if (root == null) continue;
+        root.transform.rotation = Quaternion.Euler((i - 1) * 14f, 0f, (i - 1) * -10f);
+        persistentFx.Add(root);
+      }
+    }
+
+    /// <summary>极光长蛇：正负极双色弧环交错扩散。</summary>
+    private void SpawnAuroraPolarityStrike()
+    {
+      var z = BossSystem.PlayerTelegraphZ;
+      var positive = RentWorldFx("AuroraArcPositive", PrimitiveType.Cylinder,
+        new Vector3(host.WorldX - 0.8f, TrackY(z) + 0.35f, z),
+        new Vector3(1.6f, 0.05f, 1.6f), new Color(0.35f, 1f, 0.78f, 0.7f), 0.35f);
+      if (positive != null)
+      {
+        positive.transform.rotation = Quaternion.Euler(24f, 0f, 12f);
+        persistentFx.Add(positive);
+      }
+
+      var negative = RentWorldFx("AuroraArcNegative", PrimitiveType.Cylinder,
+        new Vector3(host.WorldX + 0.8f, TrackY(z) + 0.55f, z),
+        new Vector3(2.1f, 0.05f, 2.1f), new Color(0.72f, 0.4f, 1f, 0.65f), 0.55f);
+      if (negative != null)
+      {
+        negative.transform.rotation = Quaternion.Euler(-20f, 0f, -14f);
+        persistentFx.Add(negative);
+      }
+    }
+
+    /// <summary>雾堤守卫：雾幕爆散——数团半透明雾球向外弥漫。</summary>
+    private void SpawnMistVeilStrike()
+    {
+      for (var i = 0; i < 4; i++)
+      {
+        var ang = i * 90f * Mathf.Deg2Rad;
+        var puff = RentBossFx($"MistVeilPuff{i}", PrimitiveType.Sphere,
+          new Vector3(Mathf.Cos(ang) * 1.1f, 0.5f + (i % 2) * 0.45f, Mathf.Sin(ang) * 0.7f - 0.3f),
+          Vector3.one * (0.7f + (i % 2) * 0.35f),
+          new Color(0.85f, 0.9f, 0.95f, 0.3f));
+        if (puff != null) bossAttachedFx.Add(puff);
+      }
+    }
+
+    /// <summary>珊瑚海怪：水花飞溅——青色浪环 + 上抛水珠。</summary>
+    private void SpawnCoralSplashStrike()
+    {
+      var z = BossSystem.PlayerTelegraphZ;
+      SpawnImpactRing(host.WorldX, z, 1.5f, new Color(0.35f, 0.95f, 0.9f, 0.6f));
+      for (var i = 0; i < 5; i++)
+      {
+        var ang = (i / 5f) * Mathf.PI * 2f;
+        var droplet = RentWorldFx($"CoralDroplet{i}", PrimitiveType.Sphere,
+          new Vector3(host.WorldX + Mathf.Cos(ang) * 0.9f, TrackY(z) + 0.9f + (i % 2) * 0.4f, z + Mathf.Sin(ang) * 0.4f),
+          Vector3.one * 0.18f, new Color(0.5f, 0.95f, 1f, 0.75f), 0.9f);
+        if (droplet != null) persistentFx.Add(droplet);
+      }
+    }
+
+    /// <summary>雷云苍鹰：三道落雷竖闪 + 头部白闪。</summary>
+    private void SpawnStormBoltStrike()
+    {
+      var z = BossSystem.PlayerTelegraphZ;
+      for (var i = 0; i < 3; i++)
+      {
+        var x = host.WorldX + (i - 1) * 1.1f;
+        var bolt = RentWorldFx($"StormBolt{i}", PrimitiveType.Cube,
+          new Vector3(x, TrackY(z) + 1.3f, z + (i % 2) * 0.4f),
+          new Vector3(0.09f, 2.6f, 0.09f), new Color(1f, 0.96f, 0.45f, 0.85f), 1.3f);
+        if (bolt == null) continue;
+        bolt.transform.rotation = Quaternion.Euler(0f, 0f, (i - 1) * 9f);
+        persistentFx.Add(bolt);
+      }
+
+      var flash = RentBossFx("StormHeadFlash", PrimitiveType.Sphere,
+        new Vector3(0f, 1.6f, -0.35f), Vector3.one * 0.6f, new Color(1f, 1f, 0.9f, 0.6f));
+      if (flash != null) bossAttachedFx.Add(flash);
     }
 
 		/// <summary>击发瞬间 Boss 周身冲击波扩散环</summary>

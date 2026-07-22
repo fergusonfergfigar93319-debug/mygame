@@ -8,6 +8,11 @@ namespace PenguinRun
         // 角色的脚底位于 SurfaceY，身体中心在脚底上方，所以视觉偏移就是身体中心到脚底的距离
         private const float PlayerVisualCenterOffset = 0.78f;
 
+        // 蹲姿判定盒：站立/滑铲身高与滑铲结束后的起身速度（起身期间仍可从低障碍下方通过，形成宽容窗口）
+        private const float StandingBodyHeight = 1.56f;
+        private const float SlidingBodyHeight = 0.86f;
+        private const float BodyRiseSpeed = 1.2f;
+
         private readonly RunnerMovementTuning tuning;
         private readonly RunnerPowerUpTuning powerUpTuning;
         private readonly RunnerCombatTuning combatTuning;
@@ -33,6 +38,9 @@ namespace PenguinRun
         public float SlideTimer { get; private set; }
         public float LaneLean01 { get; private set; }
 
+        /// <summary>当前判定身高（蹲姿盒）：滑铲时立即压低，滑铲结束后按 BodyRiseSpeed 起身。</summary>
+        public float BodyHeight { get; private set; } = StandingBodyHeight;
+
         /// <summary>本局已使用的二段跳次数（CloudWalk 期间允许 1 次）。</summary>
         public bool DoubleJumpUsed { get; private set; }
 
@@ -45,6 +53,7 @@ namespace PenguinRun
         private float velocityY;
         private float coyoteTimer;
         private float jumpBufferTimer;
+        private bool queuedSlideOnLand;
 
         public void ResetToStart()
         {
@@ -54,10 +63,12 @@ namespace PenguinRun
             SlideTimer = 0f;
             coyoteTimer = tuning.coyoteTime;
             jumpBufferTimer = 0f;
+            queuedSlideOnLand = false;
             Grounded = true;
             DoubleJumpUsed = false;
             PerfectActionWindow = 0f;
             LastCriticalAction = RunnerAction.None;
+            BodyHeight = StandingBodyHeight;
             if (player != null)
             {
                 player.position = new Vector3(0f, PlayerY + PlayerVisualCenterOffset, 0f);
@@ -70,12 +81,14 @@ namespace PenguinRun
             {
                 case RunnerAction.Jump:
                     SlideTimer = 0f;
+                    queuedSlideOnLand = false;
                     TryJump(ref feedbackText, ref feedbackTimer, glideTimerSeconds);
                     break;
                 case RunnerAction.Slide:
                     if (PlayerY > groundY + 0.35f)
                     {
                         velocityY = -tuning.jumpVelocity * 1.5f;
+                        queuedSlideOnLand = true;
                         feedbackText = "快速下落";
                         feedbackTimer = 0.45f;
                         LastCriticalAction = RunnerAction.Slide;
@@ -90,6 +103,13 @@ namespace PenguinRun
                         LastCriticalAction = RunnerAction.Slide;
                         PerfectActionWindow = combatTuning.perfectWindowSlideSeconds;
                         EventBus.Emit(GameEvents.PlayerSlid);
+                    }
+                    else
+                    {
+                        // 贴地小幅腾空（<0.35m）时按下滑：缓冲到落地帧立即滑铲，消除输入死区
+                        queuedSlideOnLand = true;
+                        feedbackText = "预输入滑铲";
+                        feedbackTimer = 0.4f;
                     }
                     break;
                 case RunnerAction.Left:
@@ -133,6 +153,17 @@ namespace PenguinRun
                 {
                     EventBus.Emit(GameEvents.PlayerLanded);
                     DoubleJumpUsed = false;
+                    if (queuedSlideOnLand)
+                    {
+                        // 空中下滑 → 落地自动衔接滑铲，可直接钻低门
+                        queuedSlideOnLand = false;
+                        SlideTimer = tuning.slideDuration;
+                        LastCriticalAction = RunnerAction.Slide;
+                        PerfectActionWindow = combatTuning.perfectWindowSlideSeconds;
+                        feedbackText = "滑铲";
+                        feedbackTimer = 0.45f;
+                        EventBus.Emit(GameEvents.PlayerSlid);
+                    }
                 }
             }
             else
@@ -147,13 +178,26 @@ namespace PenguinRun
                 jumpBufferTimer -= dt;
                 if (Grounded)
                 {
-                    velocityY = tuning.jumpVelocity;
+                    // 预输入跳跃兑现：与直接起跳同权，补完美窗与音效
+                    velocityY = tuning.jumpVelocity * (glideTimerSeconds > 0f ? powerUpTuning.glideJumpMultiplier : 1f);
                     coyoteTimer = 0f;
                     jumpBufferTimer = 0f;
+                    SlideTimer = 0f;
+                    queuedSlideOnLand = false;
+                    LastCriticalAction = RunnerAction.Jump;
+                    PerfectActionWindow = combatTuning.perfectWindowJumpSeconds;
+                    feedbackText = "跳跃";
+                    feedbackTimer = 0.45f;
+                    audio.PlayJump();
                 }
             }
 
             SlideTimer = Mathf.Max(0f, SlideTimer - dt);
+
+            // 蹲姿判定盒：滑铲立即压低；结束后逐渐起身（起身期间保留低姿态宽容）
+            BodyHeight = SlideTimer > 0f
+                ? SlidingBodyHeight
+                : Mathf.Min(StandingBodyHeight, BodyHeight + BodyRiseSpeed * dt);
 
             var targetX = Lane.ToX(laneWidth);
             var pos = player.position;

@@ -45,18 +45,24 @@
   - `TallSpike` — **换道**
   - `Rolling` — **换道或跳跃**（滚球前后判定较紧）
   - `PatrolEnemy` / `SwoopEnemy` — **换道或跳跃**（滑铲无效）
-- **动态碰撞开关：** 挂载 `ObstacleBehavior` 的障碍（如 `TimedGate` 开门、`ShatterWall` 已碎）通过 `IsCollidable` 控制；`CollisionSystem` 在 AABB 通过后必须读取该标志。
+- **动态碰撞开关：** 挂载 `ObstacleBehavior` 的障碍通过 `IsCollidable` 控制；`CollisionSystem` 在 AABB 通过后必须读取该标志。已接入生成链的动态障碍：`TimedGate`（定时开合能量门，500m 后出现）、`ShatterWall`（冲刺可碎宽墙，350m 后按概率升级自 WideWall，带裂纹光带提示）、`MovingBarrier`（横向巡移浮障，750m 后出现；移动障碍根节点保证视觉与判定一致）。
 - **可破坏标记：** `ObstacleColliderSpec.IsThunderFeatherDestructible` 标记雷羽可粉碎的小型可跳障碍；`ShatterWall` 由冲刺（`DashTimer > 0`）触发 `TryShatter()`，与雷羽路径分离。
 - **勿混淆：** 移动敌人注册在 `EnemyNpcState` 中管理轨迹；Boss 战障碍由 `SpawnPaused` 暂停片段生成。
 
+### 蹲姿判定盒（CrouchHitbox）
+
+- **意指：** 玩家判定身高 `PlayerMotor.BodyHeight`：站立 1.56、滑铲立即压至 0.86、滑铲结束后按 1.2/s 起身。`IsLow` 障碍以 `ObstacleColliderSpec.PassUnderMaxHeight`（默认 1.05）判定可否从下方穿过——判定身高低于该值即穿过，替代早期「SlideTimer>0 布尔」判定。
+- **宽容语义：** 起身期间（约 0.16s）仍保持低姿态穿过资格；空中下滑落地帧自动衔接滑铲（`queuedSlideOnLand`）；贴地小幅腾空时按下滑会缓冲到落地帧执行。
+- **勿混淆：** 跳跃净空判定仍走 `FeetClearanceAboveRoot`，与蹲姿盒相互独立。
+
 ### 完美动作窗口（PerfectActionWindow）
 
-- **意指：** 玩家执行跳跃或滑铲后的短窗口（默认 0.28–0.32 s，见 `RunnerTuningConfig`），在此窗口内成功规避障碍记为完美闪避并加分。
-- **执行点：** `PlayerMotor` 设置窗口；`CollisionSystem` 在窗口内匹配 `LastCriticalAction` 与规避方式。
+- **意指：** 玩家执行跳跃或滑铲后的短窗口（跳跃 0.32s、滑铲 0.50s——与滑铲时长 0.56s 对齐，空中变体 0.28s，见 `RunnerTuningConfig`），在此窗口内成功规避障碍记为完美闪避并加分。
+- **执行点：** `PlayerMotor` 设置窗口（含预输入跳跃兑现与落地衔接滑铲两条补设路径）；`CollisionSystem` 在窗口内匹配 `LastCriticalAction` 与规避方式。
 
 ### 命中解析（RunnerHitResolver）
 
-- **意指：** 障碍与 Boss 共用的一层防御/扣血判定，统一护盾、鱼弹、冰镜、树人护甲、珊瑚回弹、雷羽击破与无敌时长（`RunnerCombatTuning`）。
+- **意指：** 障碍与 Boss 共用的一层防御/扣血判定，统一护盾、鱼弹、冰镜、树人护甲、珊瑚回弹、雷羽击破与无敌时长（`RunnerCombatTuning`）。Boss 招式命中同样按此顺序消耗防御层（护盾为消耗制并附护盾碎裂无敌，不再是 Boss 期间持续免疫）；真实扣血后由 `BossSystem.NotifyBossDamageTaken` 记录死亡复盘。
 - **勿混淆：** Boss 招式闪避几何仍由 `RunnerHitResolver.IsBossPatternHit` 与 `BossSystem.CheckPatternHit` 协作；VFX 不改变命中规则。
 
 ### 移动敌人（MovingEnemy）
@@ -80,6 +86,12 @@
 - **意指：** Boss 在 `Spawning` 阶段从触发到进入 `Active` 前的专属登场演出，包含位移轨迹、姿态缓动、体型变化与主题预警特效。
 - **勿混淆：** Boss 招式前摇（`ApplySignatureWindup`）属于攻击起手，不属于出场动画。
 - **相关：** 每个 `BossSilhouette` 对应独立出场风格，以强化 Boss 识别度与首帧可读性。
+
+### Boss 骨骼动画（BossRigAnimator）
+
+- **意指：** rigged Boss 模型（`Resources/PenguinRun/Models/Bosses/`，Quaternius CC0）的 Legacy Animation 播放器：待机/移动循环、招式单发片段（melee/cast/slam 按招式映射）、受击、眩晕（破绽）、死亡。攻击片段用播放速度缩放对齐 `BossAttackPhase` 危险窗时序。
+- **权威边界：** 动画纯表现层——命中判定只读 `IsPatternDangerous` 计时器与车道几何，不读动画帧。模型缺失时 `BossEncounter.BuildSilhouette` 回退程序化剪影，玩法不受影响。
+- **相关：** `docs/adr/0002-cc0-rigged-boss-models.md`、`BossModelImportProcessor`（导入期设 Legacy rig）。
 
 ### Boss 预警带（BossTelegraphZone）
 
@@ -127,7 +139,7 @@
   - `ProjectSettings/ProjectSettings.asset` 中 `defaultScreenOrientation=3 (LandscapeLeft)`，且禁止任意 Portrait 自动旋转。
   - `PenguinRunnerGame.EnsureLandscape()` 与 `MainMenuBootstrap.EnsureLandscape()` 在场景入口运行时再校正一次。
   - `PenguinRunnerGame` 在每帧 `LateUpdate` 中调用 `ApplyRunnerCameraViewport169()`，将 `MainCamera.pixelRect` 铺满当前窗口（`Screen.width` × `Screen.height`），避免 Game 视图 Free Aspect 或超宽屏两侧出现未渲染条带。
-  - 跑酷 **IMGUI HUD**（`RunnerHud`）：`Screen.height / 1080` 作为缩放因子、`GUI.matrix` 平移至 `Screen.safeArea` 左上角，逻辑宽/高在 `RunnerHudLayout` 中排版；边缘「角上返回/结算」触控带与 `RunnerHudLayoutScale` 同步（基准 260×180 逻辑像素 × 缩放）。
+  - 跑酷 HUD（`RunnerHudCanvas`，保留式 uGUI）：`UiBuilder.CreateCanvas` + `Screen.safeArea` 适配（`ApplySafeArea`），生命/资源/Boss 面板等均为数据驱动的持久节点，仅在值变化时刷新；IMGUI 版 `RunnerHud` 已裁撤。
   - 主菜单等 uGUI：`UiBuilder.CreateCanvas` 的 `CanvasScaler.referenceResolution` 为 **1920×1080**（横屏参考）。
 - **勿混淆：** 玩家"握姿"（左/右横屏）允许由系统在两种横屏方向之间旋转，构图基准不变。
 
@@ -165,5 +177,5 @@
 
 - 角色解锁/皮肤系统。
 - 多人/排行榜网络功能。
-- Unity Animator 状态机（Boss 动画保留程序化实现，除非有完整 rig 可用）。
+- Unity Animator **状态机**（Mecanim Controller）。rigged Boss 已引入完整骨骼与动画片段（Quaternius CC0），但播放走 Legacy `Animation` + `BossRigAnimator` 程序化调度，不建 Animator 状态机；决策见 `docs/adr/0002-cc0-rigged-boss-models.md`。
 - ScriptableObject 关卡编辑器（当前为代码驱动，短期内不迁移）。
