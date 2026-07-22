@@ -37,6 +37,7 @@ namespace PenguinRun
         public bool Grounded { get; private set; }
         public float SlideTimer { get; private set; }
         public float LaneLean01 { get; private set; }
+        public float VerticalVelocity => velocityY;
 
         /// <summary>当前判定身高（蹲姿盒）：滑铲时立即压低，滑铲结束后按 BodyRiseSpeed 起身。</summary>
         public float BodyHeight { get; private set; } = StandingBodyHeight;

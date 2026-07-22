@@ -6,7 +6,7 @@ namespace PenguinRun
     /// 玩家角色：单层程序化网格企鹅（CutePenguinMesh）+ 少量配饰与反馈特效。
     /// 动画全部相对绑定基线偏移，跑动朝向 +Z（镜头看到背影），面部朝向由固定 180° 基础偏航实现。
     /// </summary>
-    internal sealed class PenguinCharacter
+    internal sealed class PenguinCharacter : IPlayerCharacterPresentation
     {
         public Transform Root { get; }
 
@@ -167,14 +167,38 @@ namespace PenguinRun
 
         public void TriggerHurtFlash() => hurtFlashTimer = 0.15f;
 
+        public void TriggerHurt() => TriggerHurtFlash();
+
         public void TriggerPerfectDodgeBurst()
         {
             perfectDodgeBurstTimer = 0.55f;
             jumpRingTimer = 0.55f;
         }
 
+        public void TriggerPerfectDodge() => TriggerPerfectDodgeBurst();
+
         /// <summary>庆祝演出（Boss 击败等高光时刻）：欢呼张翅 + 弹跳。</summary>
         public void TriggerCelebration() => celebrateTimer = 1.4f;
+
+        public void TriggerInteraction(RunnerAvatarInteraction interaction)
+        {
+        }
+
+        public void Tick(float deltaTime, in RunnerAvatarState state)
+        {
+            Animate(
+                deltaTime,
+                state.Running,
+                state.Grounded,
+                state.Sliding,
+                state.GameOver,
+                state.Speed01,
+                state.LaneLean,
+                state.Has(RunnerAvatarBuffFlags.Dash) ? 1f : 0f,
+                state.Has(RunnerAvatarBuffFlags.Magnet) ? 1f : 0f,
+                state.Has(RunnerAvatarBuffFlags.Shield) ? 1f : 0f,
+                state.Has(RunnerAvatarBuffFlags.Invulnerable) ? 1f : 0f);
+        }
 
         /// <summary>
         /// 采集本帧的辅助 buff 状态（滑翔/星光/沙漏/双倍/冰镜/极光连锁/雾灯/雷羽/树甲/珊瑚/鱼弹），
