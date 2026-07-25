@@ -12,16 +12,18 @@ PREVIEW_DIR = os.path.join(SOURCE_DIR, "previews")
 PREFIX = "GUGU_"
 
 COLORS = {
-    "Body": (0.018, 0.075, 0.15, 1.0),
-    "BodyAccent": (0.03, 0.18, 0.30, 1.0),
+    "Body": (0.012, 0.045, 0.095, 1.0),
+    "BodyAccent": (0.025, 0.16, 0.25, 1.0),
     "Belly": (0.88, 0.95, 0.96, 1.0),
     "Beak": (1.0, 0.42, 0.055, 1.0),
     "Foot": (1.0, 0.48, 0.08, 1.0),
     "Scarf": (0.78, 0.025, 0.055, 1.0),
     "ScarfDark": (0.42, 0.01, 0.025, 1.0),
     "Bronze": (0.42, 0.18, 0.04, 1.0),
-    "Lens": (0.02, 0.58, 0.84, 0.72),
+    "Leather": (0.13, 0.045, 0.018, 1.0),
+    "Lens": (0.08, 0.68, 0.86, 1.0),
     "Eye": (0.96, 0.99, 1.0, 1.0),
+    "Iris": (0.02, 0.28, 0.46, 1.0),
     "Pupil": (0.005, 0.012, 0.025, 1.0),
     "Cheek": (1.0, 0.22, 0.30, 1.0),
 }
@@ -88,6 +90,12 @@ def material(name, color, metallic=0.0, roughness=0.62, transmission=0.0):
 def assign_material(obj, name, **kwargs):
     mat = material(name, COLORS[name], **kwargs)
     obj.data.materials.append(mat)
+    color = COLORS[name]
+    attribute = obj.data.color_attributes.get("Color")
+    if attribute is None:
+        attribute = obj.data.color_attributes.new(name="Color", type="BYTE_COLOR", domain="CORNER")
+    for entry in attribute.data:
+        entry.color = color
     return obj
 
 
@@ -124,6 +132,78 @@ def cube(name, location, scale, rotation, mat_name, coll, bevel=0.0):
         smooth(obj)
     assign_material(obj, mat_name)
     move_to_collection(obj, coll)
+    return obj
+
+
+def tapered_box(name, location, half_length, width_start, width_end, thickness,
+                rotation, mat_name, coll, bevel=0.0):
+    y0, y1 = -half_length, half_length
+    z0, z1 = -thickness, thickness
+    verts = [
+        (-width_start, y0, z0), (width_start, y0, z0),
+        (-width_end, y1, z0), (width_end, y1, z0),
+        (-width_start, y0, z1), (width_start, y0, z1),
+        (-width_end, y1, z1), (width_end, y1, z1),
+    ]
+    faces = [
+        (0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1),
+        (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3),
+    ]
+    mesh = bpy.data.meshes.new(PREFIX + name + "Mesh")
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(PREFIX + name, mesh)
+    coll.objects.link(obj)
+    obj.location = location
+    obj.rotation_euler = rotation
+    if bevel > 0:
+        modifier = obj.modifiers.new("Soft cloth edges", "BEVEL")
+        modifier.width = bevel
+        modifier.segments = 4
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+        obj.select_set(False)
+        smooth(obj)
+    assign_material(obj, mat_name)
+    return obj
+
+
+def scarf_ribbon(name, points, widths, arm, coll):
+    verts = []
+    for point, width in zip(points, widths):
+        verts.extend([(point[0] - width, point[1], point[2]),
+                      (point[0] + width, point[1], point[2])])
+    faces = [(i * 2, i * 2 + 1, i * 2 + 3, i * 2 + 2)
+             for i in range(len(points) - 1)]
+    mesh = bpy.data.meshes.new(PREFIX + name + "Mesh")
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(PREFIX + name, mesh)
+    coll.objects.link(obj)
+    assign_material(obj, "Scarf")
+
+    groups = [obj.vertex_groups.new(name=f"Scarf.0{i}") for i in range(1, 4)]
+    last = max(1, len(points) - 1)
+    for section in range(len(points)):
+        t = section / last
+        weights = (max(0.0, 1.0 - t * 2.0),
+                   max(0.0, 1.0 - abs(t - 0.5) * 2.0),
+                   max(0.0, t * 2.0 - 1.0))
+        total = max(0.0001, sum(weights))
+        for group, weight in zip(groups, weights):
+            if weight > 0:
+                group.add([section * 2, section * 2 + 1], weight / total, "REPLACE")
+
+    solidify = obj.modifiers.new("Cloth thickness", "SOLIDIFY")
+    solidify.thickness = 0.045
+    solidify.offset = 0.0
+    bevel = obj.modifiers.new("Tailored cloth edge", "BEVEL")
+    bevel.width = 0.014
+    bevel.segments = 3
+    armature = obj.modifiers.new("Armature", "ARMATURE")
+    armature.object = arm
+    obj.parent = arm
     return obj
 
 
@@ -221,7 +301,7 @@ def build_character(detail="game", include_actions=True):
 
     resolution = {
         "high": (96, 64),
-        "lod0": (48, 30),
+        "lod0": (42, 26),
         "lod1": (30, 18),
         "lod2": (16, 10),
     }[detail]
@@ -235,45 +315,72 @@ def build_character(detail="game", include_actions=True):
         parts.append(obj)
         return obj
 
-    add(uv_sphere("Body", (0, 0.04, 0.96), (0.40, 0.34, 0.70), segments, rings, "Body", body_coll, (math.radians(6), 0, 0)), "Chest")
-    add(uv_sphere("ChestAccent", (0, -0.08, 1.30), (0.36, 0.30, 0.42), segments, rings, "BodyAccent", body_coll, (math.radians(5), 0, 0)), "Chest")
-    add(uv_sphere("Belly", (0, -0.305, 0.92), (0.31, 0.055, 0.50), segments, rings, "Belly", body_coll), "Chest")
-    add(uv_sphere("Head", (0, -0.13, 1.76), (0.46, 0.42, 0.43), segments, rings, "Body", body_coll, (math.radians(-2), 0, 0)), "Head")
-    add(uv_sphere("FaceMask", (0, -0.465, 1.76), (0.37, 0.07, 0.31), segments, rings, "Belly", body_coll), "Head")
+    add(uv_sphere("Body", (0, 0.05, 0.92), (0.36, 0.30, 0.68), segments, rings, "Body", body_coll, (math.radians(8), 0, 0)), "Chest")
+    add(uv_sphere("ChestAccent", (0, -0.07, 1.20), (0.32, 0.26, 0.37), segments, rings, "BodyAccent", body_coll, (math.radians(8), 0, 0)), "Chest")
+    add(uv_sphere("Belly", (0, -0.265, 0.89), (0.275, 0.045, 0.46), segments, rings, "Belly", body_coll), "Chest")
+    add(uv_sphere("Head", (0, -0.12, 1.68), (0.39, 0.36, 0.37), segments, rings, "Body", body_coll, (math.radians(-3), 0, 0)), "Head")
+    add(uv_sphere("FaceMask", (0, -0.425, 1.67), (0.32, 0.055, 0.265), segments, rings, "Belly", body_coll), "Head")
 
-    for side, x in (("L", -0.19), ("R", 0.19)):
-        add(uv_sphere(f"Eye.{side}", (x, -0.525, 1.88), (0.145, 0.055, 0.17), segments, rings, "Eye", accessory_coll), f"Eye.{side}")
-        add(uv_sphere(f"Pupil.{side}", (x * 0.98, -0.575, 1.875), (0.058, 0.025, 0.082), max(12, segments // 2), max(8, rings // 2), "Pupil", accessory_coll), f"Eye.{side}")
-        add(uv_sphere(f"Cheek.{side}", (x * 1.42, -0.52, 1.66), (0.10, 0.025, 0.045), max(12, segments // 2), max(8, rings // 2), "Cheek", accessory_coll), "Head")
+    for side, x in (("L", -0.14), ("R", 0.14)):
+        add(uv_sphere(f"Eye.{side}", (x, -0.472, 1.73), (0.105, 0.038, 0.13), segments, rings, "Eye", accessory_coll), f"Eye.{side}")
+        add(uv_sphere(f"Iris.{side}", (x * 0.98, -0.507, 1.715), (0.066, 0.014, 0.086), max(10, segments // 3), max(6, rings // 3), "Iris", accessory_coll), f"Eye.{side}")
+        add(uv_sphere(f"Pupil.{side}", (x * 0.98, -0.520, 1.708), (0.031, 0.010, 0.052), max(10, segments // 3), max(6, rings // 3), "Pupil", accessory_coll), f"Eye.{side}")
+        add(uv_sphere(f"EyeGlint.{side}", (x - 0.018, -0.530, 1.738), (0.012, 0.006, 0.016), 10, 6, "Eye", accessory_coll), f"Eye.{side}")
+        brow_rotation = math.radians(-16 if side == "L" else 16)
+        add(cube(f"Brow.{side}", (x, -0.505, 1.865), (0.09, 0.014, 0.018), (0, 0, brow_rotation), "Body", accessory_coll, 0.012), "Head")
+        add(uv_sphere(f"Cheek.{side}", (x * 1.55, -0.476, 1.57), (0.068, 0.016, 0.032), max(12, segments // 2), max(8, rings // 2), "Cheek", accessory_coll), "Head")
 
-    add(cone("Beak", (0, -0.59, 1.70), 0.145, 0.025, 0.28, max(8, segments // 6), (math.radians(90), 0, 0), "Beak", accessory_coll), "Jaw")
-    add(uv_sphere("Wing.L", (-0.43, 0.08, 0.98), (0.15, 0.12, 0.50), segments, rings, "BodyAccent", body_coll, (0, math.radians(-15), math.radians(-8))), "Wing.L")
-    add(uv_sphere("Wing.R", (0.43, 0.08, 0.98), (0.15, 0.12, 0.50), segments, rings, "BodyAccent", body_coll, (0, math.radians(15), math.radians(8))), "Wing.R")
+    add(cone("BeakUpper", (0, -0.535, 1.62), 0.105, 0.018, 0.21, max(10, segments // 6), (math.radians(90), 0, 0), "Beak", accessory_coll), "Jaw")
+    add(uv_sphere("BeakLower", (0, -0.495, 1.565), (0.09, 0.04, 0.032), max(12, segments // 2), max(8, rings // 2), "Beak", accessory_coll), "Jaw")
+    add(uv_sphere("Wing.L", (-0.365, 0.07, 0.98), (0.115, 0.09, 0.45), segments, rings, "BodyAccent", body_coll, (0, math.radians(-19), math.radians(-11))), "Wing.L")
+    add(uv_sphere("Wing.R", (0.365, 0.07, 0.98), (0.115, 0.09, 0.45), segments, rings, "BodyAccent", body_coll, (0, math.radians(19), math.radians(11))), "Wing.R")
 
-    for side, x in (("L", -0.22), ("R", 0.22)):
-        add(uv_sphere(f"Foot.{side}", (x, -0.16, 0.20), (0.27, 0.35, 0.10), segments, rings, "Foot", body_coll), f"Foot.{side}")
-        for toe_index, toe_x in enumerate((-0.11, 0, 0.11)):
-            add(uv_sphere(f"Toe.{side}.{toe_index}", (x + toe_x, -0.38, 0.18), (0.075, 0.14, 0.058), max(12, segments // 2), max(8, rings // 2), "Foot", body_coll), f"Foot.{side}")
+    for side, x in (("L", -0.18), ("R", 0.18)):
+        add(uv_sphere(f"LegCuff.{side}", (x, -0.02, 0.35), (0.075, 0.07, 0.15), max(10, segments // 3), max(6, rings // 3), "Body", body_coll), f"Leg.{side}")
+        add(uv_sphere(f"Foot.{side}", (x, -0.15, 0.18), (0.22, 0.28, 0.075), segments, rings, "Foot", body_coll), f"Foot.{side}")
+        for toe_index, toe_x in enumerate((-0.065, 0.065)):
+            add(uv_sphere(f"Toe.{side}.{toe_index}", (x + toe_x, -0.34, 0.165), (0.052, 0.105, 0.04), max(12, segments // 2), max(8, rings // 2), "Foot", body_coll), f"Foot.{side}")
 
     # Goggles: rims overlap the face by the audited 0.018m; bridge seats into both rims.
-    for side, x in (("L", -0.19), ("R", 0.19)):
-        add(torus(f"GoggleRim.{side}", (x, -0.585, 1.90), 0.155, 0.025, segments, minor_segments, "Bronze", accessory_coll, (math.radians(90), 0, 0)), "Goggles")
-        lens = uv_sphere(f"Lens.{side}", (x, -0.594, 1.90), (0.13, 0.018, 0.14), segments, rings, "Lens", accessory_coll)
+    for side, x in (("L", -0.13), ("R", 0.13)):
+        add(torus(f"GoggleRim.{side}", (x, -0.455, 1.98), 0.105, 0.018, segments, minor_segments, "Bronze", accessory_coll, (math.radians(90), 0, 0)), "Goggles")
+        lens = uv_sphere(f"Lens.{side}", (x, -0.464, 1.98), (0.086, 0.012, 0.090), segments, rings, "Lens", accessory_coll)
         lens.data.materials.clear()
         lens.data.materials.append(material("Lens", COLORS["Lens"], metallic=0.18, roughness=0.14, transmission=0.1))
         add(lens, "Goggles")
-    add(cube("GoggleBridge", (0, -0.588, 1.90), (0.07, 0.025, 0.025), (0, 0, 0), "Bronze", accessory_coll, 0.012), "Goggles")
-    add(cube("GoggleStrap.L", (-0.40, -0.36, 1.90), (0.12, 0.025, 0.035), (0, 0, math.radians(8)), "ScarfDark", accessory_coll, 0.012), "Goggles")
-    add(cube("GoggleStrap.R", (0.40, -0.36, 1.90), (0.12, 0.025, 0.035), (0, 0, math.radians(-8)), "ScarfDark", accessory_coll, 0.012), "Goggles")
+    add(cube("GoggleBridge", (0, -0.458, 1.98), (0.050, 0.018, 0.016), (0, 0, 0), "Bronze", accessory_coll, 0.010), "Goggles")
+    add(torus("GoggleBand", (0, -0.11, 1.95), 0.335, 0.020, segments,
+        minor_segments, "Leather", accessory_coll), "Goggles")
 
-    add(torus("ScarfCollar", (0, -0.02, 1.48), 0.37, 0.075, segments, minor_segments, "Scarf", accessory_coll), "Chest")
-    add(cube("ScarfTail.01", (-0.02, 0.34, 1.38), (0.13, 0.25, 0.060), (math.radians(-25), 0, math.radians(6)), "Scarf", accessory_coll, 0.030), "Scarf.01")
-    add(cube("ScarfTail.02", (-0.07, 0.55, 1.20), (0.115, 0.23, 0.052), (math.radians(-32), 0, math.radians(12)), "Scarf", accessory_coll, 0.026), "Scarf.02")
-    add(cube("ScarfTail.03", (-0.14, 0.74, 1.02), (0.095, 0.21, 0.045), (math.radians(-38), 0, math.radians(16)), "Scarf", accessory_coll, 0.022), "Scarf.03")
+    add(torus("ScarfFold.Upper", (0, -0.015, 1.43), 0.305, 0.047, segments, minor_segments, "Scarf", accessory_coll, (math.radians(2), 0, math.radians(2))), "Chest")
+    add(torus("ScarfFold.Lower", (0, 0.005, 1.37), 0.315, 0.050, segments, minor_segments, "Scarf", accessory_coll, (math.radians(-2), 0, math.radians(-3))), "Chest")
+    ribbon = scarf_ribbon("ScarfTail", [
+        (0.00, 0.22, 1.39), (-0.01, 0.34, 1.34), (-0.03, 0.46, 1.27),
+        (-0.06, 0.58, 1.18), (-0.10, 0.69, 1.08), (-0.15, 0.79, 0.98),
+        (-0.21, 0.88, 0.90),
+    ], [0.125, 0.122, 0.112, 0.098, 0.082, 0.065, 0.035], arm, accessory_coll)
+    parts.append(ribbon)
+
+    if detail != "lod2":
+        feather_segments = max(10, segments // 4)
+        feather_rings = max(6, rings // 4)
+        for side, sign in (("L", -1), ("R", 1)):
+            for index, (z, outward) in enumerate(((1.20, 0.0), (1.02, 0.018), (0.84, 0.035))):
+                feather = uv_sphere(f"WingFeather.{side}.{index}",
+                    (sign * (0.39 + outward), -0.015, z), (0.052, 0.025, 0.15),
+                    feather_segments, feather_rings, "BodyAccent", accessory_coll,
+                    (0, math.radians(sign * 18), math.radians(sign * 8)))
+                add(feather, f"Wing.{side}")
+        for index, x in enumerate((-0.11, 0.0, 0.11)):
+            feather = uv_sphere(f"TailFeather.{index}",
+                (x, 0.30, 0.62 - abs(x) * 0.25), (0.075, 0.045, 0.18),
+                feather_segments, feather_rings, "BodyAccent", body_coll,
+                (math.radians(-18), 0, math.radians(x * 45)))
+            add(feather, "Pelvis")
 
     # Small readable hero details.
-    add(cube("ChestBadge", (0.24, -0.355, 1.30), (0.075, 0.022, 0.075), (0, math.radians(45), 0), "Bronze", accessory_coll, 0.012), "Chest")
-    add(uv_sphere("HeadCrest", (0, -0.06, 2.18), (0.12, 0.10, 0.18), max(12, segments // 2), max(8, rings // 2), "BodyAccent", body_coll, (0, math.radians(12), 0)), "Head")
+    add(cube("ChestBadge", (0.21, -0.315, 1.19), (0.058, 0.016, 0.058), (0, math.radians(45), 0), "Bronze", accessory_coll, 0.010), "Chest")
+    add(uv_sphere("HeadCrest", (0, -0.06, 2.03), (0.075, 0.065, 0.12), max(12, segments // 2), max(8, rings // 2), "BodyAccent", body_coll, (0, math.radians(14), 0)), "Head")
 
     if include_actions:
         create_actions(arm)
@@ -322,26 +429,26 @@ def create_actions(arm):
         (60, {"Chest": {"rotation": (0, 0, 0)}}),
     ], True)
     add_action(arm, "Run", 16, [
-        (1, {"Root": {"location": (0, 0, 0.02), "rotation": (-8, 0, 0)}, "Wing.L": {"rotation": (24, 0, 18)}, "Wing.R": {"rotation": (-24, 0, -18)}, "Leg.L": {"rotation": (28, 0, 0)}, "Leg.R": {"rotation": (-28, 0, 0)}}),
-        (5, {"Root": {"location": (0, 0, -0.015), "rotation": (-9, 0, 0)}, "Wing.L": {"rotation": (-18, 0, 12)}, "Wing.R": {"rotation": (18, 0, -12)}, "Leg.L": {"rotation": (-22, 0, 0)}, "Leg.R": {"rotation": (22, 0, 0)}}),
-        (9, {"Root": {"location": (0, 0, 0.02), "rotation": (-8, 0, 0)}, "Wing.L": {"rotation": (24, 0, 18)}, "Wing.R": {"rotation": (-24, 0, -18)}, "Leg.L": {"rotation": (28, 0, 0)}, "Leg.R": {"rotation": (-28, 0, 0)}}),
-        (13, {"Root": {"location": (0, 0, -0.015), "rotation": (-9, 0, 0)}, "Wing.L": {"rotation": (-18, 0, 12)}, "Wing.R": {"rotation": (18, 0, -12)}, "Leg.L": {"rotation": (-22, 0, 0)}, "Leg.R": {"rotation": (22, 0, 0)}}),
-        (16, {"Root": {"location": (0, 0, 0.02), "rotation": (-8, 0, 0)}, "Wing.L": {"rotation": (24, 0, 18)}, "Wing.R": {"rotation": (-24, 0, -18)}, "Leg.L": {"rotation": (28, 0, 0)}, "Leg.R": {"rotation": (-28, 0, 0)}}),
+        (1, {"Pelvis": {"location": (0, 0, 0.02), "rotation": (-8, 0, 0)}, "Wing.L": {"rotation": (24, 0, 18)}, "Wing.R": {"rotation": (-24, 0, -18)}, "Leg.L": {"rotation": (28, 0, 0)}, "Leg.R": {"rotation": (-28, 0, 0)}}),
+        (5, {"Pelvis": {"location": (0, 0, -0.015), "rotation": (-9, 0, 0)}, "Wing.L": {"rotation": (-18, 0, 12)}, "Wing.R": {"rotation": (18, 0, -12)}, "Leg.L": {"rotation": (-22, 0, 0)}, "Leg.R": {"rotation": (22, 0, 0)}}),
+        (9, {"Pelvis": {"location": (0, 0, 0.02), "rotation": (-8, 0, 0)}, "Wing.L": {"rotation": (24, 0, 18)}, "Wing.R": {"rotation": (-24, 0, -18)}, "Leg.L": {"rotation": (28, 0, 0)}, "Leg.R": {"rotation": (-28, 0, 0)}}),
+        (13, {"Pelvis": {"location": (0, 0, -0.015), "rotation": (-9, 0, 0)}, "Wing.L": {"rotation": (-18, 0, 12)}, "Wing.R": {"rotation": (18, 0, -12)}, "Leg.L": {"rotation": (-22, 0, 0)}, "Leg.R": {"rotation": (22, 0, 0)}}),
+        (16, {"Pelvis": {"location": (0, 0, 0.02), "rotation": (-8, 0, 0)}, "Wing.L": {"rotation": (24, 0, 18)}, "Wing.R": {"rotation": (-24, 0, -18)}, "Leg.L": {"rotation": (28, 0, 0)}, "Leg.R": {"rotation": (-28, 0, 0)}}),
     ], True)
-    add_action(arm, "LaneLeft", 14, [(1, {}), (5, {"Root": {"rotation": (-8, 0, 20)}, "Chest": {"rotation": (0, -8, 8)}}), (14, {})])
-    add_action(arm, "LaneRight", 14, [(1, {}), (5, {"Root": {"rotation": (-8, 0, -20)}, "Chest": {"rotation": (0, 8, -8)}}), (14, {})])
-    add_action(arm, "Jump", 20, [(1, {"Root": {"location": (0, 0, -0.10)}}), (7, {"Root": {"location": (0, 0, 0.12), "rotation": (-12, 0, 0)}, "Wing.L": {"rotation": (0, 0, 55)}, "Wing.R": {"rotation": (0, 0, -55)}, "Leg.L": {"rotation": (-28, 0, 0)}, "Leg.R": {"rotation": (-28, 0, 0)}}), (20, {"Root": {"location": (0, 0, 0.22), "rotation": (-5, 0, 0)}})])
-    add_action(arm, "Fall", 20, [(1, {"Root": {"rotation": (6, 0, 0)}, "Wing.L": {"rotation": (0, 0, 48)}, "Wing.R": {"rotation": (0, 0, -48)}}), (20, {"Root": {"rotation": (10, 0, 0)}, "Leg.L": {"rotation": (16, 0, 0)}, "Leg.R": {"rotation": (16, 0, 0)}})], True)
-    add_action(arm, "Land", 14, [(1, {"Root": {"location": (0, 0, 0.08)}}), (5, {"Root": {"location": (0, 0, -0.16)}, "Leg.L": {"rotation": (26, 0, 0)}, "Leg.R": {"rotation": (26, 0, 0)}, "Wing.L": {"rotation": (0, 0, 36)}, "Wing.R": {"rotation": (0, 0, -36)}}), (14, {})])
-    add_action(arm, "Slide", 24, [(1, {}), (6, {"Root": {"location": (0, 0.16, -0.34), "rotation": (-32, 0, 0)}, "Wing.L": {"rotation": (-22, 0, -10)}, "Wing.R": {"rotation": (22, 0, 10)}, "Leg.L": {"rotation": (45, 0, 0)}, "Leg.R": {"rotation": (45, 0, 0)}}), (24, {"Root": {"location": (0, 0.16, -0.34), "rotation": (-32, 0, 0)}})], True)
-    add_action(arm, "Hurt", 18, [(1, {}), (5, {"Root": {"rotation": (12, 0, 24)}, "Head": {"rotation": (0, 0, -18)}, "Wing.L": {"rotation": (0, 0, 70)}, "Wing.R": {"rotation": (0, 0, -20)}}), (18, {})])
-    add_action(arm, "Defeat", 42, [(1, {}), (16, {"Root": {"location": (0, 0.12, -0.24), "rotation": (52, 0, 12)}, "Wing.L": {"rotation": (0, 0, 58)}, "Wing.R": {"rotation": (0, 0, -58)}}), (42, {"Root": {"location": (0, 0.24, -0.46), "rotation": (82, 0, 15)}})])
-    add_action(arm, "Celebrate", 48, [(1, {}), (12, {"Root": {"location": (0, 0, 0.16)}, "Wing.L": {"rotation": (0, 0, 88)}, "Wing.R": {"rotation": (0, 0, -88)}}), (26, {"Root": {"rotation": (0, 150, 0)}, "Wing.L": {"rotation": (0, 0, 62)}, "Wing.R": {"rotation": (0, 0, -62)}}), (48, {})])
+    add_action(arm, "LaneLeft", 16, [(1, {"Pelvis": {"rotation": (-8, 0, 18)}, "Chest": {"rotation": (0, -8, 8)}, "Leg.L": {"rotation": (26, 0, 0)}, "Leg.R": {"rotation": (-26, 0, 0)}}), (8, {"Pelvis": {"rotation": (-9, 0, 18)}, "Chest": {"rotation": (0, -8, 8)}, "Leg.L": {"rotation": (-22, 0, 0)}, "Leg.R": {"rotation": (22, 0, 0)}}), (16, {"Pelvis": {"rotation": (-8, 0, 18)}, "Chest": {"rotation": (0, -8, 8)}, "Leg.L": {"rotation": (26, 0, 0)}, "Leg.R": {"rotation": (-26, 0, 0)}})], True)
+    add_action(arm, "LaneRight", 16, [(1, {"Pelvis": {"rotation": (-8, 0, -18)}, "Chest": {"rotation": (0, 8, -8)}, "Leg.L": {"rotation": (26, 0, 0)}, "Leg.R": {"rotation": (-26, 0, 0)}}), (8, {"Pelvis": {"rotation": (-9, 0, -18)}, "Chest": {"rotation": (0, 8, -8)}, "Leg.L": {"rotation": (-22, 0, 0)}, "Leg.R": {"rotation": (22, 0, 0)}}), (16, {"Pelvis": {"rotation": (-8, 0, -18)}, "Chest": {"rotation": (0, 8, -8)}, "Leg.L": {"rotation": (26, 0, 0)}, "Leg.R": {"rotation": (-26, 0, 0)}})], True)
+    add_action(arm, "Jump", 20, [(1, {"Pelvis": {"location": (0, 0, -0.10)}}), (7, {"Pelvis": {"location": (0, 0, 0.12), "rotation": (-12, 0, 0)}, "Wing.L": {"rotation": (0, 0, 55)}, "Wing.R": {"rotation": (0, 0, -55)}, "Leg.L": {"rotation": (-28, 0, 0)}, "Leg.R": {"rotation": (-28, 0, 0)}}), (20, {"Pelvis": {"location": (0, 0, 0.22), "rotation": (-5, 0, 0)}})])
+    add_action(arm, "Fall", 20, [(1, {"Pelvis": {"rotation": (6, 0, 0)}, "Wing.L": {"rotation": (0, 0, 48)}, "Wing.R": {"rotation": (0, 0, -48)}}), (20, {"Pelvis": {"rotation": (10, 0, 0)}, "Leg.L": {"rotation": (16, 0, 0)}, "Leg.R": {"rotation": (16, 0, 0)}})], True)
+    add_action(arm, "Land", 14, [(1, {"Pelvis": {"location": (0, 0, 0.08)}}), (5, {"Pelvis": {"location": (0, 0, -0.16)}, "Leg.L": {"rotation": (26, 0, 0)}, "Leg.R": {"rotation": (26, 0, 0)}, "Wing.L": {"rotation": (0, 0, 36)}, "Wing.R": {"rotation": (0, 0, -36)}}), (14, {})])
+    add_action(arm, "Slide", 24, [(1, {}), (6, {"Pelvis": {"location": (0, 0.16, -0.34), "rotation": (-32, 0, 0)}, "Wing.L": {"rotation": (-22, 0, -10)}, "Wing.R": {"rotation": (22, 0, 10)}, "Leg.L": {"rotation": (45, 0, 0)}, "Leg.R": {"rotation": (45, 0, 0)}}), (24, {"Pelvis": {"location": (0, 0.16, -0.34), "rotation": (-32, 0, 0)}})], True)
+    add_action(arm, "Hurt", 18, [(1, {}), (5, {"Pelvis": {"rotation": (12, 0, 24)}, "Head": {"rotation": (0, 0, -18)}, "Wing.L": {"rotation": (0, 0, 70)}, "Wing.R": {"rotation": (0, 0, -20)}}), (18, {})])
+    add_action(arm, "Defeat", 42, [(1, {}), (16, {"Pelvis": {"location": (0, 0.12, -0.24), "rotation": (52, 0, 12)}, "Wing.L": {"rotation": (0, 0, 58)}, "Wing.R": {"rotation": (0, 0, -58)}}), (42, {"Pelvis": {"location": (0, 0.24, -0.46), "rotation": (82, 0, 15)}})])
+    add_action(arm, "Celebrate", 48, [(1, {}), (12, {"Pelvis": {"location": (0, 0, 0.16)}, "Wing.L": {"rotation": (0, 0, 88)}, "Wing.R": {"rotation": (0, 0, -88)}}), (26, {"Pelvis": {"rotation": (0, 150, 0)}, "Wing.L": {"rotation": (0, 0, 62)}, "Wing.R": {"rotation": (0, 0, -62)}}), (48, {})])
     add_action(arm, "FishPickup", 16, [(1, {}), (6, {"Head": {"rotation": (-10, 0, 10)}, "Wing.R": {"rotation": (0, 0, -70)}}), (16, {})])
     add_action(arm, "ShieldActivate", 20, [(1, {}), (8, {"Wing.L": {"rotation": (0, 0, 72)}, "Wing.R": {"rotation": (0, 0, -72)}, "Chest": {"rotation": (-8, 0, 0)}}), (20, {})])
-    add_action(arm, "DashActivate", 16, [(1, {}), (5, {"Root": {"rotation": (-26, 0, 0)}, "Wing.L": {"rotation": (-32, 0, 2)}, "Wing.R": {"rotation": (32, 0, -2)}}), (16, {})])
+    add_action(arm, "DashActivate", 16, [(1, {}), (5, {"Pelvis": {"rotation": (-26, 0, 0)}, "Wing.L": {"rotation": (-32, 0, 2)}, "Wing.R": {"rotation": (32, 0, -2)}}), (16, {})])
     add_action(arm, "MagnetActivate", 20, [(1, {}), (8, {"Head": {"rotation": (-8, 0, 0)}, "Wing.L": {"rotation": (0, 0, 58)}, "Wing.R": {"rotation": (0, 0, -58)}}), (20, {})])
-    add_action(arm, "BossCounter", 28, [(1, {}), (9, {"Root": {"rotation": (-18, 0, -18)}, "Wing.R": {"rotation": (-48, 0, -42)}}), (15, {"Root": {"rotation": (-25, 0, 22)}, "Wing.R": {"rotation": (38, 0, -86)}}), (28, {})])
+    add_action(arm, "BossCounter", 28, [(1, {}), (9, {"Pelvis": {"rotation": (-18, 0, -18)}, "Wing.R": {"rotation": (-48, 0, -42)}}), (15, {"Pelvis": {"rotation": (-25, 0, 22)}, "Wing.R": {"rotation": (38, 0, -86)}}), (28, {})])
     arm.animation_data.action = bpy.data.actions.get("Idle")
 
 

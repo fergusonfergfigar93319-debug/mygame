@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: abc2c554c62863940b909e7f44637bd9, type: 3}
+  m_Name: GugugagaAvatar
+  m_EditorClassIdentifier: Assembly-CSharp::PenguinRun.RunnerAvatarDefinition
+  avatarId: gugugaga
+  modelPrefab: {fileID: 6410491889654520856, guid: 5557b0916acfa2f408ef9f2535f0b435, type: 3}
+  baseController: {fileID: 9100000, guid: d7d1bc59ef8b18a499b538c2ec90127e, type: 2}
+  animations: {fileID: 11400000, guid: 9c5bd933a259a30468707dd75bb06975, type: 2}
+  appearance: {fileID: 11400000, guid: 103665e97d973924488973bb37986035, type: 2}
+  sockets: {fileID: 11400000, guid: 36b299964c5bb944f873c96565ef1aca, type: 2}
+  localPosition: {x: 0, y: 0, z: 0}
+  localEulerAngles: {x: 0, y: 180, z: 0}
+  localScale: {x: 1, y: 1, z: 1}
+  fallbackToProcedural: 1
