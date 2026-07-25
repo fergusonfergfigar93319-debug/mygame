@@ -177,13 +177,15 @@ Boss 活跃时，HUD 应优先显示生命、当前招式、破绽进度和必�
 - `GAME_DESIGN.md`：旧横版动作冒险历史稿，仅保留世界观参考。
 - `docs/adr/0001-lock-landscape-orientation.md`：横屏构图决策。
 - `docs/adr/0002-cc0-rigged-boss-models.md`：Boss 视觉采用 CC0 骨骼模型 + Legacy Animation 程序化播放的决策。
+- `docs/adr/0003-mecanim-for-protagonist-avatar.md`：主角 Mecanim / Boss Legacy 动画范式分治。
 - `docs/UI_ART_REVAMP_PLAN.md`：页面设计与美术效果优化方案（UI 统一、局内美术、功能结构重构的分阶段路线）。
 
 ## 后续优先级
 
 1. 减轻首局信息量，只保留核心操作教学。
 2. 为六个主题补足更明显的音频差异（视觉差异已在 2026-07-20 批次落地）。
-3. Android 实机（骁龙 7 系）60fps 性能实测与 Post Processing 分档校准。
+3. Android 实机（骁龙 7 系）60fps 性能实测与 Post Processing 分档校准（含主角 Avatar 材质批次）。
+4. 主角视觉瑕疵（见 2026-07-25 节待办）：胸口游离菱形面片、侧视翅膀/护目镜几何、跑酷实距可读性。
 
 已完成并移出列表：移动端输入阈值响应式（`RunnerGestureThresholds.ForViewport`）、跑酷 HUD 迁 uGUI 并与大厅同一套 `UiTheme` 令牌（IMGUI `RunnerHud` 已裁撤）、Boss 战 HUD 压缩（Boss 态只保留生命/招式/反制提示）。
 
@@ -205,3 +207,27 @@ Boss 活跃时，HUD 应优先显示生命、当前招式、破绽进度和必�
 ## 2026-07-16 主题地图机关与精通玩法
 
 阶段四已完成：六张地图现在拥有独立的可操作机关、标志性事件、Story/Endless/Daily 策略、主题精通、8 秒共鸣与自动旅途契约；同时新增 18 个细致双 LOD 机关预制体和 6 张主题预览。确定性、生命周期、取消清理、15 分钟耐久、旧资产、UI 布局及 Android v2 签名构建均已验证。完整规则、性能数据与 APK 信息见 [`THEME_MECHANICS_PHASE4_DELIVERY.md`](THEME_MECHANICS_PHASE4_DELIVERY.md)。
+
+## 2026-07-25 主角 Avatar 改造着陆
+
+本批次把程序化企鹅替换为数据驱动的 rigged Gugugaga 表现层，并收口动画未生效的回归空洞：
+
+- **边界：** `IPlayerCharacterPresentation` + 只读 `RunnerAvatarState`；`PlayerAvatarPresenter` 为默认实现，失败时回退 `PenguinCharacter.CreateCute`。玩法判定（`PlayerMotor` / `CollisionSystem` / `RunnerHitResolver`）未改。
+- **动画：** 主角走 Mecanim（`GugugagaBase.controller` + `AnimatorOverrideController`），Boss 仍走 Legacy（ADR-0003）。`RunnerAnimationDriver` 在换 controller 后 `Rebind()`，并兼容 `Armature|Clip` 形式的 override 键。
+- **关键修复：** AnyState 过渡曾默认 `canTransitionToSelf=true`，每帧重进 Slide/Defeat/Jump 把 `normalizedTime` 钉在 ≈0.09，预览与局内都像绑定姿势。已在 builder 与现网 controller 设为 `false`。
+- **验证：** `ProjectPenguinPreviewCapture` 对七个动作姿势做同机位 Idle 像素差断言（阈值 `MinPoseMeanAbsDiff=2.2`，实测最小 run≈4.34）；`VerifyProtagonistAvatarRevamp.ps1` 锁住该门禁与 `Rebind` 契约。Defeat 包围盒高度由 ~597 降到 ~438，滑铲/庆祝等姿势与 Idle 可区分。
+
+验证命令：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/VerifyProtagonistAvatarRevamp.ps1
+powershell -ExecutionPolicy Bypass -File tools/CompileFullRoslyn.ps1
+# 有头批处理（不要加 -nographics，否则 Camera.Render 像素差恒为 0）
+& 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.exe' -batchmode -quit -projectPath . -executeMethod PenguinRun.Editor.ProjectRunnerAvatarValidation.ValidateFromCommandLine -logFile _tmp/avatar-validation.log
+& 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.exe' -batchmode -quit -projectPath . -executeMethod PenguinRun.Editor.ProjectPenguinPreviewCapture.CaptureAllFromCommandLine -logFile _tmp/avatar-preview.log
+```
+
+**明确待办（本批次不声称通过）：**
+
+1. Android 实机 60fps 与主角材质批次数实测（本机无连接设备）。
+2. 视觉瑕疵下一轮：所有视角胸口游离棕色菱形面片；`side.png` 翅膀呈惨白椭圆并与身体穿插、护目镜镜片拉扁；跑酷实距下红围巾与护目镜糊进深色身体，仅橙色脚掌清晰可读。

@@ -159,6 +159,15 @@
   - 音频目录：`Assets/Resources/PenguinRun/`
   - 署名清单：`OPEN_SOURCE_VISUAL_ASSETS_CREDITS.txt`、`OPEN_SOURCE_AUDIO_CREDITS.txt`（随包发布）
 
+### 主角表现层（PlayerAvatarPresentation）
+
+- **意指：** 玩法与主角视觉之间的边界。`RunnerGameController` 每帧产出只读 `RunnerAvatarState`（跑/落地/滑铲/结束、速度比、换道倾角、竖直速度、buff 位标志）；`IPlayerCharacterPresentation` 消费该快照并驱动动画、表情、二次运动与角色特效。
+- **默认实现：** `PlayerAvatarPresenter` 加载 `Resources/PenguinRun/Characters/Gugugaga/GugugagaAvatar`，用 Mecanim（`GugugagaBase.controller` + `AnimatorOverrideController`）播放 clip；`Animator.applyRootMotion` 必须为 false。
+- **回退：** 定义缺失或实例化失败且 `fallbackToProcedural` 为真时，回退到程序化 `PenguinCharacter.CreateCute`；玩法判定不变。
+- **预算：** LOD0/1/2 三角面分别 ≤50000 / ≤22000 / ≤8000；单贴图边长 ≤2048；预制体唯一材质数 ≤3。
+- **勿混淆：** Boss 骨骼播放走 Legacy `Animation` + `BossRigAnimator`（见 ADR-0002），不属于本表现层。
+- **相关：** `docs/adr/0003-mecanim-for-protagonist-avatar.md`。
+
 ---
 
 ## 领域规则
@@ -177,5 +186,8 @@
 
 - 角色解锁/皮肤系统。
 - 多人/排行榜网络功能。
-- Unity Animator **状态机**（Mecanim Controller）。rigged Boss 已引入完整骨骼与动画片段（Quaternius CC0），但播放走 Legacy `Animation` + `BossRigAnimator` 程序化调度，不建 Animator 状态机；决策见 `docs/adr/0002-cc0-rigged-boss-models.md`。
+- **按角色类型分治动画范式**（见 `docs/adr/0003-mecanim-for-protagonist-avatar.md`）：
+  - 主角：允许 Mecanim Animator 状态机（`GugugagaBase.controller` + 运行时 `AnimatorOverrideController`），因为需要 `Speed01` / `LaneLean` / `VerticalSpeed` 参数混合。
+  - Boss：继续禁止 Mecanim；播放走 Legacy `Animation` + `BossRigAnimator`（ADR-0002）。
+  - 动画仍严禁进入命中判定路径；`applyRootMotion` 必须为 false。
 - ScriptableObject 关卡编辑器（当前为代码驱动，短期内不迁移）。
