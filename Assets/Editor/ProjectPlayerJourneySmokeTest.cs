@@ -61,6 +61,7 @@ namespace PenguinRun.Editor
         private static string capturePath;
         private static int penguinRunnerLoads;
         private static bool stopRequested;
+        private static bool avatarValidated;
         private static bool originalEnterPlayModeOptionsEnabled;
         private static EnterPlayModeOptions originalEnterPlayModeOptions;
 
@@ -69,6 +70,7 @@ namespace PenguinRun.Editor
             Errors.Clear();
             stage = Stage.Idle;
             stopRequested = false;
+            avatarValidated = false;
             penguinRunnerLoads = 0;
             hardDeadline = EditorApplication.timeSinceStartup + HardTimeoutSeconds;
 
@@ -237,7 +239,37 @@ namespace PenguinRun.Editor
             if (FindFirstObjectByType<PenguinRunnerGame>() == null ||
                 FindSceneObject("RunnerHudCanvas", true) == null)
                 return;
+            if (!avatarValidated && !ValidateRuntimeAvatar()) return;
             BeginCapture("03-running.png", Stage.PauseRun);
+        }
+
+        private static bool ValidateRuntimeAvatar()
+        {
+            var player = FindSceneObject("Penguin Character", true);
+            if (player == null) return false;
+
+            var animators = player.GetComponentsInChildren<Animator>(true);
+            if (animators.Length == 0)
+            {
+                Fail("Runtime player contains no Animator from the Gugugaga avatar.");
+                return false;
+            }
+            foreach (var animator in animators)
+            {
+                if (animator.applyRootMotion)
+                {
+                    Fail("Runtime avatar Animator has root motion enabled.");
+                    return false;
+                }
+            }
+            if (player.GetComponentsInChildren<Renderer>(false).Length == 0)
+            {
+                Fail("Runtime avatar contains no active renderer.");
+                return false;
+            }
+
+            avatarValidated = true;
+            return true;
         }
 
         private static void BeginCapture(string fileName, Stage nextStage)

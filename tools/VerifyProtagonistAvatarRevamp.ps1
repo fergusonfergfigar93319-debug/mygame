@@ -28,6 +28,8 @@ foreach ($file in @(
     'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerAnimationDriver.cs',
     'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerCharacterFx.cs',
     'Assets/Scripts/Editor/PenguinRun/ProjectRunnerAvatarValidation.cs',
+    'Assets/Scripts/Editor/PenguinRun/RunnerAvatarAssetBuilder.cs',
+    'Assets/Shaders/GugugagaStylized.shader',
     'Assets/Resources/PenguinRun/Characters/Gugugaga/gugugaga_avatar.fbx',
     'Assets/Resources/PenguinRun/Characters/Gugugaga/gugugaga_lod1.fbx',
     'Assets/Resources/PenguinRun/Characters/Gugugaga/gugugaga_lod2.fbx'
@@ -43,6 +45,29 @@ Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/Avatar/PlayerAvatarPresenter.
     'PenguinCharacter\.CreateCute' 'procedural fallback'
 Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerAnimationDriver.cs' `
     'applyRootMotion\s*=\s*false' 'root motion disabled'
+Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerAnimationDriver.cs' `
+    'Animator\[\]' 'all LOD animators are synchronized'
+Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerAnimationDriver.cs' `
+    'Rebind\(\)' 'animator rebind after controller swap'
+Require-Pattern 'Assets/Scripts/Editor/PenguinRun/ProjectPenguinPreviewCapture.cs' `
+    'MinPoseMeanAbsDiff' 'intra-run pose pixel difference gate'
+Require-Pattern 'Assets/Scripts/Editor/PenguinRun/ProjectPenguinPreviewCapture.cs' `
+    'AssertPose' 'same-camera Idle vs action pose assertion'
+Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/Systems/PlayerMotor.cs' `
+    'BodyHeight' 'crouch hitbox body height retained'
+Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/Systems/PlayerMotor.cs' `
+    'StandingBodyHeight' 'standing body height retained'
+Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/Systems/PlayerMotor.cs' `
+    'SlidingBodyHeight' 'sliding body height retained'
+
+$avatarRuntime = Join-Path $ProjectRoot 'Assets/Scripts/Runtime/PenguinRun/Avatar'
+if (Test-Path -LiteralPath $avatarRuntime) {
+    $forbidden = Get-ChildItem -LiteralPath $avatarRuntime -Recurse -Filter '*.cs' |
+        Select-String -Pattern 'applyRootMotion\s*=\s*true' -SimpleMatch:$false
+    if ($forbidden) {
+        $failures.Add('Forbidden: applyRootMotion = true under avatar runtime')
+    }
+}
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host "FAIL: $_" }
