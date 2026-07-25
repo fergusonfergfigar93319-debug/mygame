@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using PenguinRun.Core;
 using PenguinRun.Game;
-using PenguinRun.Game.Save;
 using UnityEngine;
 
 namespace PenguinRun
@@ -108,7 +107,8 @@ namespace PenguinRun
         {
             // 使用当前波次导演的调色板，确保开局障碍匹配地图主题
             var palette = waveDirector.CurrentPalette;
-            for (var i = 0; i < 5; i++)
+            var count = config.IsOnboarding ? 2 : 5;
+            for (var i = 0; i < count; i++)
             {
                 SpawnStandardObstacle(26f + i * 18f, (RunnerLane)Random.Range(-1, 2), Random.value > 0.72f, palette, runDistance);
             }
@@ -119,6 +119,8 @@ namespace PenguinRun
 
         private bool pendingSegmentBanner;
         private SegmentPatternKind pendingSegmentBannerKind;
+        private bool pendingOnboardingPatternHint;
+        private SegmentPatternKind pendingOnboardingPatternKind;
 
         public bool TryConsumeSegmentBanner(out SegmentPatternKind kind)
         {
@@ -130,6 +132,22 @@ namespace PenguinRun
 
             kind = pendingSegmentBannerKind;
             pendingSegmentBanner = false;
+            return true;
+        }
+
+        /// <summary>
+        /// First wave of an onboarding rotation segment. Used only for competence hints.
+        /// </summary>
+        public bool TryConsumeOnboardingPatternHint(out SegmentPatternKind kind)
+        {
+            if (!pendingOnboardingPatternHint)
+            {
+                kind = default;
+                return false;
+            }
+
+            kind = pendingOnboardingPatternKind;
+            pendingOnboardingPatternHint = false;
             return true;
         }
 
@@ -234,6 +252,16 @@ namespace PenguinRun
                 {
                     pendingSegmentBanner = true;
                     pendingSegmentBannerKind = modifiers.PatternKind;
+                }
+                if (config.IsOnboarding
+                    && waveDirector.LastConsumeWasFirstWave
+                    && (modifiers.PatternKind == SegmentPatternKind.LaneWeave
+                        || modifiers.PatternKind == SegmentPatternKind.JumpArc
+                        || modifiers.PatternKind == SegmentPatternKind.SlideTunnel
+                        || modifiers.PatternKind == SegmentPatternKind.RewardRun))
+                {
+                    pendingOnboardingPatternHint = true;
+                    pendingOnboardingPatternKind = modifiers.PatternKind;
                 }
                 var lead = Random.Range(worldTuning.spawnLeadMin, worldTuning.spawnLeadMax);
                 SpawnPattern(nextSpawnZ + worldTuning.spawnDistance + lead, modifiers, runDistance);
@@ -615,15 +643,19 @@ namespace PenguinRun
 
         private void SpawnPattern(float z, SegmentSpawnModifiers m, float runDistance)
         {
-            // 随跑动距离逐步引入移动敌人 NPC（距离 >200m 开始出现，>500m 概率提升）
-            var enemyChance = runDistance > 500f ? 0.24f : runDistance > 200f ? 0.13f : 0f;
-            if (Random.value < enemyChance)
+            // 随跑动距离逐步引入移动敌人 NPC（距离 >200m 开始出现，>500m 概率提升）。
+            // 新手期完全抑制，避免首局信息过载。
+            if (!config.IsOnboarding)
             {
-                var spawnZ = z + Random.Range(10f, 20f);
-                if (Random.value > 0.45f)
-                    SpawnPatrolEnemy(spawnZ, runDistance);
-                else
-                    SpawnSwoopEnemy(spawnZ, runDistance);
+                var enemyChance = runDistance > 500f ? 0.24f : runDistance > 200f ? 0.13f : 0f;
+                if (Random.value < enemyChance)
+                {
+                    var spawnZ = z + Random.Range(10f, 20f);
+                    if (Random.value > 0.45f)
+                        SpawnPatrolEnemy(spawnZ, runDistance);
+                    else
+                        SpawnSwoopEnemy(spawnZ, runDistance);
+                }
             }
 
             if (TrySpawnDirectedPattern(z, m, runDistance))
@@ -1073,17 +1105,17 @@ namespace PenguinRun
             };
         }
 
+        /// <summary>
+        /// Consumes a pending slide-gate opportunity flag. Caller decides whether to show a hint
+        /// based on competence-driven onboarding state (no longer writes PlayerPrefs).
+        /// </summary>
         public bool TryConsumeSlideGateTutorial(out string message)
         {
             message = "";
-            if (!slideGateTutorialPending || PlayerSave.RunnerSlideGateTutorialDone)
-            {
-                return false;
-            }
+            if (!slideGateTutorialPending) return false;
 
             slideGateTutorialPending = false;
             message = "下滑铲从横梁下穿过！";
-            PlayerSave.RunnerSlideGateTutorialDone = true;
             return true;
         }
 
@@ -1106,7 +1138,7 @@ namespace PenguinRun
             marker.Kind = kind;
 
             if ((kind == ObstacleKind.SlideGate || kind == ObstacleKind.WideSlideGate)
-                && !PlayerSave.RunnerSlideGateTutorialDone)
+                && config.IsOnboarding)
             {
                 slideGateTutorialPending = true;
             }

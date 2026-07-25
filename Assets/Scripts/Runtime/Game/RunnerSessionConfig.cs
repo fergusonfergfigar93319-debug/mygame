@@ -1,3 +1,4 @@
+using PenguinRun;
 using PenguinRun.Game.Save;
 
 namespace PenguinRun.Game
@@ -38,8 +39,15 @@ namespace PenguinRun.Game
         /// <summary>便捷访问：当前难度预设对象。</summary>
         public DifficultyPreset DifficultyPreset => DifficultyPreset.ForKind(Difficulty);
 
+        /// <summary>
+        /// Snapshot of competence-driven onboarding at run start. Fixed for the whole run so
+        /// HUD/system gating cannot flip mid-session.
+        /// </summary>
+        public bool IsOnboarding { get; private set; }
+
         public static RunnerSessionConfig Snapshot()
         {
+            var onboarding = OnboardingState.LoadFromSave();
             return new RunnerSessionConfig
             {
                 RunMode = RunSession.NextRunMode switch
@@ -65,6 +73,7 @@ namespace PenguinRun.Game
                 HapticIntensity = PlayerSave.HapticIntensity,
                 MapTheme = RunSession.NextRunTheme,
                 Difficulty = RunSession.NextRunDifficulty,
+                IsOnboarding = onboarding.IsOnboarding(PlayerSave.TotalRuns),
             };
         }
     }

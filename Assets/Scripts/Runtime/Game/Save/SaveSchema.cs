@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using PenguinRun;
 
 namespace PenguinRun.Game.Save
 {
@@ -11,7 +12,7 @@ namespace PenguinRun.Game.Save
         private const string TuanBondXpKey = "bond_tuantuan_xp";
         private const string DrorBondXpKey = "bond_dror_xp";
 
-        public const int CurrentVersion = 3;
+        public const int CurrentVersion = 4;
 
         public static int StoredVersion => PlayerSave.ReadGrowthInt(VersionKey, 0);
 
@@ -23,6 +24,7 @@ namespace PenguinRun.Game.Save
             if (version < 1) MigrateLegacyCamp();
             if (version < 2) MigrateLegacyDiscoveries();
             if (version < 3) MigrateLegacyCompanions();
+            if (version < 4) MigrateOnboardingCompetence();
 
             PlayerSave.WriteGrowthInt(VersionKey, CurrentVersion);
             PlayerSave.Flush();
@@ -53,6 +55,22 @@ namespace PenguinRun.Game.Save
                 PlayerSave.WriteGrowthInt(TuanBondXpKey, 20);
             if (PlayerSave.CompanionDrorUnlocked && PlayerSave.ReadGrowthInt(DrorBondXpKey, 0) <= 0)
                 PlayerSave.WriteGrowthInt(DrorBondXpKey, 20);
+        }
+
+        /// <summary>
+        /// Introduces competence-driven onboarding bits without bouncing veterans back into
+        /// first-run suppression. TotalRuns &gt;= 3 ⇒ all bits; legacy slide-gate hint ⇒ slide bit.
+        /// </summary>
+        private static void MigrateOnboardingCompetence()
+        {
+            if (PlayerSave.TotalRuns >= OnboardingState.ForceGraduateAfterRuns)
+            {
+                OnboardingState.MarkAllDemonstratedInSave();
+                return;
+            }
+
+            if (PlayerSave.RunnerSlideGateTutorialDone)
+                PlayerSave.OnboardingSlideDemonstrated = true;
         }
 
         private static HashSet<string> ReadCsv(string raw)

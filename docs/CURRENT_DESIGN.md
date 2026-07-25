@@ -178,16 +178,16 @@ Boss 活跃时，HUD 应优先显示生命、当前招式、破绽进度和必�
 - `docs/adr/0001-lock-landscape-orientation.md`：横屏构图决策。
 - `docs/adr/0002-cc0-rigged-boss-models.md`：Boss 视觉采用 CC0 骨骼模型 + Legacy Animation 程序化播放的决策。
 - `docs/adr/0003-mecanim-for-protagonist-avatar.md`：主角 Mecanim / Boss Legacy 动画范式分治。
+- `docs/adr/0004-competence-driven-onboarding.md`：能力驱动首局新手期（抑制噪音 + 片段轮转）。
 - `docs/UI_ART_REVAMP_PLAN.md`：页面设计与美术效果优化方案（UI 统一、局内美术、功能结构重构的分阶段路线）。
 
 ## 后续优先级
 
-1. 减轻首局信息量，只保留核心操作教学。
-2. 为六个主题补足更明显的音频差异（视觉差异已在 2026-07-20 批次落地）。
-3. Android 实机（骁龙 7 系）60fps 性能实测与 Post Processing 分档校准（含主角 Avatar 材质批次）。
-4. 主角视觉瑕疵（见 2026-07-25 节待办）：胸口游离菱形面片、侧视翅膀/护目镜几何、跑酷实距可读性。
+1. 为六个主题补足更明显的音频差异（视觉差异已在 2026-07-20 批次落地）。
+2. Android 实机（骁龙 7 系）60fps 性能实测与 Post Processing 分档校准（含主角 Avatar 材质批次）。
+3. 主角视觉瑕疵（见 2026-07-25 节待办）：胸口游离菱形面片、侧视翅膀/护目镜几何、跑酷实距可读性。
 
-已完成并移出列表：移动端输入阈值响应式（`RunnerGestureThresholds.ForViewport`）、跑酷 HUD 迁 uGUI 并与大厅同一套 `UiTheme` 令牌（IMGUI `RunnerHud` 已裁撤）、Boss 战 HUD 压缩（Boss 态只保留生命/招式/反制提示）。
+已完成并移出列表：减轻首局信息量（能力驱动新手期，见 2026-07-25 节）、移动端输入阈值响应式（`RunnerGestureThresholds.ForViewport`）、跑酷 HUD 迁 uGUI 并与大厅同一套 `UiTheme` 令牌（IMGUI `RunnerHud` 已裁撤）、Boss 战 HUD 压缩（Boss 态只保留生命/招式/反制提示）。
 
 ## 2026-07-20 建模/特效/判定/页面全面优化
 
@@ -231,3 +231,22 @@ powershell -ExecutionPolicy Bypass -File tools/CompileFullRoslyn.ps1
 
 1. Android 实机 60fps 与主角材质批次数实测（本机无连接设备）。
 2. 视觉瑕疵下一轮：所有视角胸口游离棕色菱形面片；`side.png` 翅膀呈惨白椭圆并与身体穿插、护目镜镜片拉扁；跑酷实距下红围巾与护目镜糊进深色身体，仅橙色脚掌清晰可读。
+
+## 2026-07-25 首局新手期闸门
+
+本批次落地能力驱动的首局保护（ADR-0004），对齐「首局体验」最小动作集：
+
+- **概念：** `OnboardingState` 四个能力位（换道/跳/铲/收集）+ `TotalRuns >= 3` 保险丝；`RunnerSessionConfig.IsOnboarding` 开局快照，整局不变。
+- **抑制：** 新手期内关闭路线分支、旅途札记升级、主题机关、世界事件、移动敌人；Boss 不抑制。
+- **轮转：** `SegmentWaveDirector` 按 `LaneWeave → JumpArc → SlideTunnel → RewardRun` 确定性轮转，排除高难 pattern；冰湖/雾堤池补齐缺失的 `JumpArc`。
+- **提示：** 废弃滑铲横梁旧 flag 的写入路径，四个能力位统一驱动首次提示；动作标签仅新手期显示。
+- **迁移：** `SaveSchema` v4：老玩家 `TotalRuns >= 3` 直接毕业；`RunnerSlideGateTutorialDone` 迁入滑铲能力位。
+- **验证：** `tools/VerifyFirstRunOnboarding.ps1` + `ProjectOnboardingValidation`（1200m 抑制、轮转覆盖、毕业/保险丝/迁移）。
+
+验证命令：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/VerifyFirstRunOnboarding.ps1
+powershell -ExecutionPolicy Bypass -File tools/CompileFullRoslyn.ps1
+& 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.exe' -batchmode -quit -projectPath . -executeMethod PenguinRun.Editor.ProjectOnboardingValidation.ValidateFromCommandLine -logFile _tmp/onboarding-validation.log
+```

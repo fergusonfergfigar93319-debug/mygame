@@ -168,6 +168,14 @@
 - **勿混淆：** Boss 骨骼播放走 Legacy `Animation` + `BossRigAnimator`（见 ADR-0002），不属于本表现层。
 - **相关：** `docs/adr/0003-mecanim-for-protagonist-avatar.md`。
 
+### 新手期（Onboarding Period）
+
+- **意指：** 玩家尚未演示最小动作集时的首局保护期。四个能力位为换道、跳跃、滑铲、收集；全部演示过即毕业，另设 `TotalRuns >= 3` 保险丝强制毕业。
+- **生效边界：** 「是否新手期」在开局 `RunnerSessionConfig.Snapshot()` 读一次，整局不变；能力位局内实时记录，结算时落盘。
+- **期内行为：** 抑制路线分支、旅途札记升级、主题机关、世界事件与移动敌人；片段池按 `LaneWeave → JumpArc → SlideTunnel → RewardRun` 轮转并排除高难 pattern。Boss **不**抑制。
+- **勿混淆：** `Runner3DTutorialDone` 属于图鉴域，语义是「已完成第一次旅程」（解锁 `story_first_journey`），**不是**新手期毕业标志。
+- **相关：** `docs/adr/0004-competence-driven-onboarding.md`、`OnboardingState`。
+
 ---
 
 ## 领域规则

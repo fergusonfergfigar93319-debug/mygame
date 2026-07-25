@@ -39,6 +39,7 @@ namespace PenguinRun
         private readonly ThemeMechanicRuntime mechanicRuntime;
         private readonly ThemeMechanicSpawner mechanicSpawner;
         private readonly ThemeMasteryTracker themeMastery;
+        private readonly OnboardingState onboarding;
         private readonly Transform sceneRoot;
         private readonly System.Action pulseHaptic;
         private readonly System.Action<Color, float> onScreenFlash;
@@ -62,6 +63,7 @@ namespace PenguinRun
         private int mechanicKeypointIndex;
         private RunnerAction lastRunnerAction;
         private float secondsSinceDamage = 99f;
+        private int lastCoinCountForOnboarding;
 
         public RunnerGameController(
             RunnerTuning tuning,
@@ -84,13 +86,14 @@ namespace PenguinRun
             this.onScreenFlash = onScreenFlash;
             this.onFinish = onFinish;
 
-            var waveDirector = new SegmentWaveDirector(config.MapTheme);
+            onboarding = OnboardingState.LoadFromSave();
+            var waveDirector = new SegmentWaveDirector(config.MapTheme, config.IsOnboarding);
             spawner = new SegmentSpawner(tuning.world, tuning.powerUp, tuning.movement.laneWidth, config, waveDirector, tuning.movement.groundY);
-            routeEventDirector = new RouteEventDirector(config.MapTheme, config.Daily, PlayerSave.TotalRuns);
+            routeEventDirector = new RouteEventDirector(config.MapTheme, config.Daily, PlayerSave.TotalRuns, config.IsOnboarding);
             runUpgradeState = new RunUpgradeState(config.MapTheme, config.Daily, PlayerSave.TotalRuns);
             motor = new PlayerMotor(playerTransform, runnerAudio, tuning.movement, tuning.powerUp, tuning.combat);
             world = new WorldDirector(tuning.world, tuning.pickup);
-            mechanicDirector = new MapMechanicDirector(config.ThemeMechanicMode, config.RunSeed);
+            mechanicDirector = new MapMechanicDirector(config.ThemeMechanicMode, config.RunSeed, config.IsOnboarding);
             mechanicRuntime = new ThemeMechanicRuntime();
             mechanicSpawner = new ThemeMechanicSpawner(
                 sceneRoot, tuning.movement.laneWidth, tuning.movement.groundY);
@@ -206,6 +209,7 @@ namespace PenguinRun
                 Random.InitState(config.RunSeed);
             }
 
+            lastCoinCountForOnboarding = world.Coins;
             spawner.SeedInitialObstacles(world.Distance);
         }
 
@@ -350,6 +354,8 @@ namespace PenguinRun
         {
             if (finishRequested) return;
             finishRequested = true;
+            onboarding.Persist();
+            PlayerSave.Flush();
             stateMachine.ForceTransitionTo(GameStateMachine.State.Finished);
             onFinish?.Invoke(CaptureResult());
         }
@@ -467,16 +473,28 @@ namespace PenguinRun
                 action = RunnerAction.None;
             }
             var laneBeforeAction = motor.Lane;
+            var feedbackBeforeAction = feedbackText;
+            var feedbackTimerBeforeAction = feedbackTimer;
             motor.ApplyAction(action, ref feedbackText, ref feedbackTimer, world.GlideTimer, groundY);
             lastRunnerAction = action;
-            if (motor.Lane != laneBeforeAction)
+            var laneChanged = motor.Lane != laneBeforeAction;
+            if (laneChanged)
             {
                 AwardSkill(SkillAction.LaneChain, 35);
+            }
+            if (action != RunnerAction.None)
+            {
+                onboarding.Record(action, laneChanged);
             }
             motor.Tick(dt, tuning.movement.laneWidth,
                 tuning.movement.laneLerp * runUpgradeState.LaneResponseMultiplier,
                 ref feedbackText, ref feedbackTimer, world.GlideTimer, groundY,
                 mechanicRuntime.Snapshot.Modifiers);
+            if (!config.IsOnboarding)
+            {
+                SuppressMotorActionLabels(ref feedbackText, ref feedbackTimer,
+                    feedbackBeforeAction, feedbackTimerBeforeAction);
+            }
 
             feedbackTimer = Mathf.Max(0f, feedbackTimer - dt);
 
@@ -549,10 +567,20 @@ namespace PenguinRun
                 ApplyRouteEventOutcome(routeEventDirector.Choose(choseRisk, world.Distance));
             }
 
-            if (spawner.TryConsumeSlideGateTutorial(out var slideTutorial))
+            if (config.IsOnboarding)
             {
-                feedbackText = slideTutorial;
-                feedbackTimer = 2.4f;
+                if (spawner.TryConsumeSlideGateTutorial(out _)
+                    && onboarding.TryConsumeSlideOpportunityHint(out var slideTutorial))
+                {
+                    feedbackText = slideTutorial;
+                    feedbackTimer = 2.4f;
+                }
+                else if (spawner.TryConsumeOnboardingPatternHint(out var patternKind)
+                         && onboarding.TryConsumePatternHint(patternKind, out var patternHint))
+                {
+                    feedbackText = patternHint;
+                    feedbackTimer = 2.4f;
+                }
             }
 
             // 速度门检测
@@ -578,6 +606,11 @@ namespace PenguinRun
                 () => AwardSkill(SkillAction.AirCollection, 60),
                 world, spawner.coins, ref feedbackText, ref feedbackTimer,
                 themeMastery.RecordFish);
+            if (world.Coins > lastCoinCountForOnboarding)
+            {
+                onboarding.RecordCollect();
+                lastCoinCountForOnboarding = world.Coins;
+            }
             pickups.CollectPowerUps(playerTransform, world, spawner.powerUps, ref feedbackText, ref feedbackTimer);
 
             // ── Boss 战每帧逻辑 ─────────────────────────────────
@@ -875,7 +908,7 @@ namespace PenguinRun
 
         public bool TryBuildUpgradeOffer(out RunUpgradeOffer offer)
         {
-            if (!upgradeOfferPending)
+            if (config.IsOnboarding || !upgradeOfferPending)
             {
                 offer = RunUpgradeOffer.Empty;
                 return false;
@@ -1039,6 +1072,22 @@ namespace PenguinRun
                     EventBus.Emit(GameEvents.GameOver);
                     break;
             }
+        }
+
+        private static void SuppressMotorActionLabels(
+            ref string feedbackText,
+            ref float feedbackTimer,
+            string previousText,
+            float previousTimer)
+        {
+            if (!IsMotorActionLabel(feedbackText)) return;
+            feedbackText = previousText;
+            feedbackTimer = previousTimer;
+        }
+
+        private static bool IsMotorActionLabel(string text)
+        {
+            return text is "左移" or "右移" or "跳跃" or "滑铲" or "预输入滑铲" or "快速下落";
         }
 
         private static bool IsReactionAction(RunnerAction action)

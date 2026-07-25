@@ -12,6 +12,7 @@ namespace PenguinRun
 
         private readonly IReadOnlyList<RouteEventDefinition> pool;
         private readonly int seed;
+        private readonly bool suppressed;
         private int eventIndex;
         private float nextEventDistance = FirstEventDistance;
         private float eventStartDistance;
@@ -19,10 +20,11 @@ namespace PenguinRun
         private RouteEventSnapshot snapshot = RouteEventSnapshot.Empty;
         private readonly List<string> completedEventIds = new();
 
-        public RouteEventDirector(RunnerMapTheme theme, bool daily, int runCount)
+        public RouteEventDirector(RunnerMapTheme theme, bool daily, int runCount, bool suppressed = false)
         {
             pool = RouteEventCatalog.For(theme);
             seed = BuildSeed(theme, daily, runCount);
+            this.suppressed = suppressed;
         }
 
         public RouteEventSnapshot Snapshot => snapshot;
@@ -36,6 +38,8 @@ namespace PenguinRun
 
         public bool Tick(float distanceMeters)
         {
+            if (suppressed) return false;
+
             distanceMeters = Mathf.Max(0f, distanceMeters);
             if (snapshot.AwaitingChoice)
             {

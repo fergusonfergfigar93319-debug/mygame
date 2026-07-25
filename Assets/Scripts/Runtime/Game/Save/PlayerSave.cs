@@ -48,6 +48,10 @@ namespace PenguinRun.Game.Save
         private const string KeyVisitedCamp = "visited_camp";
         private const string KeyRunner3DTutorialDone = "runner3d_tutorial_done";
         private const string KeyRunnerSlideGateTutorialDone = "runner_slide_gate_tutorial_done";
+        private const string KeyOnboardingLane = "onboarding_v1_lane";
+        private const string KeyOnboardingJump = "onboarding_v1_jump";
+        private const string KeyOnboardingSlide = "onboarding_v1_slide";
+        private const string KeyOnboardingCollect = "onboarding_v1_collect";
         private const string KeySelectedDifficulty = "selected_difficulty";
         private const string KeyDefeatedBossCsv = "defeated_boss_ids_csv";
         private const string KeyLoginStreak = "login_streak";
@@ -364,10 +368,38 @@ namespace PenguinRun.Game.Save
             set => PlayerPrefs.SetInt(KeyRunner3DTutorialDone, value ? 1 : 0);
         }
 
+        /// <summary>
+        /// Legacy one-shot slide-gate hint flag. Kept readable for SaveSchema migration into
+        /// <see cref="OnboardingSlideDemonstrated"/>; new code must not write it.
+        /// </summary>
         public static bool RunnerSlideGateTutorialDone
         {
             get => PlayerPrefs.GetInt(KeyRunnerSlideGateTutorialDone, 0) != 0;
             set => PlayerPrefs.SetInt(KeyRunnerSlideGateTutorialDone, value ? 1 : 0);
+        }
+
+        public static bool OnboardingLaneDemonstrated
+        {
+            get => PlayerPrefs.GetInt(KeyOnboardingLane, 0) != 0;
+            set => PlayerPrefs.SetInt(KeyOnboardingLane, value ? 1 : 0);
+        }
+
+        public static bool OnboardingJumpDemonstrated
+        {
+            get => PlayerPrefs.GetInt(KeyOnboardingJump, 0) != 0;
+            set => PlayerPrefs.SetInt(KeyOnboardingJump, value ? 1 : 0);
+        }
+
+        public static bool OnboardingSlideDemonstrated
+        {
+            get => PlayerPrefs.GetInt(KeyOnboardingSlide, 0) != 0;
+            set => PlayerPrefs.SetInt(KeyOnboardingSlide, value ? 1 : 0);
+        }
+
+        public static bool OnboardingCollectDemonstrated
+        {
+            get => PlayerPrefs.GetInt(KeyOnboardingCollect, 0) != 0;
+            set => PlayerPrefs.SetInt(KeyOnboardingCollect, value ? 1 : 0);
         }
 
         public static DifficultyKind SelectedDifficulty

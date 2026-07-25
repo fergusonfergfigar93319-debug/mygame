@@ -4,18 +4,30 @@ namespace PenguinRun
 {
     internal sealed class SegmentWaveDirector
     {
+        private static readonly SegmentPatternKind[] OnboardingRotation =
+        {
+            SegmentPatternKind.LaneWeave,
+            SegmentPatternKind.JumpArc,
+            SegmentPatternKind.SlideTunnel,
+            SegmentPatternKind.RewardRun,
+        };
+
         private RunnerSegmentDefinition[] pool;
         private RunnerSegmentDefinition current;
         private int wavesLeftInSegment;
+        private readonly bool isOnboarding;
+        private int onboardingRotationIndex;
 
-        public SegmentWaveDirector(RunnerMapTheme theme)
+        public SegmentWaveDirector(RunnerMapTheme theme, bool isOnboarding = false)
         {
+            this.isOnboarding = isOnboarding;
             pool = RunnerSegmentCatalog.GetPool(theme);
             PickNewSegment();
         }
 
         public void ResetForRun()
         {
+            onboardingRotationIndex = 0;
             PickNewSegment();
         }
 
@@ -54,8 +66,56 @@ namespace PenguinRun
                 return;
             }
 
+            if (isOnboarding)
+            {
+                current = PickOnboardingSegment();
+                wavesLeftInSegment = current.WaveCount;
+                return;
+            }
+
             current = pool[Random.Range(0, pool.Length)];
             wavesLeftInSegment = current.WaveCount;
+        }
+
+        private RunnerSegmentDefinition PickOnboardingSegment()
+        {
+            for (var attempt = 0; attempt < OnboardingRotation.Length; attempt++)
+            {
+                var kind = OnboardingRotation[onboardingRotationIndex % OnboardingRotation.Length];
+                onboardingRotationIndex++;
+                if (TryFindByKind(kind, out var match))
+                    return match;
+            }
+
+            // Prefer any non-excluded pattern over hard noise if rotation entries are missing.
+            for (var i = 0; i < pool.Length; i++)
+            {
+                if (!IsExcludedOnboardingPattern(pool[i].PatternKind))
+                    return pool[i];
+            }
+
+            return RunnerSegmentCatalog.Fallback;
+        }
+
+        private bool TryFindByKind(SegmentPatternKind kind, out RunnerSegmentDefinition match)
+        {
+            for (var i = 0; i < pool.Length; i++)
+            {
+                if (pool[i].PatternKind != kind) continue;
+                match = pool[i];
+                return true;
+            }
+
+            match = default;
+            return false;
+        }
+
+        internal static bool IsExcludedOnboardingPattern(SegmentPatternKind kind)
+        {
+            return kind is SegmentPatternKind.HazardRhythm
+                or SegmentPatternKind.PowerUpTrial
+                or SegmentPatternKind.SplitGate
+                or SegmentPatternKind.EnemyAmbush;
         }
     }
 }

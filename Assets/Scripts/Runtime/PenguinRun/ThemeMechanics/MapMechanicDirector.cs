@@ -7,15 +7,17 @@ namespace PenguinRun
         private IRunRandom random;
         private readonly ThemeMechanicMode mode;
         private readonly int seed;
+        private readonly bool suppressed;
 
         private int beatsSinceMechanic = 99;
         private int scheduledCount;
         private bool signatureScheduled;
 
-        public MapMechanicDirector(ThemeMechanicMode mode, int seed)
+        public MapMechanicDirector(ThemeMechanicMode mode, int seed, bool suppressed = false)
         {
             this.mode = mode;
             this.seed = seed;
+            this.suppressed = suppressed;
             random = new XorShiftRunRandom(seed);
         }
 
@@ -49,6 +51,8 @@ namespace PenguinRun
         public bool TrySchedule(in ThemeMechanicContext context, out ThemeMechanicRequest request)
         {
             request = ThemeMechanicRequest.None;
+            if (suppressed) return false;
+
             var policy = ThemeMechanicCatalog.PolicyFor(mode);
             if (context.Mode != mode
                 || context.BossActive

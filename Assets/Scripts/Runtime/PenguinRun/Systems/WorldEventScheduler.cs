@@ -12,6 +12,12 @@ namespace PenguinRun
 
         private float nextEventDistance = 500f;
         private const float EventInterval = 500f;
+        private readonly bool suppressed;
+
+        public WorldEventScheduler(bool suppressed = false)
+        {
+            this.suppressed = suppressed;
+        }
 
         public WorldEventType ActiveEvent { get; private set; }
         public float EventTimer { get; private set; }
@@ -45,6 +51,8 @@ namespace PenguinRun
         /// <summary>每帧调用，返回是否触发了新事件。</summary>
         public bool Tick(float distance)
         {
+            if (suppressed) return false;
+
             if (EventActive)
             {
                 EventTimer -= Time.deltaTime;

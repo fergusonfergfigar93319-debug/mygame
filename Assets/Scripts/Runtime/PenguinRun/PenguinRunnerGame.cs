@@ -123,7 +123,7 @@ namespace PenguinRun
             runnerAudio.Initialize(config.Daily, config.SfxEnabled, config.BgmEnabled, config.RunBgmTrack, config.AmbienceTrack, config.SfxStyle);
             BuildScene();
             particlePool = new ParticleEffectPool(transform, tuning.movement.groundY);
-            worldEvents = new WorldEventScheduler();
+            worldEvents = new WorldEventScheduler(config.IsOnboarding);
             ApplyMapThemeVisuals(currentTheme);
             game = new RunnerGameController(tuning, config, runnerAudio, player.transform, character, transform, PulseHaptic, TriggerScreenFlash, OnRunFinished);
             game.ResetRun(false);

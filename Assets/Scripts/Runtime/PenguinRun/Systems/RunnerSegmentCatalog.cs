@@ -152,6 +152,7 @@ namespace PenguinRun
                 new RunnerSegmentDefinition("混合节奏",       3,  0.02f, -0.02f,  0.02f,  0.10f, 0.03f, 0.04f, p),
                 new RunnerSegmentDefinition("喘息平台",       2, -0.04f,  0.12f, -0.14f,  0.12f, 0f,    0f,    p),
                 new RunnerSegmentDefinition("双线压力",       2,  0.03f, -0.08f,  0.10f, -0.06f, 0f,    0.06f, p, SegmentPatternKind.LaneWeave),
+                new RunnerSegmentDefinition("冰棱起跳",       2,  0.00f,  0.02f,  0.02f,  0.18f, 0f,    0.04f, p, SegmentPatternKind.JumpArc),
                 new RunnerSegmentDefinition("道具窗口",       2,  0.12f,  0.00f, -0.06f,  0.00f, 0f,    0f,    p),
                 new RunnerSegmentDefinition("crystal wake",  3,  0.02f, -0.06f,  0.10f, -0.02f, 0.08f, 0.08f, p, SegmentPatternKind.SplitGate),
                 // 新增片段
@@ -225,6 +226,7 @@ namespace PenguinRun
                 new RunnerSegmentDefinition("喘息霾气",       2, -0.06f,  0.08f, -0.14f,  0.12f, 0f,    0f,    p),
                 new RunnerSegmentDefinition("道具求生",       2,  0.10f, -0.06f, -0.02f,  0.00f, 0.05f, 0f,    p),
                 new RunnerSegmentDefinition("尖锋加压",       2,  0.03f, -0.08f,  0.10f, -0.06f, 0.14f, 0.12f, p, SegmentPatternKind.LaneWeave),
+                new RunnerSegmentDefinition("雾堤起跳",       2,  0.00f,  0.02f,  0.02f,  0.18f, 0.04f, 0.04f, p, SegmentPatternKind.JumpArc),
                 new RunnerSegmentDefinition("fog ambush",     3,  0.04f, -0.10f,  0.14f, -0.06f, 0.16f, 0.08f, p, SegmentPatternKind.SplitGate),
                 // 新增片段
                 new RunnerSegmentDefinition("雾墙狂奔",       3,  0.00f, -0.12f,  0.20f,  0.00f, 0.18f, 0.08f, p, SegmentPatternKind.HazardRhythm),
