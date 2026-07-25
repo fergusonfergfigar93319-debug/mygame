@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace PenguinRun
 {
-    internal sealed class PlayerAvatarPresenter : IPlayerCharacterPresentation
+    public sealed class PlayerAvatarPresenter : IPlayerCharacterPresentation
     {
         private readonly RunnerAnimationDriver animationDriver;
         private readonly RunnerExpressionDriver expressionDriver;
@@ -20,9 +20,9 @@ namespace PenguinRun
             Root.localRotation = Quaternion.Euler(definition.LocalEulerAngles);
             Root.localScale = definition.LocalScale;
 
-            var animator = instance.GetComponentInChildren<Animator>(true);
-            if (animator == null) throw new System.InvalidOperationException("Avatar prefab has no Animator.");
-            animationDriver = new RunnerAnimationDriver(animator, definition);
+            var animators = instance.GetComponentsInChildren<Animator>(true);
+            if (animators.Length == 0) throw new System.InvalidOperationException("Avatar prefab has no Animator.");
+            animationDriver = new RunnerAnimationDriver(animators, definition);
 
             expressionDriver = instance.GetComponent<RunnerExpressionDriver>() ?? instance.AddComponent<RunnerExpressionDriver>();
             expressionDriver.Bind(instance.transform);

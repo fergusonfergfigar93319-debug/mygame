@@ -18,47 +18,98 @@ namespace PenguinRun
         private static readonly int Interaction = Animator.StringToHash("Interaction");
         private static readonly int PlayInteraction = Animator.StringToHash("PlayInteraction");
 
-        private readonly Animator animator;
+        private readonly Animator[] animators;
 
-        public RunnerAnimationDriver(Animator animator, RunnerAvatarDefinition definition)
+        public RunnerAnimationDriver(Animator[] animators, RunnerAvatarDefinition definition)
         {
-            this.animator = animator;
-            animator.applyRootMotion = false;
-            animator.updateMode = AnimatorUpdateMode.Normal;
-            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            this.animators = animators;
 
-            if (definition.BaseController == null || definition.Animations == null) return;
-            var controller = new AnimatorOverrideController(definition.BaseController);
-            var replacements = definition.Animations.Overrides;
-            var overrides = new List<KeyValuePair<AnimationClip, AnimationClip>>();
-            foreach (var clip in controller.animationClips)
+            RuntimeAnimatorController runtimeController = definition.BaseController;
+            if (definition.BaseController != null && definition.Animations != null)
             {
-                if (clip != null && replacements.TryGetValue(clip.name, out var replacement) && replacement != null)
-                    overrides.Add(new KeyValuePair<AnimationClip, AnimationClip>(clip, replacement));
+                var controller = new AnimatorOverrideController(definition.BaseController);
+                var replacements = definition.Animations.Overrides;
+                var overrides = new List<KeyValuePair<AnimationClip, AnimationClip>>();
+                foreach (var clip in controller.animationClips)
+                {
+                    if (clip == null) continue;
+                    if (TryResolveReplacement(clip.name, replacements, out var replacement))
+                        overrides.Add(new KeyValuePair<AnimationClip, AnimationClip>(clip, replacement));
+                }
+                controller.ApplyOverrides(overrides);
+                runtimeController = controller;
             }
-            controller.ApplyOverrides(overrides);
-            animator.runtimeAnimatorController = controller;
+
+            foreach (var animator in animators)
+            {
+                animator.applyRootMotion = false;
+                animator.updateMode = AnimatorUpdateMode.Normal;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                animator.runtimeAnimatorController = runtimeController;
+                // Rebind after swapping controllers so editor/batch capture and runtime
+                // both start from a valid graph before the first Update.
+                animator.Rebind();
+                animator.Update(0f);
+            }
         }
 
         public void Tick(float deltaTime, in RunnerAvatarState state)
         {
-            animator.SetBool(Running, state.Running);
-            animator.SetBool(Grounded, state.Grounded);
-            animator.SetBool(Sliding, state.Sliding);
-            animator.SetBool(GameOver, state.GameOver);
-            animator.SetFloat(Speed01, state.Speed01, 0.08f, deltaTime);
-            animator.SetFloat(LaneLean, state.LaneLean, 0.06f, deltaTime);
-            animator.SetFloat(VerticalSpeed, state.VerticalVelocity);
+            foreach (var animator in animators)
+            {
+                animator.SetBool(Running, state.Running);
+                animator.SetBool(Grounded, state.Grounded);
+                animator.SetBool(Sliding, state.Sliding);
+                animator.SetBool(GameOver, state.GameOver);
+                animator.SetFloat(Speed01, state.Speed01, 0.08f, deltaTime);
+                animator.SetFloat(LaneLean, state.LaneLean, 0.06f, deltaTime);
+                animator.SetFloat(VerticalSpeed, state.VerticalVelocity);
+            }
         }
 
-        public void TriggerHurt() => animator.SetTrigger(Hurt);
-        public void TriggerCelebration() => animator.SetTrigger(Celebrate);
-        public void TriggerPerfectDodge() => animator.SetTrigger(PerfectDodge);
+        public void TriggerHurt()
+        {
+            foreach (var animator in animators) animator.SetTrigger(Hurt);
+        }
+
+        public void TriggerCelebration()
+        {
+            foreach (var animator in animators) animator.SetTrigger(Celebrate);
+        }
+
+        public void TriggerPerfectDodge()
+        {
+            foreach (var animator in animators) animator.SetTrigger(PerfectDodge);
+        }
 
         public void TriggerInteraction(RunnerAvatarInteraction value)
         {
-            animator.SetInteger(Interaction, (int)value);
-            animator.SetTrigger(PlayInteraction);
+            foreach (var animator in animators)
+            {
+                animator.SetInteger(Interaction, (int)value);
+                animator.SetTrigger(PlayInteraction);
+            }
+        }
+
+        private static bool TryResolveReplacement(
+            string clipName,
+            IReadOnlyDictionary<string, AnimationClip> replacements,
+            out AnimationClip replacement)
+        {
+            if (replacements.TryGetValue(clipName, out replacement) && replacement != null)
+                return true;
+
+            // Imported takes often arrive as "Armature|Idle"; canonical keys are bare names.
+            var separator = clipName.LastIndexOf('|');
+            if (separator >= 0 && separator + 1 < clipName.Length)
+            {
+                var bare = clipName.Substring(separator + 1);
+                if (replacements.TryGetValue(bare, out replacement) && replacement != null)
+                    return true;
+            }
+
+            replacement = null;
+            return false;
         }
     }
 }

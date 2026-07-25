@@ -24,7 +24,7 @@ namespace PenguinRun
         private readonly RunnerTuning tuning;
         private readonly RunnerSessionConfig config;
         private readonly RunnerAudio runnerAudio;
-        private readonly PenguinCharacter character;
+        private readonly IPlayerCharacterPresentation character;
         private readonly Transform playerTransform;
         private readonly SegmentSpawner spawner;
         private readonly PlayerMotor motor;
@@ -68,7 +68,7 @@ namespace PenguinRun
             RunnerSessionConfig config,
             RunnerAudio runnerAudio,
             Transform playerTransform,
-            PenguinCharacter character,
+            IPlayerCharacterPresentation character,
             Transform sceneRoot,
             System.Action pulseHaptic,
             System.Action<Color, float> onScreenFlash,
@@ -140,6 +140,12 @@ namespace PenguinRun
         public SegmentSpawner Spawner => spawner;
 
         public PlayerMotor Motor => motor;
+
+        public void TickAvatarPresentation(float deltaTime, bool running, bool gameOver)
+        {
+            TickCharacter(deltaTime, running, motor.Grounded, motor.SlideTimer > 0f,
+                gameOver, world.Speed01(), motor.LaneLean01);
+        }
 
         public BossSystem Boss => bossSystem;
 
@@ -246,8 +252,7 @@ namespace PenguinRun
 
             var dt = Mathf.Min(rawDt, 0.05f);
             feedbackTimer = Mathf.Max(0f, feedbackTimer - dt);
-            character.Animate(dt, false, motor.Grounded, false, false, 0f, 0f,
-                world.DashTimer, world.MagnetTimer, world.ShieldTimer, world.HitInvulnerabilityTimer);
+            TickCharacter(dt, false, motor.Grounded, false, false, 0f, 0f);
             runnerAudio.UpdateRunState(0f, false, false, false, false);
 
             if (entrancePhase == EntrancePhase.None)
@@ -394,7 +399,7 @@ namespace PenguinRun
             var action = input.Poll();
             var idleDt = Mathf.Min(rawDt, 0.05f);
             feedbackTimer = Mathf.Max(0f, feedbackTimer - idleDt);
-            character.Animate(idleDt, false, motor.Grounded, false, GameOver, 0f, 0f, world.DashTimer, world.MagnetTimer, world.ShieldTimer, world.HitInvulnerabilityTimer);
+            TickCharacter(idleDt, false, motor.Grounded, false, GameOver, 0f, 0f);
             runnerAudio.UpdateRunState(0f, false, false, false, false);
 
             if (action != RunnerAction.None)
@@ -420,8 +425,7 @@ namespace PenguinRun
             {
                 pauseHoldUI = Mathf.Max(0f, pauseHoldUI - dt);
                 feedbackTimer = Mathf.Max(0f, feedbackTimer - dt);
-                character.Animate(dt, false, motor.Grounded, false, GameOver, 0f, 0f,
-                    world.DashTimer, world.MagnetTimer, world.ShieldTimer, world.HitInvulnerabilityTimer);
+                TickCharacter(dt, false, motor.Grounded, false, GameOver, 0f, 0f);
                 runnerAudio.UpdateRunState(0f, false, false, false, false);
                 return 0f;
             }
@@ -446,8 +450,8 @@ namespace PenguinRun
             if (waitingForGuidedReaction)
             {
                 feedbackTimer = Mathf.Max(0f, feedbackTimer - dt);
-                character.Animate(dt, stateMachine.IsRunning, motor.Grounded, motor.SlideTimer > 0f, GameOver, 0f, 0f,
-                    world.DashTimer, world.MagnetTimer, world.ShieldTimer, world.HitInvulnerabilityTimer);
+                TickCharacter(dt, stateMachine.IsRunning, motor.Grounded,
+                    motor.SlideTimer > 0f, GameOver, 0f, 0f);
                 runnerAudio.UpdateRunState(0f, stateMachine.IsRunning, world.DashTimer > 0f, world.MagnetTimer > 0f, world.ShieldTimer > 0f);
                 return 0f;
             }
@@ -477,19 +481,8 @@ namespace PenguinRun
             feedbackTimer = Mathf.Max(0f, feedbackTimer - dt);
 
             var speed01 = world.Speed01();
-            character.SetAuxBuffState(world);
-            character.Animate(
-                dt,
-                stateMachine.IsRunning,
-                motor.Grounded,
-                motor.SlideTimer > 0f,
-                GameOver,
-                speed01,
-                motor.LaneLean01,
-                world.DashTimer,
-                world.MagnetTimer,
-                world.ShieldTimer,
-                world.HitInvulnerabilityTimer);
+            TickCharacter(dt, stateMachine.IsRunning, motor.Grounded,
+                motor.SlideTimer > 0f, GameOver, speed01, motor.LaneLean01);
             runnerAudio.UpdateRunState(speed01, stateMachine.IsRunning, world.DashTimer > 0f, world.MagnetTimer > 0f, world.ShieldTimer > 0f);
 
             return effectiveSpeed;
@@ -671,7 +664,7 @@ namespace PenguinRun
                     bossSystem.NotifyBossDamageTaken(false, ref feedbackText, ref feedbackTimer);
                     RecordThemeDamage();
                     BreakSkillChain();
-                    character.TriggerHurtFlash();
+                    character.TriggerHurt();
                     EventBus.Emit(GameEvents.PlayerHurt);
                     pulseHaptic?.Invoke();
                     EmitRunFeedback(RunFeedbackKind.BossHit);
@@ -718,7 +711,7 @@ namespace PenguinRun
 
             if (world.Lives < lastLifeCount)
             {
-                character.TriggerHurtFlash();
+                character.TriggerHurt();
                 lastLifeCount = world.Lives;
             }
 
@@ -957,7 +950,7 @@ namespace PenguinRun
             {
                 case RunFeedbackKind.PerfectDodge:
                     onScreenFlash?.Invoke(new Color(1f, 0.85f, 0.2f, 0.22f), 0.25f);
-                    character.TriggerPerfectDodgeBurst();
+                    character.TriggerPerfectDodge();
                     break;
                 case RunFeedbackKind.ObstacleDamage:
                     onScreenFlash?.Invoke(new Color(1f, 0.35f, 0.2f, 0.4f), 0.28f);
@@ -1056,6 +1049,31 @@ namespace PenguinRun
                    action == RunnerAction.Right ||
                    action == RunnerAction.Dash ||
                    action == RunnerAction.Start;
+        }
+
+        private void TickCharacter(float deltaTime, bool running, bool grounded,
+            bool sliding, bool gameOver, float speed01, float laneLean)
+        {
+            var buffs = RunnerAvatarBuffFlags.None;
+            if (world.DashTimer > 0f) buffs |= RunnerAvatarBuffFlags.Dash;
+            if (world.MagnetTimer > 0f) buffs |= RunnerAvatarBuffFlags.Magnet;
+            if (world.ShieldTimer > 0f) buffs |= RunnerAvatarBuffFlags.Shield;
+            if (world.HitInvulnerabilityTimer > 0f) buffs |= RunnerAvatarBuffFlags.Invulnerable;
+            if (world.GlideTimer > 0f) buffs |= RunnerAvatarBuffFlags.Glide;
+            if (world.ScoreBoostTimer > 0f) buffs |= RunnerAvatarBuffFlags.ScoreBoost;
+            if (world.SlowMoTimer > 0f) buffs |= RunnerAvatarBuffFlags.SlowMo;
+            if (world.DoubleFishTimer > 0f) buffs |= RunnerAvatarBuffFlags.DoubleFish;
+            if (world.IceMirrorTimer > 0f) buffs |= RunnerAvatarBuffFlags.IceMirror;
+            if (world.AuroraChainTimer > 0f) buffs |= RunnerAvatarBuffFlags.AuroraChain;
+            if (world.FogLanternTimer > 0f) buffs |= RunnerAvatarBuffFlags.FogLantern;
+            if (world.TreantArmorHits > 0) buffs |= RunnerAvatarBuffFlags.TreantArmor;
+            if (world.CoralBounceReady) buffs |= RunnerAvatarBuffFlags.CoralBounce;
+            if (world.ThunderFeatherTimer > 0f) buffs |= RunnerAvatarBuffFlags.ThunderFeather;
+            if (world.FishBombs > 0) buffs |= RunnerAvatarBuffFlags.FishBomb;
+
+            var state = new RunnerAvatarState(running, grounded, sliding, gameOver,
+                speed01, laneLean, motor.VerticalVelocity, buffs);
+            character.Tick(deltaTime, state);
         }
 
         private void TriggerManualDash(ref string feedbackText, ref float feedbackTimer)

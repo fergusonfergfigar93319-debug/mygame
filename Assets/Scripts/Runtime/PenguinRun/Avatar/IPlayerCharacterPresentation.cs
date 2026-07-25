@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace PenguinRun
 {
-    internal interface IPlayerCharacterPresentation
+    public interface IPlayerCharacterPresentation
     {
         Transform Root { get; }
         void Tick(float deltaTime, in RunnerAvatarState state);

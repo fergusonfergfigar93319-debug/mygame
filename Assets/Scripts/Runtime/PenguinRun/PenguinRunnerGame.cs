@@ -27,7 +27,7 @@ namespace PenguinRun
 
         private RunnerSessionConfig config;
         private GameObject player;
-        private PenguinCharacter character;
+        private IPlayerCharacterPresentation character;
         private RunnerAudio runnerAudio;
         private Camera runnerCamera;
         private RunnerPostFx postFx;
@@ -143,6 +143,13 @@ namespace PenguinRun
         private void OnPowerUpCollectedFx(PowerUpKind kind)
         {
             if (player == null || particlePool == null) return;
+            character?.TriggerInteraction(kind switch
+            {
+                PowerUpKind.Shield => RunnerAvatarInteraction.ShieldActivate,
+                PowerUpKind.Dash => RunnerAvatarInteraction.DashActivate,
+                PowerUpKind.Magnet => RunnerAvatarInteraction.MagnetActivate,
+                _ => RunnerAvatarInteraction.FishPickup,
+            });
             var profile = PowerUpVisualProfile.For(kind, currentTheme);
             var pos = player.transform.position;
             particlePool.EmitRing(pos, profile.CoreColor, 12, 1.1f, 3.2f, 0.55f);
@@ -372,7 +379,7 @@ namespace PenguinRun
                         deathState = DeathState.FadeRed;
                         deathStateTimer = 0f;
                     }
-                    character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
+                    game.TickAvatarPresentation(dt, false, true);
                     game.RunnerAudio.UpdateRunState(0f, false, false, false, false);
                     UpdateCamera(dt);
                     break;
@@ -384,7 +391,7 @@ namespace PenguinRun
                     screenFlashTimer = 0.02f;
                     screenFlashDuration = 0.02f;
 
-                    character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
+                    game.TickAvatarPresentation(dt, false, true);
                     UpdateCamera(dt);
 
                     postFx?.SetDeathEmphasis(Mathf.Clamp01(deathStateTimer / 0.6f));
@@ -398,12 +405,12 @@ namespace PenguinRun
                     break;
 
                 case DeathState.ShowResult:
-                    character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
+                    game.TickAvatarPresentation(dt, false, true);
                     UpdateCamera(dt);
                     break;
 
                 case DeathState.WaitingTap:
-                    character.Animate(dt, false, game.Motor.Grounded, false, true, 0f, 0f, 0f, 0f, 0f, 0f);
+                    game.TickAvatarPresentation(dt, false, true);
                     UpdateCamera(dt);
 
                     break;
@@ -903,7 +910,9 @@ namespace PenguinRun
 
             player = new GameObject("Penguin Character");
             // 使用程序化 Mesh 生成的可爱卡通企鹅，替代 Primitive 拼接版本
-            character = PenguinCharacter.CreateCute(player.transform);
+            var avatarDefinition = Resources.Load<RunnerAvatarDefinition>(
+                "PenguinRun/Characters/Gugugaga/GugugagaAvatar");
+            character = PlayerAvatarPresenter.Create(player.transform, avatarDefinition);
             player.transform.localScale = Vector3.one * Mathf.Clamp(tuning.camera.playerVisualScale, 0.72f, 1f);
             SetPlayerRenderersVisible(player.transform, true);
 

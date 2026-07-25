@@ -27,7 +27,9 @@ namespace PenguinRun
             invulnerableRing = Add("Invulnerable Ring", PrimitiveType.Cylinder, new Vector3(0f, 0.18f, 0f), new Vector3(1.3f, 0.03f, 1.3f), new Color(1f, 0.58f, 0.44f, 0.38f));
             jumpRing = Add("Jump Ring", PrimitiveType.Cylinder, new Vector3(0f, 0.04f, 0f), new Vector3(1.5f, 0.035f, 1.5f), new Color(0.7f, 1f, 0.95f, 0.5f));
             slideTrail = Add("Slide Trail", PrimitiveType.Cube, new Vector3(0f, 0.03f, 0.7f), new Vector3(0.8f, 0.05f, 1.5f), new Color(0.5f, 0.95f, 1f, 0.45f));
-            interactionBurst = Add("Interaction Burst", PrimitiveType.Sphere, new Vector3(0f, 0.95f, 0f), Vector3.one * 1.3f, new Color(1f, 0.78f, 0.3f, 0.18f));
+            interactionBurst = Add("Interaction Burst", PrimitiveType.Cylinder,
+                new Vector3(0f, 0.12f, 0f), new Vector3(1.3f, 0.03f, 1.3f),
+                new Color(1f, 0.78f, 0.3f, 0.18f));
             SetAllInactive();
         }
 
@@ -53,12 +55,14 @@ namespace PenguinRun
             if (jumpRingTimer > 0f)
             {
                 var t = 1f - jumpRingTimer / 0.38f;
-                jumpRing.localScale = Vector3.one * Mathf.Lerp(1.4f, 2.7f, t);
+                var radius = Mathf.Lerp(1.4f, 2.7f, t);
+                jumpRing.localScale = new Vector3(radius, 0.035f, radius);
             }
             if (interactionTimer > 0f || hurtTimer > 0f)
             {
                 var remaining = Mathf.Max(interactionTimer, hurtTimer);
-                interactionBurst.localScale = Vector3.one * Mathf.Lerp(1.6f, 0.8f, remaining / 0.35f);
+                var radius = Mathf.Lerp(1.6f, 0.8f, remaining / 0.35f);
+                interactionBurst.localScale = new Vector3(radius, 0.03f, radius);
             }
             wasGrounded = state.Grounded;
         }

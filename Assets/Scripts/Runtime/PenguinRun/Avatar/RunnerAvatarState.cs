@@ -3,7 +3,7 @@ using System;
 namespace PenguinRun
 {
     [Flags]
-    internal enum RunnerAvatarBuffFlags
+    public enum RunnerAvatarBuffFlags
     {
         None = 0,
         Dash = 1 << 0,
@@ -23,7 +23,7 @@ namespace PenguinRun
         FishBomb = 1 << 14,
     }
 
-    internal readonly struct RunnerAvatarState
+    public readonly struct RunnerAvatarState
     {
         public RunnerAvatarState(
             bool running,

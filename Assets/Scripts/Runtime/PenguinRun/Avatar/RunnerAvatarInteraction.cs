@@ -1,6 +1,6 @@
 namespace PenguinRun
 {
-    internal enum RunnerAvatarInteraction
+    public enum RunnerAvatarInteraction
     {
         FishPickup,
         ShieldActivate,
