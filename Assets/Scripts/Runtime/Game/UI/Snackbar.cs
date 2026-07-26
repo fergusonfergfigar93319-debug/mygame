@@ -52,7 +52,7 @@ namespace PenguinRun.Game.UI
             var topAccent = UiBuilder.CreateRect("TopAccent", go.transform,
                 new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(0f, 3f), new Vector2(0f, -1.5f),
-                UiBuilder.AccentCyan, rounded: true);
+                UiBuilder.AccentActive, rounded: true);
             topAccent.GetComponent<Image>().raycastTarget = false;
             topAccent.offsetMin = new Vector2(20f, topAccent.offsetMin.y);
             topAccent.offsetMax = new Vector2(-20f, topAccent.offsetMax.y);
@@ -61,12 +61,12 @@ namespace PenguinRun.Game.UI
             var iconBadge = UiBuilder.CreateRect("Icon", go.transform,
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
                 new Vector2(40f, 40f), new Vector2(40f, 0f),
-                new Color(UiBuilder.AccentCyan.r, UiBuilder.AccentCyan.g, UiBuilder.AccentCyan.b, 0.22f),
+                new Color(UiBuilder.AccentActive.r, UiBuilder.AccentActive.g, UiBuilder.AccentActive.b, 0.22f),
                 circle: true);
             iconBadge.GetComponent<Image>().raycastTarget = false;
-            UiBuilder.AddOutline(iconBadge.gameObject, UiBuilder.AccentCyan, new Vector2(1f, -1f));
+            UiBuilder.AddOutline(iconBadge.gameObject, UiBuilder.AccentActive, new Vector2(1f, -1f));
             UiBuilder.CreateText("IconText", iconBadge.transform, "\u2139", 22, FontStyle.Bold,
-                TextAnchor.MiddleCenter, UiBuilder.AccentCyan);
+                TextAnchor.MiddleCenter, UiBuilder.AccentActive);
 
             var text = UiBuilder.CreateText(
                 "Label", go.transform, string.Empty,

@@ -21,6 +21,10 @@ namespace PenguinRun.Game.UI
         public const string HeartFull = "icon_heart_full";
         public const string HeartEmpty = "icon_heart_empty";
         public const string Timer = "icon_timer";
+        /// <summary>路程标记（旗帜）。由 tools/generate_ui_icons.py 生成。</summary>
+        public const string Distance = "icon_distance";
+        /// <summary>鱼干（局内货币）。由 tools/generate_ui_icons.py 生成。</summary>
+        public const string Fish = "icon_fish";
 
         private static readonly Dictionary<string, Sprite> cache = new();
 

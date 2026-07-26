@@ -69,11 +69,11 @@ namespace PenguinRun.Game.UI
             var accent = UiBuilder.CreateRect("Accent", header,
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
                 new Vector2(4f, 22f), new Vector2(20f, 0f),
-                UiBuilder.AccentCyan, rounded: true);
+                UiBuilder.AccentActive, rounded: true);
             accent.GetComponent<Image>().raycastTarget = false;
 
             var t = UiBuilder.CreateText("Title", header, title,
-                22, FontStyle.Bold, TextAnchor.MiddleLeft, UiBuilder.AccentCyan);
+                22, FontStyle.Bold, TextAnchor.MiddleLeft, UiBuilder.AccentActive);
             var trt = (RectTransform)t.transform;
             trt.anchorMin = new Vector2(0f, 0f);
             trt.anchorMax = new Vector2(1f, 1f);
@@ -202,7 +202,7 @@ namespace PenguinRun.Game.UI
             {
                 if (btn == null) continue;
                 var sel = cur == trackId;
-                img.color = sel ? UiBuilder.AccentCyan : new Color(0f, 0f, 0f, 0f);
+                img.color = sel ? UiBuilder.AccentActive : new Color(0f, 0f, 0f, 0f);
                 if (label != null)
                 {
                     label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
@@ -268,7 +268,7 @@ namespace PenguinRun.Game.UI
             {
                 if (btn == null) continue;
                 var sel = cur == trackId;
-                img.color = sel ? UiBuilder.AccentCyan : new Color(0f, 0f, 0f, 0f);
+                img.color = sel ? UiBuilder.AccentActive : new Color(0f, 0f, 0f, 0f);
                 if (label != null)
                 {
                     label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
@@ -332,7 +332,7 @@ namespace PenguinRun.Game.UI
             {
                 if (btn == null) continue;
                 var sel = cur == ambienceId;
-                img.color = sel ? UiBuilder.AccentCyan : new Color(0f, 0f, 0f, 0f);
+                img.color = sel ? UiBuilder.AccentActive : new Color(0f, 0f, 0f, 0f);
                 if (label != null)
                 {
                     label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
@@ -394,7 +394,7 @@ namespace PenguinRun.Game.UI
             {
                 if (btn == null) continue;
                 var sel = cur == styleId;
-                img.color = sel ? UiBuilder.AccentCyan : new Color(0f, 0f, 0f, 0f);
+                img.color = sel ? UiBuilder.AccentActive : new Color(0f, 0f, 0f, 0f);
                 if (label != null)
                 {
                     label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
@@ -421,7 +421,7 @@ namespace PenguinRun.Game.UI
             // 数值显示
             hapticValueText = UiBuilder.CreateText("HapticValue", row,
                 $"{PlayerSave.HapticIntensity * 100f:F0}%",
-                26, FontStyle.Bold, TextAnchor.MiddleRight, UiBuilder.AccentCyan);
+                26, FontStyle.Bold, TextAnchor.MiddleRight, UiBuilder.AccentActive);
             var vrt = (RectTransform)hapticValueText.transform;
             vrt.anchorMin = new Vector2(1f, 1f);
             vrt.anchorMax = new Vector2(1f, 1f);
@@ -467,7 +467,7 @@ namespace PenguinRun.Game.UI
             fillRt.anchorMax = new Vector2(0f, 1f);
             fillRt.sizeDelta = Vector2.zero;
             var fillImg = fill.GetComponent<Image>();
-            fillImg.color = UiBuilder.AccentCyan;
+            fillImg.color = UiBuilder.AccentActive;
             fillImg.sprite = UiBuilder.RoundedSprite;
             fillImg.type = Image.Type.Sliced;
 
@@ -486,7 +486,7 @@ namespace PenguinRun.Game.UI
             var handleImg = handle.GetComponent<Image>();
             handleImg.color = Color.white;
             handleImg.sprite = UiBuilder.CircleSprite;
-            UiBuilder.AddOutline(handle, UiBuilder.AccentCyan, new Vector2(2f, -2f));
+            UiBuilder.AddOutline(handle, UiBuilder.AccentActive, new Vector2(2f, -2f));
             UiBuilder.AddShadow(handle, new Color(0f, 0f, 0f, 0.45f), new Vector2(0f, -3f));
 
             var slider = sliderGo.GetComponent<Slider>();
@@ -553,7 +553,7 @@ namespace PenguinRun.Game.UI
             bgrt.anchorMax = Vector2.one;
             bgrt.sizeDelta = Vector2.zero;
             var bgImg = bg.GetComponent<Image>();
-            bgImg.color = initial ? UiBuilder.AccentCyan : new Color(0.18f, 0.25f, 0.34f, 1f);
+            bgImg.color = initial ? UiBuilder.AccentActive : new Color(0.18f, 0.25f, 0.34f, 1f);
             bgImg.sprite = UiBuilder.RoundedSprite;
             bgImg.type = Image.Type.Sliced;
             UiBuilder.AddOutline(bg,
@@ -580,7 +580,7 @@ namespace PenguinRun.Game.UI
 
             t.onValueChanged.AddListener(on =>
             {
-                bgImg.color = on ? UiBuilder.AccentCyan : new Color(0.18f, 0.25f, 0.34f, 1f);
+                bgImg.color = on ? UiBuilder.AccentActive : new Color(0.18f, 0.25f, 0.34f, 1f);
                 krt.anchoredPosition = new Vector2(on ? 72f : 24f, 0f);
                 var outline = bg.GetComponent<Outline>();
                 if (outline != null)

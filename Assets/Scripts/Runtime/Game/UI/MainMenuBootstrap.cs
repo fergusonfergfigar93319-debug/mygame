@@ -186,7 +186,7 @@ namespace PenguinRun.Game.UI
             iconBadge.pivot = new Vector2(0.5f, 1f);
             UiBuilder.AddOutline(iconBadge.gameObject, UiBuilder.BorderAccent, new Vector2(2f, -2f));
             UiBuilder.CreateText("IconText", iconBadge.transform, "❖", 44, FontStyle.Bold,
-                TextAnchor.MiddleCenter, UiBuilder.AccentCyan);
+                TextAnchor.MiddleCenter, UiBuilder.AccentActive);
 
             // 欢迎标题
             var titleStr = streak <= 1 ? "欢迎来到企鹅快跑！" : $"欢迎回来 · 第 {streak} 天";

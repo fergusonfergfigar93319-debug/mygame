@@ -253,7 +253,7 @@ namespace PenguinRun.Game.UI
             if (rowBgImage != null)
                 rowBgImage.raycastTarget = false;
             UiBuilder.CreateText("Label", row.transform, label, 22, FontStyle.Bold,
-                TextAnchor.MiddleCenter, UiBuilder.AccentCyan);
+                TextAnchor.MiddleCenter, UiBuilder.AccentActive);
             var lt = row.GetComponentInChildren<TextMeshProUGUI>();
             if (lt != null)
             {

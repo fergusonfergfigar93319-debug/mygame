@@ -81,7 +81,7 @@ namespace PenguinRun.Game.UI
             var level = PlayerSave.PlayerLevel;
             var xpProgress = PlayerSave.PlayerLevelProgress;
             var levelText = UiBuilder.CreateText("Level", card, $"Lv.{level}", 20, FontStyle.Bold,
-                TextAnchor.MiddleLeft, UiBuilder.AccentCyan);
+                TextAnchor.MiddleLeft, UiBuilder.AccentActive);
             var lrt = (RectTransform)levelText.transform;
             lrt.anchorMin = new Vector2(0f, 1f);
             lrt.anchorMax = new Vector2(1f, 1f);
@@ -97,7 +97,7 @@ namespace PenguinRun.Game.UI
             var xpFill = UiBuilder.CreateRect("XpFill", xpTrack,
                 new Vector2(0f, 0f), new Vector2(0f, 1f),
                 Vector2.zero, Vector2.zero,
-                UiBuilder.AccentCyan, rounded: true).GetComponent<Image>();
+                UiBuilder.AccentActive, rounded: true).GetComponent<Image>();
             xpFill.raycastTarget = false;
             var fillRt = (RectTransform)xpFill.transform;
             fillRt.anchorMin = Vector2.zero;
@@ -110,7 +110,7 @@ namespace PenguinRun.Game.UI
                 new Vector2(-56f, 88f), new Vector2(0f, -188f));
             statsRow.pivot = new Vector2(0.5f, 1f);
             var recordStats = RunRecords.GetStats();
-            BuildStatCell(statsRow, 0f, "历史最高", $"{PlayerSave.BestScore:N0}", UiBuilder.AccentCyan);
+            BuildStatCell(statsRow, 0f, "历史最高", $"{PlayerSave.BestScore:N0}", UiBuilder.AccentActive);
             BuildStatCell(statsRow, 0.34f, "总局数", $"{PlayerSave.TotalRuns:N0}", UiBuilder.WarmGold);
             BuildStatCell(statsRow, 0.67f, "累计鱼干", $"{PlayerSave.TotalFishSnacks:N0}", UiBuilder.Success);
             if (recordStats.TotalRuns > 0)
@@ -201,7 +201,7 @@ namespace PenguinRun.Game.UI
             btnRow.pivot = new Vector2(0.5f, 0f);
 
             var lbBtn = UiBuilder.CreateButton("Leaderboard", btnRow, "排行榜",
-                UiBuilder.Surface2, UiBuilder.AccentCyan, 22, rounded: true);
+                UiBuilder.Surface2, UiBuilder.AccentActive, 22, rounded: true);
             var lbrt = (RectTransform)lbBtn.transform;
             lbrt.anchorMin = new Vector2(0f, 0f);
             lbrt.anchorMax = new Vector2(0.5f, 1f);

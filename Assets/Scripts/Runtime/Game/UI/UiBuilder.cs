@@ -11,8 +11,20 @@ namespace PenguinRun.Game.UI
     public static class UiBuilder
     {
         // ── 主色（Primary Palette）─────────────────────────────────────────────
-        /// <summary>主强调色：明亮青色，用于活动状态、关键操作。</summary>
-        public static readonly Color AccentCyan = UiTheme.AccentCyan;
+        /// <summary>
+        /// 选中/激活态强调色（Tab 选中填充、强调文字、次级 CTA）。
+        ///
+        /// 童话纸张改版是靠本别名层整体重映射完成的（SurfaceBase / Surface1 / Surface2 /
+        /// WarmGold 都在那一批改掉了），唯独这一项被漏下，仍指向旧霓虹色板的
+        /// <c>UiTheme.AccentCyan</c>。结果是营地商店、图鉴、排行榜、结算页与死亡页里
+        /// 所有「选中」「主操作」元素都在米黄纸面上渲染成霓虹青。
+        /// 旧名 <c>AccentCyan</c> 一并改名：一个叫 Cyan 的绿色正是这类 bug 复发的温床。
+        ///
+        /// 取 PineGreen 而非 CoralAction：CoralAction 已经是 <see cref="WarmGold"/>，
+        /// 两者若同色，`isBest ? WarmGold : AccentActive` 这类分支会渲染成同一个颜色。
+        /// 白字在 PineGreen 上对比度 5.1:1，满足 AA。
+        /// </summary>
+        public static readonly Color AccentActive = UiTheme.PineGreen;
         /// <summary>次要强调色：柔和金色，用于奖励、货币。</summary>
         public static readonly Color WarmGold = UiTheme.CoralAction;
         /// <summary>成功/已完成色。</summary>
@@ -654,9 +666,12 @@ namespace PenguinRun.Game.UI
             string name, Transform parent, string label, int fontSize = 30,
             System.Action onClick = null)
         {
-            var btn = CreateButton(name, parent, label, AccentCyan, TextOnAccent, fontSize, rounded: true);
-            AddOutline(btn.gameObject, new Color(0.3f, 1f, 1f, 0.55f), new Vector2(2f, -2f));
-            AddShadow(btn.gameObject, new Color(0f, 0.5f, 0.6f, 0.45f), new Vector2(0f, -4f));
+            // 与大厅底坞的「出发」和主 CTA「翻开旅程」同色（CoralAction + 白字）：
+            // 玩家在大厅学到的「主操作长这样」在结算页与死亡页同样成立。
+            // 此前是青色描边 + 青色投影的旧霓虹处理，落在米黄纸卡上像另一个产品的控件。
+            var btn = CreateButton(name, parent, label, UiTheme.CoralAction, Color.white, fontSize, rounded: true);
+            AddOutline(btn.gameObject, UiTheme.StitchBorder, new Vector2(2f, -2f));
+            AddShadow(btn.gameObject, UiTheme.ShadowWarm, new Vector2(0f, -4f));
             if (onClick != null) btn.onClick.AddListener(() => onClick.Invoke());
             return btn;
         }
@@ -668,8 +683,14 @@ namespace PenguinRun.Game.UI
             string name, Transform parent, string label, int fontSize = 28,
             System.Action onClick = null)
         {
-            var btn = CreateButton(name, parent, label, Surface2, TextPrimary, fontSize, rounded: true);
-            AddOutline(btn.gameObject, BorderDefault, new Vector2(1f, -1f));
+            // 纸面上的次级按钮：雾蓝实底 + 墨色字（对比度 6.97:1），明显从属于珊瑚色主 CTA。
+            // 唯一调用点是死亡页的「回到营地」，那张卡是 PaperWarm；旧版给的是深海军蓝
+            // 实底（Surface2 的旧值），在米黄卡上像一块挖空。
+            //
+            // 不用全透明「幽灵」底：AddOutline 走 uGUI 的 Shadow，会把描边 alpha 乘以源顶点
+            // alpha，底色全透明时描边会一起消失，按钮就只剩一行字。
+            var btn = CreateButton(name, parent, label, UiTheme.MistBlue, UiTheme.InkPrimary, fontSize, rounded: true);
+            AddOutline(btn.gameObject, UiTheme.StitchBorder, new Vector2(2f, -2f));
             if (onClick != null) btn.onClick.AddListener(() => onClick.Invoke());
             return btn;
         }

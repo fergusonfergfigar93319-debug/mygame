@@ -90,12 +90,12 @@ namespace PenguinRun.Game.UI
                 new Vector2(badgeSize, badgeSize), new Vector2(0f, badgeY),
                 badgeColor, circle: true);
             UiBuilder.AddOutline(headlineBadge.gameObject,
-                r.NewBest ? new Color(1f, 0.9f, 0.5f, 0.9f) : UiBuilder.AccentCyan,
+                r.NewBest ? new Color(1f, 0.9f, 0.5f, 0.9f) : UiBuilder.AccentActive,
                 new Vector2(3f, -3f));
             UiBuilder.CreateText("BadgeIcon", headlineBadge.transform,
                 r.NewBest ? "\u2605" : "\u2713",
                 r.NewBest ? 72 : 56, FontStyle.Bold, TextAnchor.MiddleCenter,
-                r.NewBest ? UiBuilder.WarmGold : UiBuilder.AccentCyan);
+                r.NewBest ? UiBuilder.WarmGold : UiBuilder.AccentActive);
 
             // 新纪录时添加脉冲动画
             if (r.NewBest)
@@ -176,18 +176,22 @@ namespace PenguinRun.Game.UI
             rrt.anchoredPosition = new Vector2(0f, 14f);
 
             // 三栏统计网格（距离 / 鱼干 / 存活）
-            var gridY = -240f;
+            // 下半区纵向堆叠（面板 920 高、中心 0、底边 -460）：
+            //   统计 -237..-115 / 奖励横幅 -329..-253 / 按钮 -433..-345，块间约 16px。
+            // 此前奖励横幅 56px 里有 50px 压在按钮下面，双倍鱼干券、Boss 速杀这些奖励
+            // 等于没有告知玩家；且横幅本身放不下满配奖励的文案。
+            var gridY = -176f;
             var gridStartX = 0.08f;
             var gridEndX = 0.92f;
             var cellWidth = (gridEndX - gridStartX) / 3f;
             var spacing = 0.01f;
 
             BuildStatCell(panel, gridStartX + spacing, gridStartX + cellWidth - spacing, gridY,
-                "\u279E", "距离", $"{model.DistanceMeters}m", UiTheme.MistBlue);
+                UiIcons.Distance, "距离", $"{model.DistanceMeters}m", UiTheme.PineGreen);
             BuildStatCell(panel, gridStartX + cellWidth + spacing, gridStartX + 2 * cellWidth - spacing, gridY,
-                "\u2740", "鱼干", $"{model.Fish}", UiTheme.CoralAction);
+                UiIcons.Fish, "鱼干", $"{model.Fish}", UiTheme.CoralAction);
             BuildStatCell(panel, gridStartX + 2 * cellWidth + spacing, gridEndX - spacing, gridY,
-                "\u231B", "存活", $"{Mathf.RoundToInt(r.SurvivalSeconds)}s", new Color(0.4f, 0.95f, 0.7f, 1f));
+                UiIcons.Timer, "存活", $"{Mathf.RoundToInt(r.SurvivalSeconds)}s", UiTheme.MistBlue);
 
             BuildBonusBanner(panel, r, model);
 
@@ -198,8 +202,8 @@ namespace PenguinRun.Game.UI
             brt.anchorMin = new Vector2(0.1f, 0f);
             brt.anchorMax = new Vector2(0.9f, 0f);
             brt.pivot = new Vector2(0.5f, 0f);
-            brt.sizeDelta = new Vector2(0f, 96f);
-            brt.anchoredPosition = new Vector2(0f, 56f);
+            brt.sizeDelta = new Vector2(0f, 88f);
+            brt.anchoredPosition = new Vector2(0f, 27f);
             dismiss.onClick.AddListener(() =>
             {
                 Object.Destroy(root.gameObject);
@@ -209,24 +213,23 @@ namespace PenguinRun.Game.UI
 
         private static void BuildStatCell(RectTransform parent,
             float anchorXMin, float anchorXMax, float anchoredY,
-            string icon, string label, string value, Color color)
+            string iconName, string label, string value, Color color)
         {
             var cell = UiBuilder.CreateRect("Stat_" + label, parent,
                 new Vector2(anchorXMin, 0.5f), new Vector2(anchorXMax, 0.5f),
-                new Vector2(0f, 130f), new Vector2(0f, anchoredY),
+                new Vector2(0f, 122f), new Vector2(0f, anchoredY),
                 UiTheme.PaperBase, rounded: true);
             UiBuilder.AddOutline(cell.gameObject,
                 new Color(color.r, color.g, color.b, 0.35f), new Vector2(1f, -1f));
 
-            // 图标
-            var iconText = UiBuilder.CreateText("Icon", cell.transform, icon,
-                36, FontStyle.Bold, TextAnchor.UpperCenter, color);
-            var irt = (RectTransform)iconText.transform;
-            irt.anchorMin = new Vector2(0f, 1f);
-            irt.anchorMax = new Vector2(1f, 1f);
+            // 图标：UiIcons 白色剪影 Sprite 按 color 染色。
+            var iconImage = UiIcons.CreateImage("Icon", cell.transform, iconName, color);
+            var irt = iconImage.rectTransform;
+            irt.anchorMin = new Vector2(0.5f, 1f);
+            irt.anchorMax = new Vector2(0.5f, 1f);
             irt.pivot = new Vector2(0.5f, 1f);
-            irt.sizeDelta = new Vector2(0f, 44f);
-            irt.anchoredPosition = new Vector2(0f, -10f);
+            irt.sizeDelta = new Vector2(38f, 38f);
+            irt.anchoredPosition = new Vector2(0f, -12f);
 
             // 数值
             var valueText = UiBuilder.CreateText("Value", cell.transform, value,
@@ -254,7 +257,9 @@ namespace PenguinRun.Game.UI
             JourneyResultViewModel model)
         {
             var hasBossSpeed = r.LastBossSpeedFishBonus > 0 || r.LastBossSpeedScoreBonus > 0;
-            var sb = new System.Text.StringBuilder("\u2728  ");
+            // 不要在这里放 emoji：U+2728 不在项目 TMP 字体图集里，实机渲染成一个豆腐块。
+            // 需要装饰符号时走 UiIcons Sprite。
+            var sb = new System.Text.StringBuilder();
             var parts = new System.Collections.Generic.List<string> { model.ProgressionPreview };
             if (!string.IsNullOrWhiteSpace(model.ThemeMasteryBody))
                 parts.Add($"{model.ThemeMasteryTitle} · {model.ThemeMasteryBody}");
@@ -264,24 +269,37 @@ namespace PenguinRun.Game.UI
             if (r.ConsumedDoubleFishTicket) parts.Add("双倍鱼干券");
             if (r.ConsumedScoreBoostTicket) parts.Add("得分加成券");
             if (hasBossSpeed) parts.Add($"Boss速杀 {r.LastBossSpeedTier} (+{r.LastBossSpeedFishBonus}鱼干/+{r.LastBossSpeedScoreBonus}分)");
+
+            // 这条横幅是一行摘要，不是完整清单。此前它把最多 8 段文案拼进 56px 条里，
+            // 结果是「跑得越好、奖励越多，反而越读不清」。保留前几项并标出还有更多。
+            const int MaxParts = 4;
+            var truncated = parts.Count > MaxParts;
+            if (truncated) parts = parts.GetRange(0, MaxParts);
             sb.Append(string.Join(" · ", parts));
+            if (truncated) sb.Append(" · …");
 
             var banner = UiBuilder.CreateRect("BonusBanner", panel,
                 new Vector2(0.08f, 0.5f), new Vector2(0.92f, 0.5f),
-                new Vector2(0f, 56f), new Vector2(0f, -382f),
+                new Vector2(0f, 76f), new Vector2(0f, -291f),
                 new Color(1f, 0.78f, 0.32f, 0.18f), rounded: true);
             UiBuilder.AddOutline(banner.gameObject, new Color(1f, 0.78f, 0.32f, 0.55f),
                 new Vector2(1f, -1f));
 
             var t = UiBuilder.CreateText("Text", banner, sb.ToString(),
                 20, FontStyle.Bold, TextAnchor.MiddleCenter,
-                new Color(1f, 0.85f, 0.4f, 1f));
+                // 浅金字压在浅金底上只有约 1.2:1 的对比度，实际读不出来。墨色为 10.2:1。
+                UiTheme.InkPrimary);
             var trt = (RectTransform)t.transform;
             trt.anchorMin = Vector2.zero;
             trt.anchorMax = Vector2.one;
             trt.sizeDelta = Vector2.zero;
-            trt.offsetMin = new Vector2(16f, 0f);
-            trt.offsetMax = new Vector2(-16f, 0f);
+            trt.offsetMin = new Vector2(16f, 6f);
+            trt.offsetMax = new Vector2(-16f, -6f);
+            // 兜底：内容再长也只会缩小并省略，不会溢出框外。
+            t.enableAutoSizing = true;
+            t.fontSizeMin = 15f;
+            t.fontSizeMax = 20f;
+            t.overflowMode = TMPro.TextOverflowModes.Ellipsis;
         }
 
         private static string BuildRankLabel(RunOutcomeRouter.Result r)

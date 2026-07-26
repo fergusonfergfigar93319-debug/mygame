@@ -143,6 +143,20 @@
 
 - **意指：** 进入 Boss 战时替换跑步 BGM 的独立音乐轨，由 `RunnerAudio.EnterBossMusic` 切入、`ExitBossMusic` 恢复。每个 Boss 通过 `BossDefinition.BgmClipName` 字段（本次内容包新增）映射至 `Resources/PenguinRun/` 下的 `.ogg` 文件。
 
+### 纸张 UI 层（PaperUiLayer）
+
+- **意指：** `Assets/Scripts/Runtime/Game/UI` 下的大厅与面板 UI，使用童话纸张色板（`PaperBase` / `InkPrimary` / `PineGreen` / `MistBlue` / `CoralAction` / `StitchBorder`）。
+- **权威边界：** 该层**禁止**引用旧霓虹色板令牌（`UiTheme.AccentCyan` / `UiTheme.Surface*` / `UiTheme.TextPrimary` 等），一律走 `UiBuilder` 别名。整套纸张改版就是靠别名层重映射完成的，漏掉一个别名（当年的 `AccentCyan`）就会让几十个调用点同时跑偏。由 `VerifyStorybookPalette.ps1` 断言。
+- **勿混淆：** 局内 HUD（`RunnerHudCanvas`，`Runtime/PenguinRun/Systems`）画在深色 3D 场景上，继续使用旧令牌是正当的，不在本层范围内。
+- **主操作语言：** 主 CTA 一律 `CoralAction` + 白字（与大厅底坞一致）；选中/激活态用 `AccentActive`（PineGreen）；次级按钮用 `MistBlue` + 墨色字。
+- **相关陷阱：** `UiBuilder.AddOutline` 走 uGUI `Shadow`，描边 alpha 会乘以源顶点 alpha——底色全透明的「幽灵按钮」连描边一起消失。
+
+### UI 字形（UiGlyph）
+
+- **意指：** UI 文本里出现的符号字符。项目 TMP 字体是**动态图集**，能否显示取决于源字体覆盖，而非当前图集内容。
+- **规则：** 新增装饰性符号一律走 `UiIcons` Sprite，不要写裸 Unicode。已确认 ★(U+2605)、✓(U+2713) 可用；➞(U+279E)、❀(U+2740)、⌛(U+231B)、✨(U+2728) 在实机是豆腐块。
+- **勿混淆：** `TMP_FontAsset.HasCharacter` 对动态字体只反映当前图集，不能用来判断「会不会变豆腐块」——据此写的门禁会把正常显示的 ★ 误报为缺失。
+
 ### 画质档位（RunnerQualityTier）
 
 - **意指：** 按设备能力（内存 / 核心数 / 显存）选出的 Low / Medium / High 三档，以及每档对应的 `RunnerQualityBudget`（Bloom、阴影、粒子 Raycast、LOD Bias、骨骼权重、贴图 mip）。

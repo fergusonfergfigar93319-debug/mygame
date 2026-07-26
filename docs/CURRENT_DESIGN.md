@@ -230,6 +230,28 @@ powershell -ExecutionPolicy Bypass -File tools/CompileFullRoslyn.ps1
 1. Android 实机 60fps 与主角材质批次数实测（本机无连接设备）。
 2. 视觉瑕疵下一轮：所有视角胸口游离棕色菱形面片；`side.png` 翅膀呈惨白椭圆并与身体穿插、护目镜镜片拉扁；跑酷实距下红围巾与护目镜糊进深色身体，仅橙色脚掌清晰可读。
 
+## 2026-07-26 结算页与调色板收口
+
+从三张实机截图（`Artifacts/PlayerExperienceAudit`）反查，发现的都是既有机制发现不了的视觉缺陷。
+
+- **根因：童话纸张改版漏了一个别名。** 整套改版是靠 `UiBuilder` 别名层重映射完成的（`SurfaceBase`→PaperBase、`Surface1`→PaperWarm、`WarmGold`→CoralAction 都改了），**唯独 `AccentCyan` 没改**，仍指向旧霓虹色板。这一处遗漏就是营地商店、图鉴、排行榜、结算页、死亡页所有「选中」「主操作」元素在米黄纸面上渲染成霓虹青的共同来源。已重映射为 `PineGreen` 并改名 `AccentActive`——一个叫 Cyan 的绿色正是这类 bug 复发的温床。取 PineGreen 而非 CoralAction 是因为后者已是 `WarmGold`，同色会让 `isBest ? WarmGold : AccentActive` 这类分支渲染成同一个颜色。
+- **主按钮语言统一**：`CreatePrimaryButton` 改为大厅底坞同款（CoralAction + 白字 + 暖色描边/投影），玩家在大厅学到的「主操作长这样」在结算页与死亡页同样成立。`CreateSecondaryButton` 从深海军蓝实底改为雾蓝（墨色字 6.97:1）。不用全透明「幽灵」底：`AddOutline` 走 uGUI `Shadow`，会把描边 alpha 乘以源顶点 alpha，底色全透明时描边一起消失。
+- **占位图标补齐**：结算页三个统计格用的是裸 Unicode（U+279E / U+2740 / U+231B）与横幅前缀 U+2728，都不在项目 TMP 字体图集里，实机是豆腐块加一个星号。新增 `tools/generate_ui_icons.py` 生成风格一致的旗帜（距离）与鱼干图标，配合已有的 `Timer`。
+- **奖励横幅曾被按钮盖住**：56px 里有 50px 压在 CTA 之下——双倍鱼干券、Boss 速杀这些奖励**被告知在玩家看不见的地方**。且横幅把最多 8 段文案塞进一条 56px 里，「跑得越好、奖励越多，反而越读不清」。现重排为 统计 −237..−115 / 横幅 −329..−253 / 按钮 −433..−345，横幅限 4 段 + 省略号 + TMP 自动缩放兜底，文字改墨色（原浅金压浅黄仅约 1.2:1，现 10.2:1）。
+
+**新增门禁**：
+- `ProjectResultScreenCapture`（Unity）：用**满配奖励**的样本局构建结算页并断言下半区区块**两两不相交**，同时产出截图证据。用矩形相交而非像素比对——像素阈值会随配色字体漂移，「两个可见区块不许叠在一起」才是稳定契约。这个缺陷只在玩家真拿到奖励时出现，旅程 smoke 的样本局没有奖励，加上它在本机截不到帧，所以此前无从发现。
+- `VerifyStorybookPalette.ps1`（静态）：纸张 UI 层禁止引用旧霓虹色板令牌。作用域限于 `Runtime/Game/UI`——局内 HUD（`RunnerHudCanvas`）画在深色 3D 场景上，继续用旧令牌是正当的。实测能挡回归。
+
+验证：15 个静态门禁全过；全量 Roslyn 编译通过（173 源文件）；4 个 Unity 校验器通过；截图证据在 `Artifacts/ResultScreens`。
+
+**明确待办：**
+
+1. **大厅两张卡内容完全重复**：`01-home.png` 里左「今日手记」与右「下一章」标题正文一字不差（都是「让营火更亮一些 / 星火篝火已经备齐修复材料」）。未修。
+2. **大厅吉祥物渲染成两个白色圆块**而非企鹅。未修，需要先定位是资源缺失还是渲染回退。
+3. **UI 代码里还有约 30 处裸 Unicode 字形**（`CampShopPanel` / `CodexPanel` / `LeaderboardPanel` 等）。已知 ★ ✓ 渲染正常、➞ ❀ ⌛ ✨ 是豆腐块，逐个靠肉眼排查不可行。曾尝试写字形覆盖门禁但**已删除**：项目用动态字体图集，`TMP_FontAsset.HasCharacter` 查的是「当前图集有没有」而非「源字体有没有」，会把正常显示的 ★ 误报为缺失；且需要先剥离注释（`—`、`""`、`─` 大量出现在注释里）。要做对需要改查源字体文件覆盖。
+4. 大厅存在两个橙色主 CTA（底栏「出发」与右侧「翻开旅程」）互相竞争，未处理。
+
 ## 2026-07-26 代码健康度：止血而非大修
 
 `GAME_OPTIMIZATION_PLAN` 里记的风险是「改 Boss、机关、道具容易互相影响」，根源是它们都落在同几个超大文件里。安全拆分需要运行时验证，而本环境暂时给不了（无 Android 设备；`ProjectPlayerJourneySmokeTest` 在 batchmode 下截不到帧）。因此本批次只做**可验证**的那一半。

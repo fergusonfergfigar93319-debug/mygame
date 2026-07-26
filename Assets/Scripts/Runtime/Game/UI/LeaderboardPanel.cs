@@ -145,7 +145,7 @@ namespace PenguinRun.Game.UI
             {
                 if (img == null) continue;
                 var sel = sort == s;
-                img.color = sel ? UiBuilder.AccentCyan : new Color(0f, 0f, 0f, 0f);
+                img.color = sel ? UiBuilder.AccentActive : new Color(0f, 0f, 0f, 0f);
                 if (label != null)
                 {
                     label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f)
@@ -191,13 +191,13 @@ namespace PenguinRun.Game.UI
             var iconCircle = UiBuilder.CreateRect("Icon", empty,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(120f, 120f), new Vector2(0f, 60f),
-                new Color(UiBuilder.AccentCyan.r, UiBuilder.AccentCyan.g, UiBuilder.AccentCyan.b, 0.15f),
+                new Color(UiBuilder.AccentActive.r, UiBuilder.AccentActive.g, UiBuilder.AccentActive.b, 0.15f),
                 circle: true);
             UiBuilder.AddOutline(iconCircle.gameObject,
-                new Color(UiBuilder.AccentCyan.r, UiBuilder.AccentCyan.g, UiBuilder.AccentCyan.b, 0.45f),
+                new Color(UiBuilder.AccentActive.r, UiBuilder.AccentActive.g, UiBuilder.AccentActive.b, 0.45f),
                 new Vector2(2f, -2f));
             UiBuilder.CreateText("IconText", iconCircle.transform, "\u2605", 56, FontStyle.Bold,
-                TextAnchor.MiddleCenter, UiBuilder.AccentCyan);
+                TextAnchor.MiddleCenter, UiBuilder.AccentActive);
 
             var t = UiBuilder.CreateText("Title", empty,
                 todayBucket ? "今日还没有本地纪录" : "还没有本地纪录",
@@ -304,7 +304,7 @@ namespace PenguinRun.Game.UI
             }
             UiBuilder.CreateText("MedalNum", medalBadge.transform, medalSymbol,
                 isMedal ? 32 : 26, FontStyle.Bold, TextAnchor.MiddleCenter,
-                isMedal ? new Color(0.15f, 0.08f, 0.02f, 1f) : UiBuilder.AccentCyan);
+                isMedal ? new Color(0.15f, 0.08f, 0.02f, 1f) : UiBuilder.AccentActive);
 
             // 玩家昵称
             var name = UiBuilder.CreateText("Name", row, e.nickname ?? "玩家",
