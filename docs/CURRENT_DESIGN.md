@@ -265,7 +265,7 @@ chapterBody  = kind == StartJourney ? "..."      : recommendation.Body;
 
 从三张实机截图（`Artifacts/PlayerExperienceAudit`）反查，发现的都是既有机制发现不了的视觉缺陷。
 
-- **根因：童话纸张改版漏了一个别名。** 整套改版是靠 `UiBuilder` 别名层重映射完成的（`SurfaceBase`→PaperBase、`Surface1`→PaperWarm、`WarmGold`→CoralAction 都改了），**唯独 `AccentCyan` 没改**，仍指向旧霓虹色板。这一处遗漏就是营地商店、图鉴、排行榜、结算页、死亡页所有「选中」「主操作」元素在米黄纸面上渲染成霓虹青的共同来源。已重映射为 `PineGreen` 并改名 `AccentActive`——一个叫 Cyan 的绿色正是这类 bug 复发的温床。取 PineGreen 而非 CoralAction 是因为后者已是 `WarmGold`，同色会让 `isBest ? WarmGold : AccentActive` 这类分支渲染成同一个颜色。
+- **根因：一次有意的推迟，后续从未落地。** 整套改版是靠 `UiBuilder` 别名层重映射完成的（`SurfaceBase`→PaperBase、`Surface1`→PaperWarm、`WarmGold`→CoralAction 都改了），**唯独 `AccentCyan` 保持不变**，仍指向旧霓虹色板。这不是疏忽——当年的计划书（`docs/superpowers/plans/2026-07-13-storybook-ui-foundation.md:178`）明确写了「Keep `AccentCyan` … unchanged **until their consumers receive semantic replacements**」，而那个后续批次没有发生。推迟本身合理，缺的是把它记成待办的机制；现在由 `VerifyStorybookPalette.ps1` 兜住。这一处遗漏就是营地商店、图鉴、排行榜、结算页、死亡页所有「选中」「主操作」元素在米黄纸面上渲染成霓虹青的共同来源。已重映射为 `PineGreen` 并改名 `AccentActive`——一个叫 Cyan 的绿色正是这类 bug 复发的温床。取 PineGreen 而非 CoralAction 是因为后者已是 `WarmGold`，同色会让 `isBest ? WarmGold : AccentActive` 这类分支渲染成同一个颜色。
 - **主按钮语言统一**：`CreatePrimaryButton` 改为大厅底坞同款（CoralAction + 白字 + 暖色描边/投影），玩家在大厅学到的「主操作长这样」在结算页与死亡页同样成立。`CreateSecondaryButton` 从深海军蓝实底改为雾蓝（墨色字 6.97:1）。不用全透明「幽灵」底：`AddOutline` 走 uGUI `Shadow`，会把描边 alpha 乘以源顶点 alpha，底色全透明时描边一起消失。
 - **占位图标补齐**：结算页三个统计格用的是裸 Unicode（U+279E / U+2740 / U+231B）与横幅前缀 U+2728，都不在项目 TMP 字体图集里，实机是豆腐块加一个星号。新增 `tools/generate_ui_icons.py` 生成风格一致的旗帜（距离）与鱼干图标，配合已有的 `Timer`。
 - **奖励横幅曾被按钮盖住**：56px 里有 50px 压在 CTA 之下——双倍鱼干券、Boss 速杀这些奖励**被告知在玩家看不见的地方**。且横幅把最多 8 段文案塞进一条 56px 里，「跑得越好、奖励越多，反而越读不清」。现重排为 统计 −237..−115 / 横幅 −329..−253 / 按钮 −433..−345，横幅限 4 段 + 省略号 + TMP 自动缩放兜底，文字改墨色（原浅金压浅黄仅约 1.2:1，现 10.2:1）。

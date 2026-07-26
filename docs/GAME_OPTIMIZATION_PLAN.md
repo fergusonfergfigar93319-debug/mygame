@@ -174,8 +174,6 @@
 
 ## 下一批建议
 
-下一批建议优先处理"道具教学 + 文件拆分"：
-
-- 为鱼干、围巾、团团支援、长跳靴增加首次获得轻提示。
-- 抽出 `StoryRunState` / `StoryCollisionSystem` / `StoryPickupSystem`，先减少主循环压力。
-- 给排行榜页增加"我的最好一局"视觉高亮，把每日挑战目标进一步做实。
+> **本节已停止维护（2026-07-26）。** 原内容指向 `StoryRunState` / `StoryCollisionSystem` / `StoryPickupSystem` 等旧 Android/Kotlin 阶段的文件，它们随工程转向 Unity 已不复存在；其中「排行榜『我的最好一局』高亮」也早在 2026-05 批次完成。
+>
+> 当前优先级请以 [CURRENT_DESIGN.md](./CURRENT_DESIGN.md) 的「后续优先级」一节为准，那里是唯一的现行来源。本文其余部分作为历史执行记录保留。
