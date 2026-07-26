@@ -39,6 +39,7 @@ namespace PenguinRun.Game.UI.Lobby
         private Image companion;
         private TextMeshProUGUI companionBondLabel;
         private Image companionBondFill;
+        private RectTransform companionBondPlate;
         private LobbyCampActions actions;
         private bool inputEnabled = true;
         private bool panelOpen;
@@ -89,6 +90,9 @@ namespace PenguinRun.Game.UI.Lobby
             scene.companion = scene.CreateCharacter(characterLayer, "Companion", new Vector2(0.55f, 0.16f),
                 new Vector2(0.68f, 0.56f), CampVisualAssetCatalog.Companion(false), actions.OpenCodex);
             scene.CreateCompanionBondPlate(characterLayer);
+            // 伙伴美术缺席时整组隐藏，与前景道具用的是同一条约定（sprite 为空即不显示）。
+            // 羁绊进度不会因此丢失：顶栏 Ticker 与战绩 Sheet 都仍然展示。
+            scene.ApplyCompanionVisibility();
 
             var foreground = UiBuilder.CreateRect("ForegroundProps", scene.Root,
                 new Vector2(0f, 0f), new Vector2(1f, 0.33f), Vector2.zero, Vector2.zero, Color.white);
@@ -109,6 +113,7 @@ namespace PenguinRun.Game.UI.Lobby
         {
             mascot.sprite = CampVisualAssetCatalog.Mascot;
             companion.sprite = CampVisualAssetCatalog.Companion(drorUnlocked);
+            ApplyCompanionVisibility();
             companionBondLabel.text = $"羁绊 Lv.{model.BondLevel} · {model.CompanionHint}";
             companionBondFill.fillAmount = model.BondProgress;
             foreach (var node in camp.Nodes)
@@ -197,9 +202,10 @@ namespace PenguinRun.Game.UI.Lobby
 
         private void CreateCompanionBondPlate(Transform parent)
         {
-            var plate = UiBuilder.CreateRect("CompanionBondPlate", parent,
+            companionBondPlate = UiBuilder.CreateRect("CompanionBondPlate", parent,
                 new Vector2(0.52f, 0.12f), new Vector2(0.72f, 0.19f), Vector2.zero, Vector2.zero,
                 new Color(UiTheme.InkPrimary.r, UiTheme.InkPrimary.g, UiTheme.InkPrimary.b, 0.78f), rounded: true);
+            var plate = companionBondPlate;
             UiBuilder.AddOutline(plate.gameObject,
                 new Color(UiTheme.WarmGold.r, UiTheme.WarmGold.g, UiTheme.WarmGold.b, 0.62f), new Vector2(1f, -1f));
             plate.GetComponent<Image>().raycastTarget = false;
@@ -220,6 +226,14 @@ namespace PenguinRun.Game.UI.Lobby
             companionBondFill.type = Image.Type.Filled;
             companionBondFill.fillMethod = Image.FillMethod.Horizontal;
             companionBondFill.raycastTarget = false;
+        }
+
+        /// <summary>伙伴立绘缺席时隐藏角色与羁绊铭牌，避免出现一个没有主体的浮空标签。</summary>
+        private void ApplyCompanionVisibility()
+        {
+            var hasArt = companion != null && companion.sprite != null;
+            if (companion != null) companion.gameObject.SetActive(hasArt);
+            if (companionBondPlate != null) companionBondPlate.gameObject.SetActive(hasArt);
         }
 
         private Image CreateCharacter(Transform parent, string name, Vector2 min, Vector2 max,

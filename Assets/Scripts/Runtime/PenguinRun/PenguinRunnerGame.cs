@@ -2373,17 +2373,9 @@ namespace PenguinRun
             };
         }
 
-        private static string GetThemeDisplayName(RunnerMapTheme theme)
-        {
-            return theme switch
-            {
-                RunnerMapTheme.CedarRuins => "雪松废墟",
-                RunnerMapTheme.AuroraField => "极光磁场",
-                RunnerMapTheme.MistDike => "雾堤",
-                RunnerMapTheme.OceanReef => "海洋珊瑚礁",
-                RunnerMapTheme.SkyFlight => "天空飞翔",
-                _ => "冰湖回音谷",
-            };
-        }
+        // 主题展示名集中在 RunnerMapThemeInfo：这里原本有一份独立副本，且已经和大厅那份
+        // 漂移（此处是「雾堤」，其余地方是「北境雾堤」）。
+        private static string GetThemeDisplayName(RunnerMapTheme theme) =>
+            RunnerMapThemeInfo.DisplayName(theme);
     }
 }

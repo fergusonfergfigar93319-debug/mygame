@@ -26,7 +26,14 @@ namespace PenguinRun.Game.UI.Lobby
 
         public static Sprite Panorama => Load(PanoramaPath) ?? StorybookArtCatalog.LobbyPanorama;
         public static Sprite Mascot => Load(MascotPath) ?? StorybookArtCatalog.Mascot;
-        public static Sprite Companion(bool drorUnlocked) => Load(drorUnlocked ? DrorPath : TuanTuanPath) ?? Mascot;
+        /// <summary>
+        /// 伙伴立绘。**没有**美术时返回 null，由调用方隐藏节点。
+        ///
+        /// 此前回退是 <c>?? Mascot</c>：伙伴美术从未产出过（`companion_tuantuan` /
+        /// `companion_dror` 只声明了路径，生成器没有生成），于是大厅会在吉祥物旁边再画
+        /// 一只一模一样的吉祥物。少一个角色好过多一只重复的角色。
+        /// </summary>
+        public static Sprite Companion(bool drorUnlocked) => Load(drorUnlocked ? DrorPath : TuanTuanPath);
         public static Sprite ForegroundProps => Load(ForegroundPropsPath);
         public static Sprite Smoke => Load(SmokePath);
         public static Sprite Glow => Load(GlowPath);

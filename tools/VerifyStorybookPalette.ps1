@@ -63,6 +63,22 @@ Require-Pattern $uiBuilder 'AccentActive\s*=\s*UiTheme\.PineGreen' 'active accen
 Require-Pattern $uiBuilder 'CreateButton\(name, parent, label, UiTheme\.CoralAction' 'primary CTA uses the lobby coral'
 Require-Pattern $uiBuilder 'CreateButton\(name, parent, label, UiTheme\.MistBlue' 'secondary button sits on paper'
 
+# The lobby art fallback chain is silent: a missing texture degrades to a plain
+# white circle with no error, which is how the mascot went missing unnoticed.
+Require-Pattern 'Assets/Scripts/Editor/PenguinRun/ProjectLobbyArtValidation.cs' `
+    'CircleSprite' 'lobby art must not silently degrade to the placeholder circle'
+# The chapter card must not re-read the growth recommendation the journal card shows.
+Require-Pattern 'Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs' `
+    'RunnerMapThemeInfo\.DisplayName\(nextTheme\)' 'chapter card is driven by map progress'
+foreach ($meta in @(
+    'Assets/Resources/PenguinRun/StorybookUI/mascot_gugugaga.png.meta',
+    'Assets/Resources/PenguinRun/StorybookUI/lobby_panorama.png.meta'
+)) {
+    # A .meta with no importer block leaves the texture unimported and unloadable.
+    Require-Pattern $meta 'TextureImporter:' "importer block present in $(Split-Path $meta -Leaf)"
+    Require-Pattern $meta 'textureType: 8' "sprite import type in $(Split-Path $meta -Leaf)"
+}
+
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host "FAIL: $_" }
     exit 1

@@ -528,6 +528,20 @@ namespace PenguinRun.Game.UI
             SetRaycastTargets(parent, false);
         }
 
+        /// <summary>
+        /// 下一章 = 进度顺序里第一张还没打满三星的图；全部打满时停在最后一张。
+        /// 只读主题精通存档，不写入。
+        /// </summary>
+        private static RunnerMapTheme NextChapterTheme()
+        {
+            var order = RunnerMapThemeInfo.ProgressionOrder;
+            foreach (var theme in order)
+            {
+                if (ThemeMasteryStore.For(theme).Stars < 3) return theme;
+            }
+            return order[order.Length - 1];
+        }
+
         private static LobbyViewModel BuildLobbyViewModel()
         {
             var recommendation = GrowthRecommendation.Build();
@@ -539,12 +553,12 @@ namespace PenguinRun.Game.UI
             var bond = CompanionBondStore.Snapshot(activeCompanion);
             var camp = CampRebuildStore.Snapshot();
             var difficulty = DifficultyPreset.ForKind(PlayerSave.SelectedDifficulty);
-            var chapterTitle = recommendation.Kind == GrowthRecommendationKind.StartJourney
-                ? "雪松遗迹"
-                : recommendation.Title;
-            var chapterBody = recommendation.Kind == GrowthRecommendationKind.StartJourney
-                ? "穿过低雾中的旧木桥，避开倒伏雪松和滚落石块。"
-                : recommendation.Body;
+            // 「下一章」讲的是下一段旅程，不复述左侧手记的成长建议。此前只有
+            // StartJourney 一种推荐类型走专属文案，其余四种直接回落到
+            // recommendation.Title/Body——而那正是左卡的内容，于是两张卡一字不差。
+            var nextTheme = NextChapterTheme();
+            var chapterTitle = RunnerMapThemeInfo.DisplayName(nextTheme);
+            var chapterBody = RunnerMapThemeInfo.Tagline(nextTheme);
             var journalReward = claimableMissions > 0
                 ? $"可领取 {claimableMissions} 份任务奖励"
                 : "今日奖励：鱼干 × 80";

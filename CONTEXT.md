@@ -151,6 +151,14 @@
 - **主操作语言：** 主 CTA 一律 `CoralAction` + 白字（与大厅底坞一致）；选中/激活态用 `AccentActive`（PineGreen）；次级按钮用 `MistBlue` + 墨色字。
 - **相关陷阱：** `UiBuilder.AddOutline` 走 uGUI `Shadow`，描边 alpha 会乘以源顶点 alpha——底色全透明的「幽灵按钮」连描边一起消失。
 
+### 美术回退链（ArtFallbackChain）
+
+- **意指：** 大厅美术的多级回退（premium 资源 → storybook 资源 → `UiBuilder.CircleSprite` 占位圆）。
+- **风险：** 整条链**静默**——资源缺失不抛异常、不打日志，画面上只是少了角色或多了个白圆。吉祥物就是这样消失了很久没被发现（`.meta` 缺 `TextureImporter:` 块 → 资源从未导入 → 一路退到占位圆）。
+- **规则：** 会显示出来的美术必须是真资源；允许"缺席"（隐藏节点），**不允许**退化成占位圆或复用他人的立绘（伙伴退化成吉祥物会让大厅出现两个同样的角色）。由 `ProjectLobbyArtValidation` 断言。
+- **相关：** 新增 PNG 资源必须确认 `.meta` 含 `TextureImporter:` 与 `textureType: 8`；只有 `fileFormatVersion` + `guid` 的 60 字节 meta 是残缺的。
+- **勿混淆：** `CampVisualAssetCatalog` 里声明了路径不代表资源存在——`companion_tuantuan` / `companion_dror` / `mascot_gugugaga_premium` / `camp_panorama_premium` 至今没有产出。
+
 ### UI 字形（UiGlyph）
 
 - **意指：** UI 文本里出现的符号字符。项目 TMP 字体是**动态图集**，能否显示取决于源字体覆盖，而非当前图集内容。
