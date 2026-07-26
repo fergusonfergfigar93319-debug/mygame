@@ -19,7 +19,9 @@ function Require-Pattern([string]$content, [string]$pattern, [string]$descriptio
 }
 
 $schema = Require-File 'Assets/Scripts/Runtime/Game/Save/SaveSchema.cs'
-Require-Pattern $schema 'CurrentVersion\s*=\s*3\b' 'save schema version three'
+# Phase three shipped schema v3; later phases may bump the version but must keep the v1-v3 migrations.
+Require-Pattern $schema 'CurrentVersion\s*=\s*([3-9]|[1-9]\d+)\b' 'save schema version three or later'
+Require-Pattern $schema 'if\s*\(version\s*<\s*3\)\s*MigrateLegacyCompanions\s*\(' 'phase-three companion migration step'
 Require-Pattern $schema '\bEnsureMigrated\s*\(' 'non-destructive save migration entrypoint'
 Require-Pattern $schema '\bMigrateLegacyDiscoveries\s*\(' 'legacy discovery migration'
 if ($schema -match 'DeleteAll|DeleteKey') { $failures.Add('SaveSchema must not delete existing player data') }

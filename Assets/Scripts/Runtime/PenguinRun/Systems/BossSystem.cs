@@ -480,6 +480,8 @@ namespace PenguinRun
             }
         }
 
+        private string vulnerableCounterHint;
+
         public string CurrentBossCounterHint
         {
             get
@@ -488,7 +490,9 @@ namespace PenguinRun
                 if (CurrentBoss == null) return string.Empty;
                 if (CurrentBoss.Phase == BossPhase.Vulnerable)
                 {
-                    return $"破绽窗口：立刻冲刺贯穿 BOSS。{GetDashHowToHint()}；也可用护盾贴身撞击。";
+                    // HUD 每帧读取本属性；破绽提示为常量文案，缓存避免逐帧插值分配。
+                    return vulnerableCounterHint ??=
+                        $"破绽窗口：立刻冲刺贯穿 BOSS。{GetDashHowToHint()}；也可用护盾贴身撞击。";
                 }
                 return "先躲连招，等绿色破绽圈出现再反击";
             }

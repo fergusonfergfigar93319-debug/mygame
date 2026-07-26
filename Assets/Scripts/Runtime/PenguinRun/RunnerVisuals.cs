@@ -100,6 +100,38 @@ namespace PenguinRun
             return material.HasProperty("_Color") ? material.GetColor("_Color") : Color.white;
         }
 
+        /// <summary>
+        /// Per-renderer color override via MaterialPropertyBlock. Use this instead of writing
+        /// sharedMaterial colors: shared materials come from the global cache, so mutating them
+        /// tints every same-colored object and poisons the cache for future CreateMaterial calls.
+        /// </summary>
+        public static void SetRendererColor(Renderer renderer, Color color)
+        {
+            if (renderer == null) return;
+            var material = renderer.sharedMaterial;
+            if (material == null) return;
+            renderer.GetPropertyBlock(colorBlock);
+            if (material.HasProperty("_BaseColor")) colorBlock.SetColor("_BaseColor", color);
+            if (material.HasProperty("_Color")) colorBlock.SetColor("_Color", color);
+            renderer.SetPropertyBlock(colorBlock);
+        }
+
+        /// <summary>Reads the effective color: the property-block override when present, else the shared material color.</summary>
+        public static Color GetRendererColor(Renderer renderer)
+        {
+            if (renderer == null) return Color.white;
+            var material = renderer.sharedMaterial;
+            if (material == null) return Color.white;
+            renderer.GetPropertyBlock(colorBlock);
+            if (!colorBlock.isEmpty)
+            {
+                return material.HasProperty("_BaseColor")
+                    ? colorBlock.GetColor("_BaseColor")
+                    : colorBlock.GetColor("_Color");
+            }
+            return GetColor(material);
+        }
+
         public static void SetRendererAlpha(Renderer renderer, float alpha)
         {
             if (renderer == null) return;

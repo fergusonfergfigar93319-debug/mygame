@@ -54,11 +54,20 @@ namespace PenguinRun
         private int cachedLives = int.MinValue;
         private int cachedMaxLives = int.MinValue;
         private string cachedBuffs;
+        private readonly StringBuilder buffSb = new StringBuilder(128);
         private float overrideFeedbackUntil;
         private bool bossMode;
         private int cachedUpgradeSelectionCount = -1;
         private int lastSkillTier = -1;
         private int cachedContractProgress = -1;
+        private int cachedSkillChain = int.MinValue;
+        private int cachedSkillScore = int.MinValue;
+        private float cachedSkillMultiplier = float.MinValue;
+        private string cachedSkillLabel;
+        private float skillTierFlashUntil;
+        private string cachedRouteTitle;
+        private string cachedRouteSafe;
+        private string cachedRouteRisk;
 
         private RunnerHudCanvas(GameObject canvasObject, GameObject normalStatsRoot, GameObject bossRoot,
             GameObject pauseRoot, GameObject pauseActionRoot, GameObject feedbackRoot,
@@ -291,12 +300,14 @@ namespace PenguinRun
                 }
             }
 
-            var buffs = BuildBuffSummary(world);
-            if (buffs != cachedBuffs)
+            // 道具倒计时显示粒度为 0.1s：复用 StringBuilder 并按内容比对，仅在显示值真正变化时才生成新串。
+            buffSb.Clear();
+            BuildBuffSummary(world, buffSb);
+            if (!ContentEquals(buffSb, cachedBuffs))
             {
-                cachedBuffs = buffs;
-                buffText.text = buffs;
-                buffRoot.SetActive(!string.IsNullOrWhiteSpace(buffs));
+                cachedBuffs = buffSb.ToString();
+                buffText.text = cachedBuffs;
+                buffRoot.SetActive(!string.IsNullOrWhiteSpace(cachedBuffs));
             }
 
             if (Time.unscaledTime >= overrideFeedbackUntil)
@@ -312,6 +323,12 @@ namespace PenguinRun
             routeRoot.SetActive(visible);
             if (!visible) return;
 
+            if (cachedRouteTitle == snapshot.Title
+                && cachedRouteSafe == snapshot.SafeLabel
+                && cachedRouteRisk == snapshot.RiskLabel) return;
+            cachedRouteTitle = snapshot.Title;
+            cachedRouteSafe = snapshot.SafeLabel;
+            cachedRouteRisk = snapshot.RiskLabel;
             routeTitleText.text = snapshot.Title;
             routeChoiceText.text = $"← 安心：{snapshot.SafeLabel}    冒险：{snapshot.RiskLabel} →";
         }
@@ -368,19 +385,36 @@ namespace PenguinRun
             if (!visible)
             {
                 lastSkillTier = -1;
+                cachedSkillChain = int.MinValue;
                 return;
             }
 
+            // 倍率升档的金色高亮保持 0.6s（单帧高亮肉眼不可见）；文本仅在数据变化帧重建。
             var tier = Mathf.Max(0, Mathf.RoundToInt((snapshot.Multiplier - 1f) / 0.25f));
-            var tierChanged = snapshot.Chain > 0 && tier != lastSkillTier;
-            var expiring = snapshot.Chain > 0 && snapshot.RemainingSeconds < 0.6f;
+            if (snapshot.Chain > 0 && lastSkillTier >= 0 && tier != lastSkillTier)
+            {
+                skillTierFlashUntil = Time.unscaledTime + 0.6f;
+            }
             lastSkillTier = tier;
 
-            skillText.text = snapshot.Chain > 0
-                ? $"{snapshot.LastLabel}  ×{snapshot.Chain}  {snapshot.Multiplier:0.00}倍  ·  技巧{snapshot.TotalScore:N0}"
-                : $"技巧分 {snapshot.TotalScore:N0}";
-            skillText.color = tierChanged || expiring ? UiTheme.WarmGold : UiTheme.TextSecondary;
-            skillText.fontSize = tierChanged || expiring ? UiTheme.Body : UiTheme.Caption;
+            if (snapshot.Chain != cachedSkillChain
+                || snapshot.TotalScore != cachedSkillScore
+                || snapshot.LastLabel != cachedSkillLabel
+                || !Mathf.Approximately(snapshot.Multiplier, cachedSkillMultiplier))
+            {
+                cachedSkillChain = snapshot.Chain;
+                cachedSkillScore = snapshot.TotalScore;
+                cachedSkillMultiplier = snapshot.Multiplier;
+                cachedSkillLabel = snapshot.LastLabel;
+                skillText.text = snapshot.Chain > 0
+                    ? $"{snapshot.LastLabel}  ×{snapshot.Chain}  {snapshot.Multiplier:0.00}倍  ·  技巧{snapshot.TotalScore:N0}"
+                    : $"技巧分 {snapshot.TotalScore:N0}";
+            }
+
+            var expiring = snapshot.Chain > 0 && snapshot.RemainingSeconds < 0.6f;
+            var highlight = expiring || Time.unscaledTime < skillTierFlashUntil;
+            skillText.color = highlight ? UiTheme.WarmGold : UiTheme.TextSecondary;
+            skillText.fontSize = highlight ? UiTheme.Body : UiTheme.Caption;
         }
 
         public void SetThemeMechanic(ThemeMechanicSnapshot snapshot)
@@ -485,9 +519,18 @@ namespace PenguinRun
             UnityEngine.Object.DontDestroyOnLoad(eventSystem);
         }
 
-        private static string BuildBuffSummary(WorldDirector world)
+        private static bool ContentEquals(StringBuilder sb, string value)
         {
-            var sb = new StringBuilder(128);
+            if (value == null || sb.Length != value.Length) return false;
+            for (var i = 0; i < value.Length; i++)
+            {
+                if (sb[i] != value[i]) return false;
+            }
+            return true;
+        }
+
+        private static void BuildBuffSummary(WorldDirector world, StringBuilder sb)
+        {
             AppendBuff(sb, "冲刺", world.DashTimer);
             AppendBuff(sb, "磁力", world.MagnetTimer);
             AppendBuff(sb, "护盾", world.ShieldTimer);
@@ -514,7 +557,6 @@ namespace PenguinRun
                 if (sb.Length > 0) sb.Append(" · ");
                 sb.Append("鱼弹 ×").Append(world.FishBombs);
             }
-            return sb.ToString();
         }
 
         private static void AppendBuff(StringBuilder sb, string label, float seconds)

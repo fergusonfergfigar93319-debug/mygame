@@ -146,6 +146,7 @@ namespace PenguinRun
         private readonly Transform rightArm;
         private Transform head;
         private readonly Transform[] healthCrystals = new Transform[BossSystem.BossMaxHits];
+        private readonly Renderer[] healthCrystalRenderers = new Renderer[BossSystem.BossMaxHits];
         private readonly List<GameObject> projectileObjects = new();
         private readonly List<TelegraphMarker> telegraphs = new();
         private readonly BossPatternVfxPlayer patternVfxPlayer = new();
@@ -183,6 +184,7 @@ namespace PenguinRun
         private struct TelegraphMarker
         {
             public GameObject Go;
+            public Renderer Rend;
             public float Lifetime;
             public float MaxLifetime;
             public Vector3 BaseScale;
@@ -229,10 +231,13 @@ namespace PenguinRun
             tintBaseColors.Clear();
             foreach (var r in tintRenderers)
             {
-                tintBaseColors.Add(r != null ? RunnerVisuals.GetColor(r.material) : Color.white);
+                tintBaseColors.Add(r != null && r.sharedMaterial != null
+                    ? RunnerVisuals.GetColor(r.sharedMaterial)
+                    : Color.white);
             }
 
-            // 健康水晶（在 boss 上方），击中后变暗
+            // 健康水晶（在 boss 上方），击中后变暗。颜色仅由 UpdateHealthCrystals 驱动，
+            // 不加入 tintRenderers，避免与 UpdateBodyTint 每帧互相覆盖。
             for (var i = 0; i < BossSystem.BossMaxHits; i++)
             {
                 var crystal = AddPrim($"HP_{i}", PrimitiveType.Cube,
@@ -243,7 +248,7 @@ namespace PenguinRun
                 crystal.transform.localPosition = new Vector3((i - 1) * 0.5f, 4.4f, 0f);
                 crystal.transform.localRotation = Quaternion.Euler(0f, 45f, 0f);
                 healthCrystals[i] = crystal.transform;
-                tintRenderers.Add(crystal.GetComponent<Renderer>());
+                healthCrystalRenderers[i] = crystal.GetComponent<Renderer>();
             }
 
             // 底部威吓光环
@@ -1600,6 +1605,7 @@ namespace PenguinRun
             telegraphs.Add(new TelegraphMarker
             {
                 Go = go,
+                Rend = go.GetComponent<Renderer>(),
                 Lifetime = lifetime,
                 MaxLifetime = lifetime,
                 BaseScale = new Vector3(radius, cylHeight, radius),
@@ -1645,7 +1651,8 @@ namespace PenguinRun
                 telegraphPos.y = TelegraphSurfaceY(BossSystem.PlayerTelegraphZ) + 0.14f;
                 t.Go.transform.position = telegraphPos;
 
-                var rend = t.Go.GetComponent<Renderer>();
+                // 逐渲染器 MPB 覆盖：预警圈共享缓存材质，绝不能写 sharedMaterial。
+                var rend = t.Rend;
                 if (t.IsDecoy)
                 {
                     var fadeStart = patternDangerDelay - 0.2f;
@@ -1653,33 +1660,23 @@ namespace PenguinRun
                     var alphaMul = elapsed >= fadeStart ? Mathf.Clamp01(1f - (elapsed - fadeStart) / 0.25f) : 1f;
                     var pulse = 1f + Mathf.Sin(Time.time * 18f) * 0.1f;
                     t.Go.transform.localScale = t.BaseScale * pulse;
-                    if (rend != null)
-                    {
-                        var c = t.WarnColor;
-                        c.a *= alphaMul * 0.65f;
-                        RunnerVisuals.SetColor(rend.sharedMaterial, c);
-                    }
+                    var c = t.WarnColor;
+                    c.a *= alphaMul * 0.65f;
+                    RunnerVisuals.SetRendererColor(rend, c);
                 }
                 else if (dangerPulse)
                 {
                     var pulse = 1f + Mathf.Sin(Time.time * 44f) * 0.32f;
                     t.Go.transform.localScale = t.BaseScale * pulse;
-                    if (rend != null)
-                    {
-                        var red = new Color(1f, 0.08f, 0.08f, 0.9f);
-                        RunnerVisuals.SetColor(rend.sharedMaterial, red);
-                    }
+                    RunnerVisuals.SetRendererColor(rend, new Color(1f, 0.08f, 0.08f, 0.9f));
                 }
                 else
                 {
                     var pulse = 1f + Mathf.Sin(Time.time * 22f) * 0.18f;
                     t.Go.transform.localScale = t.BaseScale * pulse;
-                    if (rend != null)
-                    {
-                        var warn = t.WarnColor;
-                        warn.a = Mathf.Max(warn.a, 0.78f);
-                        RunnerVisuals.SetColor(rend.sharedMaterial, warn);
-                    }
+                    var warn = t.WarnColor;
+                    warn.a = Mathf.Max(warn.a, 0.78f);
+                    RunnerVisuals.SetRendererColor(rend, warn);
                 }
 
                 telegraphs[i] = t;
@@ -1703,15 +1700,15 @@ namespace PenguinRun
             {
                 if (healthCrystals[i] == null) continue;
                 var alive = i < HitsRemaining;
-                var renderer = healthCrystals[i].GetComponent<Renderer>();
+                var renderer = healthCrystalRenderers[i];
                 if (renderer != null)
                 {
+                    // 三颗水晶共享同一缓存材质，必须用逐渲染器 MPB 才能各自变暗。
                     var c = alive
                         ? Definition.GlowColor
                         : new Color(0.25f, 0.28f, 0.32f, 0.55f);
-                    var mat = renderer.sharedMaterial;
-                    var current = RunnerVisuals.GetColor(mat);
-                    RunnerVisuals.SetColor(mat, Color.Lerp(current, c, 0.2f));
+                    var current = RunnerVisuals.GetRendererColor(renderer);
+                    RunnerVisuals.SetRendererColor(renderer, Color.Lerp(current, c, 0.2f));
                 }
                 if (alive)
                 {
@@ -1754,7 +1751,7 @@ namespace PenguinRun
                 {
                     target = baseColor;
                 }
-                RunnerVisuals.SetColor(rend.sharedMaterial, target);
+                RunnerVisuals.SetRendererColor(rend, target);
             }
         }
 

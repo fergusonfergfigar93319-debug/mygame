@@ -34,8 +34,10 @@ Require-Pattern $uiBuilder 'UiTheme\.AccentCyan' 'UiBuilder consumes UiTheme col
 Require-Pattern $uiBuilder 'UiTheme\.Body' 'UiBuilder consumes UiTheme typography tokens'
 Require-Pattern $uiBuilder 'TextMeshProUGUI' 'UiBuilder exposes a TMP text factory'
 Require-Pattern $uiBuilder 'CreateTmpText' 'UiBuilder creates TMP text'
-$null = rg -q 'LegacyRuntime\.ttf' (Join-Path $ProjectRoot 'Assets')
-if ($LASTEXITCODE -eq 0) {
+$legacyFontHits = Get-ChildItem -Path (Join-Path $ProjectRoot 'Assets') -Recurse -File `
+        -Include *.cs, *.shader, *.asset, *.prefab, *.unity, *.mat, *.json, *.txt |
+    Select-String -Pattern 'LegacyRuntime\.ttf' -List
+if ($legacyFontHits) {
     $failures.Add('Runtime assets still reference LegacyRuntime.ttf')
 }
 

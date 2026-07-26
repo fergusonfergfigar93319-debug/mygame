@@ -17,6 +17,7 @@ namespace PenguinRun
         private RunnerTuning tuning;
         private RunnerGameController game;
         private readonly List<GameObject> laneGuides = new();
+        private readonly List<Renderer> laneGuideRenderers = new();
         private readonly List<GameObject> trackMarkers = new();
         private readonly List<GameObject> sceneryProps = new();
         private readonly List<GameObject> roadTiles = new();
@@ -930,6 +931,7 @@ namespace PenguinRun
                     true);
                 guide.transform.position = new Vector3(i * lw, 0.02f, 28f);
                 laneGuides.Add(guide);
+                laneGuideRenderers.Add(guide.GetComponent<Renderer>());
             }
         }
 
@@ -2066,19 +2068,20 @@ namespace PenguinRun
             var activeX = game.Motor.Lane.ToX(lw);
             var d = game.World.Distance;
             var gy = tuning.movement.groundY;
-            foreach (var guide in laneGuides)
+            for (var i = 0; i < laneGuides.Count; i++)
             {
+                var guide = laneGuides[i];
                 var p = guide.transform.position;
                 p.y = TrackTerrain.SurfaceY(p.z, d, gy) + 0.02f;
                 guide.transform.position = p;
-                var rend = guide.GetComponent<Renderer>();
+                var rend = i < laneGuideRenderers.Count ? laneGuideRenderers[i] : null;
                 if (rend == null) continue;
-                var mat = rend.sharedMaterial;
-                var active = Mathf.Abs(guide.transform.position.x - activeX) < 0.1f;
-                RunnerVisuals.SetColor(
-                    mat,
+                // 两侧导条共享缓存材质：高亮必须走逐渲染器 MPB，写 sharedMaterial 会三条同变。
+                var active = Mathf.Abs(p.x - activeX) < 0.1f;
+                RunnerVisuals.SetRendererColor(
+                    rend,
                     Color.Lerp(
-                        RunnerVisuals.GetColor(mat),
+                        RunnerVisuals.GetRendererColor(rend),
                         active ? new Color(0.57f, 1f, 0.86f, 0.92f) : new Color(0.82f, 0.93f, 1f, 0.35f),
                         Mathf.Clamp01(dt * 8f)));
             }
