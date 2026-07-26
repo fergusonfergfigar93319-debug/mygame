@@ -1801,10 +1801,35 @@ namespace PenguinRun
     }
 
     /// <summary>挂在跑道世界空间 Boss FX 上，用于脉冲缩放动画。</summary>
+    /// <summary>
+    /// Boss 招式 FX 的类型标记。逐帧动画此前靠 <c>fx.name.Contains(...)</c> 分派，
+    /// 而 <c>GameObject.name</c> 每次取值都会从原生层 marshal 出新 string——Boss 战期间
+    /// 池里十几个 FX，每个每帧最多 4 次匹配。类型在租借时就已确定，故前移到租借期。
+    /// </summary>
+    internal enum BossFxKind
+    {
+        None = 0,
+        ChargeArrow,
+        CenterBeam,
+        QuakeRing,
+        SweepSlashLeft,
+        SweepSlashRight,
+        SalvoOrb,
+        SalvoGlyphRing,
+    }
+
     internal sealed class BossWorldFxMarker : MonoBehaviour
     {
         public Vector3 BaseScale = Vector3.one;
         public float SurfaceYOffset = 0.09f;
+    }
+
+    /// <summary>租借期写入的 FX 类型 + 渲染器缓存，避免逐帧 name 匹配与 GetComponent。</summary>
+    internal sealed class BossFxTag : MonoBehaviour
+    {
+        public BossFxKind Kind = BossFxKind.None;
+        public Renderer CachedRenderer;
+        public BossWorldFxMarker CachedMarker;
     }
 
     /// <summary>

@@ -126,6 +126,23 @@ Require-Pattern $bossVfx 'SpawnSnowKingIceStrike' 'Snow King strike burst is poo
 Require-Pattern $bossVfx 'BossSilhouette\.SnowKing' 'Snow King strike burst is silhouette scoped'
 Require-Pattern $bossVfx 'MaxShardBurstCount\s*=\s*6' 'Boss strike shard burst is mobile capped'
 Require-Pattern $bossVfx 'Mathf\.Min\(count, MaxShardBurstCount\)' 'Boss shard burst applies the mobile cap'
+
+# Boss FX per-frame dispatch reads a kind tag written at rent time. GameObject.name marshals
+# a fresh string on every access and the animate loop tested it up to four times per FX.
+Require-Pattern $bossEncounter 'enum\s+BossFxKind' 'Boss FX kind enum exists'
+Require-Pattern $bossVfx 'tag\.Kind' 'Boss FX animation dispatches on the cached kind'
+if ($bossVfx -match 'AnimatePersistentFx[\s\S]{0,3000}?fx\.name\.Contains') {
+    $failures.Add('Regression: Boss FX per-frame animation dispatches on GameObject.name')
+}
+
+# Obstacle liveness checks run per frame per rolling obstacle and per enemy; List.Contains
+# makes that O(n^2) when obstacles are dense.
+$spawnerSrc = Require-Path 'Assets/Scripts/Runtime/PenguinRun/Systems/SegmentSpawner.cs'
+Require-Pattern $spawnerSrc 'obstacleSet' 'obstacle liveness uses a set mirror'
+if ($spawnerSrc -match '!obstacles\.Contains\(') {
+    $failures.Add('Regression: obstacle liveness check fell back to List.Contains')
+}
+Require-Pattern $spawnerSrc 'powerKeyScratch' 'power-up sweep reuses a scratch list'
 Require-Pattern $bossEncounter 'spawnTimer\s*=\s*1\.8f' 'Boss intro has readable minimum duration'
 Require-Pattern $bossEncounter 'CedarHeartCore' 'Cedar Sentinel heart core module'
 Require-Pattern $bossEncounter 'CedarRootShoulder' 'Cedar Sentinel root shoulder modules'

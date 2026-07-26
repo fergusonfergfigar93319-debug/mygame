@@ -80,6 +80,13 @@ namespace PenguinRun
         }
 
         public readonly List<GameObject> obstacles = new();
+
+        /// <summary>
+        /// <see cref="obstacles"/> 的成员镜像，与其在 Add/RemoveAt/Clear 三处同步维护。
+        /// 滚球与移动敌人每帧都要判断「自己是否还在场上」，用 List.Contains 是 O(n) 线性扫描，
+        /// 障碍密集时整体退化成 O(n²)。
+        /// </summary>
+        private readonly HashSet<GameObject> obstacleSet = new();
         public readonly Dictionary<GameObject, ObstacleColliderSpec> obstacleSpecs = new();
         public readonly List<ObstacleBehavior> obstacleBehaviors = new();
         public readonly List<GameObject> coins = new();
@@ -420,6 +427,7 @@ namespace PenguinRun
             Object.Destroy(obstacle);
             obstacleSpecs.Remove(obstacle);
             obstacles.RemoveAt(index);
+            obstacleSet.Remove(obstacle);
             for (var r = rollingObstacles.Count - 1; r >= 0; r--)
             {
                 if (rollingObstacles[r].Go == obstacle)
@@ -454,6 +462,7 @@ namespace PenguinRun
         {
             foreach (var obstacle in obstacles) Object.Destroy(obstacle);
             obstacles.Clear();
+            obstacleSet.Clear();
             obstacleSpecs.Clear();
             obstacleBehaviors.Clear();
             rollingObstacles.Clear();
@@ -621,7 +630,7 @@ namespace PenguinRun
             for (var i = rollingObstacles.Count - 1; i >= 0; i--)
             {
                 var state = rollingObstacles[i];
-                if (state.Go == null || !obstacles.Contains(state.Go))
+                if (state.Go == null || !obstacleSet.Contains(state.Go))
                 {
                     rollingObstacles.RemoveAt(i);
                     continue;
@@ -1131,6 +1140,7 @@ namespace PenguinRun
             ObstacleKind kind = ObstacleKind.StandardHigh)
         {
             obstacles.Add(obstacle);
+            obstacleSet.Add(obstacle);
             obstacleSpecs[obstacle] = spec;
             obstacleYDelta[obstacle] = yDeltaFromFlatGround;
 
@@ -1157,7 +1167,7 @@ namespace PenguinRun
             for (var i = enemyNpcs.Count - 1; i >= 0; i--)
             {
                 var state = enemyNpcs[i];
-                if (state.Go == null || !obstacles.Contains(state.Go))
+                if (state.Go == null || !obstacleSet.Contains(state.Go))
                 {
                     enemyNpcs.RemoveAt(i);
                     continue;

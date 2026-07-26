@@ -54,6 +54,8 @@ namespace PenguinRun
         private bool themeAppliedInTransition;
         private float themeTransitionTimer;
         private GUIStyle themeTransitionLabelStyle;
+        private GUIStyle entranceNumberStyle;
+        private GUIStyle entranceGoStyle;
 
         // ── Boss 战镜头特效 ──────────────────────────────────
         private float cameraShakeTimer = 0f;
@@ -2166,14 +2168,17 @@ namespace PenguinRun
                 var scale = 1f + (1f - tInStep) * 0.5f;
                 var alpha = 1f - tInStep * 0.6f;
 
-                var numStyle = new GUIStyle(GUI.skin.label)
+                // OnGUI 每帧至少调用两次（Layout + Repaint）。样式建一次后只改字段，
+                // 数字用预置常量串——倒计时正是最容易被察觉到卡顿的时刻。
+                entranceNumberStyle ??= new GUIStyle(GUI.skin.label)
                 {
-                    fontSize = Mathf.RoundToInt(120f * scale),
                     fontStyle = FontStyle.Bold,
                     alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = new Color(1f, 1f, 1f, alpha) },
                 };
-                GUI.Label(new Rect(cx - 100f, cy - 80f, 200f, 160f), game.CountdownNumber.ToString(), numStyle);
+                entranceNumberStyle.fontSize = Mathf.RoundToInt(120f * scale);
+                entranceNumberStyle.normal.textColor = new Color(1f, 1f, 1f, alpha);
+                GUI.Label(new Rect(cx - 100f, cy - 80f, 200f, 160f),
+                    CountdownLabel(game.CountdownNumber), entranceNumberStyle);
             }
             else if (game.EntrancePhase == EntrancePhase.GoText)
             {
@@ -2181,16 +2186,25 @@ namespace PenguinRun
                 var scale = 1f + t * 0.3f;
                 var alpha = 1f - t;
 
-                var goStyle = new GUIStyle(GUI.skin.label)
+                entranceGoStyle ??= new GUIStyle(GUI.skin.label)
                 {
-                    fontSize = Mathf.RoundToInt(80f * scale),
                     fontStyle = FontStyle.Bold,
                     alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = new Color(0.34f, 1f, 0.82f, alpha) },
                 };
-                GUI.Label(new Rect(cx - 200f, cy - 60f, 400f, 120f), "出发！", goStyle);
+                entranceGoStyle.fontSize = Mathf.RoundToInt(80f * scale);
+                entranceGoStyle.normal.textColor = new Color(0.34f, 1f, 0.82f, alpha);
+                GUI.Label(new Rect(cx - 200f, cy - 60f, 400f, 120f), "出发！", entranceGoStyle);
             }
         }
+
+        /// <summary>倒计时数字的预置串，避免每次 OnGUI 走 int.ToString()。</summary>
+        private static string CountdownLabel(int n) => n switch
+        {
+            1 => "1",
+            2 => "2",
+            3 => "3",
+            _ => n.ToString(),
+        };
 
         private void DrawScreenFlashOverlay()
         {

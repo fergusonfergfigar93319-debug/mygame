@@ -502,9 +502,9 @@ namespace PenguinRun
     {
       var glow = HostGlow(0.46f);
       var slashL = RentBossFx("SweepSlashL", PrimitiveType.Cube,
-        new Vector3(-0.85f, 0.72f, -0.55f), new Vector3(0.2f, 0.08f, 1.2f), glow);
+        new Vector3(-0.85f, 0.72f, -0.55f), new Vector3(0.2f, 0.08f, 1.2f), glow, BossFxKind.SweepSlashLeft);
       var slashR = RentBossFx("SweepSlashR", PrimitiveType.Cube,
-        new Vector3(0.85f, 0.72f, -0.55f), new Vector3(0.2f, 0.08f, 1.2f), glow);
+        new Vector3(0.85f, 0.72f, -0.55f), new Vector3(0.2f, 0.08f, 1.2f), glow, BossFxKind.SweepSlashRight);
       if (slashL != null) bossAttachedFx.Add(slashL);
       if (slashR != null) bossAttachedFx.Add(slashR);
 
@@ -555,7 +555,7 @@ namespace PenguinRun
         var arrow = RentWorldFx($"ChargeArrow{i}", PrimitiveType.Cube,
           new Vector3(0f, y + 0.12f + i * 0.05f, az),
           new Vector3(host.LaneWidthInternal * 2.4f - i * 0.35f, 0.1f, 0.22f),
-          new Color(1f, 0.85f, 0.35f, 0.58f));
+          new Color(1f, 0.85f, 0.35f, 0.58f), kind: BossFxKind.ChargeArrow);
         if (arrow != null) persistentFx.Add(arrow);
       }
 
@@ -572,7 +572,7 @@ namespace PenguinRun
     {
       var ring = RentBossFx("SalvoGlyphRing", PrimitiveType.Cylinder,
         new Vector3(0f, 0.3f, 0f), new Vector3(1.5f, 0.03f, 1.5f),
-        new Color(1f, 0.72f, 0.35f, 0.45f));
+        new Color(1f, 0.72f, 0.35f, 0.45f), BossFxKind.SalvoGlyphRing);
       if (ring != null) bossAttachedFx.Add(ring);
 
       for (var i = 0; i < 3; i++)
@@ -580,7 +580,7 @@ namespace PenguinRun
         var ang = i * 120f * Mathf.Deg2Rad;
         var orb = RentBossFx($"SalvoOrb{i}", PrimitiveType.Sphere,
           new Vector3(Mathf.Cos(ang) * 0.9f, 1.5f, Mathf.Sin(ang) * 0.9f),
-          Vector3.one * 0.24f, new Color(1f, 0.78f, 0.4f, 0.72f));
+          Vector3.one * 0.24f, new Color(1f, 0.78f, 0.4f, 0.72f), BossFxKind.SalvoOrb);
         if (orb != null) bossAttachedFx.Add(orb);
       }
 
@@ -600,7 +600,7 @@ namespace PenguinRun
       var beam = RentWorldFx("CenterBeam", PrimitiveType.Cylinder,
         new Vector3(0f, bossPos.y + 1.35f, midZ),
         new Vector3(0.42f, 5.5f, 0.42f),
-        new Color(host.Definition.GlowColor.r, host.Definition.GlowColor.g * 0.85f, 1f, 0.32f));
+        new Color(host.Definition.GlowColor.r, host.Definition.GlowColor.g * 0.85f, 1f, 0.32f), kind: BossFxKind.CenterBeam);
       if (beam != null)
       {
         beam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
@@ -622,13 +622,13 @@ namespace PenguinRun
         var laneX = lane * host.LaneWidthInternal;
         var ring = RentWorldFx($"QuakeRing_{lane}", PrimitiveType.Cylinder,
           new Vector3(laneX, TrackY(BossSystem.PlayerTelegraphZ), BossSystem.PlayerTelegraphZ + lane * 0.12f),
-          new Vector3(1.15f, 0.055f, 1.15f), new Color(1f, 0.72f, 0.22f, 0.68f));
+          new Vector3(1.15f, 0.055f, 1.15f), new Color(1f, 0.72f, 0.22f, 0.68f), kind: BossFxKind.QuakeRing);
         if (ring != null) persistentFx.Add(ring);
       }
 
       var bossRing = RentBossFx("QuakeRingA", PrimitiveType.Cylinder,
         new Vector3(0f, 0.06f, 0f), new Vector3(1.6f, 0.035f, 1.6f),
-        new Color(1f, 0.8f, 0.28f, 0.38f));
+        new Color(1f, 0.8f, 0.28f, 0.38f), BossFxKind.QuakeRing);
       if (bossRing != null) bossAttachedFx.Add(bossRing);
     }
 
@@ -718,7 +718,9 @@ namespace PenguinRun
       foreach (var fx in persistentFx)
       {
         if (fx == null) continue;
-        var marker = fx.GetComponent<BossWorldFxMarker>();
+        var tag = fx.GetComponent<BossFxTag>();
+        var kind = tag != null ? tag.Kind : BossFxKind.None;
+        var marker = tag != null ? tag.CachedMarker : fx.GetComponent<BossWorldFxMarker>();
         SyncWorldFxToTrack(fx, marker);
 
         if (marker != null)
@@ -727,25 +729,25 @@ namespace PenguinRun
           fx.transform.localScale = marker.BaseScale * pulse;
         }
 
-        if (pattern == BossPattern.ChargeAcross && fx.name.Contains("ChargeArrow"))
+        if (pattern == BossPattern.ChargeAcross && kind == BossFxKind.ChargeArrow)
         {
           fx.transform.position += new Vector3(0f, 0f, -2.8f * dt);
         }
 
-        if (pattern == BossPattern.CenterBeam && fx.name.Contains("CenterBeam"))
+        if (pattern == BossPattern.CenterBeam && kind == BossFxKind.CenterBeam)
         {
           var sy = 5.5f + strike01 * 2.2f;
           fx.transform.localScale = new Vector3(0.42f + strike01 * 0.12f, sy, 0.42f);
         }
 
-        if (pattern == BossPattern.QuakePulse && fx.name.Contains("QuakeRing"))
+        if (pattern == BossPattern.QuakePulse && kind == BossFxKind.QuakeRing)
         {
           var expand = 1f + strike01 * 1.4f;
           fx.transform.localScale = marker != null ? marker.BaseScale * expand : fx.transform.localScale * expand;
           fx.transform.Rotate(Vector3.up, 200f * dt, Space.World);
         }
 
-        var rend = fx.GetComponent<Renderer>();
+        var rend = tag != null ? tag.CachedRenderer : fx.GetComponent<Renderer>();
         if (rend != null)
         {
           var c = RunnerVisuals.GetColor(rend.material);
@@ -770,21 +772,25 @@ namespace PenguinRun
       {
         var fx = bossAttachedFx[i];
         if (fx == null) continue;
-        if (pattern == BossPattern.SweepLow && fx.name.Contains("Slash"))
+        var tag = fx.GetComponent<BossFxTag>();
+        var kind = tag != null ? tag.Kind : BossFxKind.None;
+
+        if (pattern == BossPattern.SweepLow
+            && (kind == BossFxKind.SweepSlashLeft || kind == BossFxKind.SweepSlashRight))
         {
-          var dir = fx.name.Contains("SlashL") ? 1f : -1f;
+          var dir = kind == BossFxKind.SweepSlashLeft ? 1f : -1f;
           var sweep = Mathf.Sin(Time.time * 26f + dir) * 0.5f;
           fx.transform.localPosition = new Vector3(dir * (0.72f + sweep), 0.75f, -0.65f);
           fx.transform.localRotation = Quaternion.Euler(0f, 0f, dir * (42f + sweep * 32f));
         }
 
-        if (pattern == BossPattern.RangedSalvo && fx.name.Contains("SalvoOrb"))
+        if (pattern == BossPattern.RangedSalvo && kind == BossFxKind.SalvoOrb)
         {
           var ang = Time.time * 2.8f + i * 2.1f;
           fx.transform.localPosition = new Vector3(Mathf.Cos(ang) * 0.9f, 1.45f + Mathf.Sin(Time.time * 5f) * 0.08f, Mathf.Sin(ang) * 0.9f);
         }
 
-        if (pattern == BossPattern.RangedSalvo && fx.name.Contains("GlyphRing"))
+        if (pattern == BossPattern.RangedSalvo && kind == BossFxKind.SalvoGlyphRing)
         {
           fx.transform.Rotate(Vector3.up, 190f * dt, Space.Self);
         }
@@ -862,7 +868,7 @@ namespace PenguinRun
 
     private Transform FxParent => host.FxSceneParentInternal;
 
-    private GameObject RentWorldFx(string name, PrimitiveType type, Vector3 pos, Vector3 scale, Color color, float surfaceYOffset = 0.09f)
+    private GameObject RentWorldFx(string name, PrimitiveType type, Vector3 pos, Vector3 scale, Color color, float surfaceYOffset = 0.09f, BossFxKind kind = BossFxKind.None)
     {
       var go = pool.Rent(type, name, pos, scale, color, true, FxParent);
       if (go != null)
@@ -871,21 +877,34 @@ namespace PenguinRun
         if (m == null) m = go.AddComponent<BossWorldFxMarker>();
         m.BaseScale = scale;
         m.SurfaceYOffset = surfaceYOffset;
+        TagFx(go, kind, m);
       }
 
       return go;
     }
 
-    private GameObject RentBossFx(string name, PrimitiveType type, Vector3 localPos, Vector3 scale, Color color)
+    private GameObject RentBossFx(string name, PrimitiveType type, Vector3 localPos, Vector3 scale, Color color, BossFxKind kind = BossFxKind.None)
     {
       var go = pool.Rent(type, name, Vector3.zero, scale, color, true, host.BodyTransform);
       if (go != null)
       {
         go.transform.localPosition = localPos;
         go.transform.localRotation = Quaternion.identity;
+        TagFx(go, kind, null);
       }
 
       return go;
+    }
+
+    /// <summary>把类型与组件引用写进 FX，逐帧动画只读这里，不再碰 name / GetComponent。</summary>
+    private static void TagFx(GameObject go, BossFxKind kind, BossWorldFxMarker marker)
+    {
+      var tag = go.GetComponent<BossFxTag>();
+      if (tag == null) tag = go.AddComponent<BossFxTag>();
+      tag.Kind = kind;
+      // 池化对象会换 primitive 类型，渲染器引用必须每次租借重取。
+      tag.CachedRenderer = go.GetComponent<Renderer>();
+      tag.CachedMarker = marker != null ? marker : go.GetComponent<BossWorldFxMarker>();
     }
   }
 }

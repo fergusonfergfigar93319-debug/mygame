@@ -14,7 +14,7 @@ namespace PenguinRun
         private readonly RunUpgradeState upgrades;
         private readonly HashSet<GameObject> perfectDodged = new();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        private readonly HashSet<string> warnedMissingSpecs = new();
+        private readonly HashSet<GameObject> warnedMissingSpecs = new();
 #endif
 
         public CollisionSystem(RunnerAudio audio, RunnerCombatTuning combat, RunUpgradeState upgrades)
@@ -56,7 +56,9 @@ namespace PenguinRun
                 var hasSpec = obstacleSpecs.TryGetValue(obstacle, out var s);
                 var spec = hasSpec ? s : ObstacleColliderSpec.SmallJumpable;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-                if (!hasSpec && warnedMissingSpecs.Add(obstacle.name))
+                // 按对象引用去重，而不是按名字：obstacle.name 每次取值都会 marshal 出新 string，
+                // 而这一行位于每帧每障碍的路径上（缺规格时会持续命中）。
+                if (!hasSpec && warnedMissingSpecs.Add(obstacle))
                 {
                     Debug.LogWarning($"[CollisionSystem] 障碍 \"{obstacle.name}\" 未注册 ObstacleColliderSpec，回退 SmallJumpable（违反领域规则）");
                 }
