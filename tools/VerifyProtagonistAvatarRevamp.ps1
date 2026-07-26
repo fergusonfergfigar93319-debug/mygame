@@ -28,7 +28,9 @@ foreach ($file in @(
     'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerAnimationDriver.cs',
     'Assets/Scripts/Runtime/PenguinRun/Avatar/RunnerCharacterFx.cs',
     'Assets/Scripts/Editor/PenguinRun/ProjectRunnerAvatarValidation.cs',
+    'Assets/Scripts/Editor/PenguinRun/ProjectAvatarGameplayViewCapture.cs',
     'Assets/Scripts/Editor/PenguinRun/RunnerAvatarAssetBuilder.cs',
+    'tools/blender/build_gugugaga_avatar.py',
     'Assets/Shaders/GugugagaStylized.shader',
     'Assets/Resources/PenguinRun/Characters/Gugugaga/gugugaga_avatar.fbx',
     'Assets/Resources/PenguinRun/Characters/Gugugaga/gugugaga_lod1.fbx',
@@ -53,6 +55,20 @@ Require-Pattern 'Assets/Scripts/Editor/PenguinRun/ProjectPenguinPreviewCapture.c
     'MinPoseMeanAbsDiff' 'intra-run pose pixel difference gate'
 Require-Pattern 'Assets/Scripts/Editor/PenguinRun/ProjectPenguinPreviewCapture.cs' `
     'AssertPose' 'same-camera Idle vs action pose assertion'
+# The avatar spends the whole run with its back to the camera. A world-space key
+# direction leaves that side on the ambient floor, which is what made the scarf and
+# goggles vanish into the body at play distance. Keep the light view-relative.
+Require-Pattern 'Assets/Shaders/GugugagaStylized.shader' `
+    'UNITY_MATRIX_V' 'view-relative key light'
+Require-Pattern 'Assets/Scripts/Editor/PenguinRun/ProjectAvatarGameplayViewCapture.cs' `
+    'MinMeanLuma' 'gameplay-distance lighting gate'
+Require-Pattern 'Assets/Scripts/Editor/PenguinRun/ProjectAvatarGameplayViewCapture.cs' `
+    'MinDetailStdDev' 'gameplay-distance silhouette detail gate'
+# Surface patches are clipped to the host outline; without this the belly and face
+# mask poke past the body in profile as detached pale ellipses.
+Require-Pattern 'tools/blender/build_gugugaga_avatar.py' `
+    'def conform_inside' 'surface patches clipped to host outline'
+
 Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/Systems/PlayerMotor.cs' `
     'BodyHeight' 'crouch hitbox body height retained'
 Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/Systems/PlayerMotor.cs' `

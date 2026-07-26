@@ -82,6 +82,8 @@ namespace PenguinRun.Game.Save
         public const string RunBgmOpenSwing = "open_swing";
         public const string RunBgmRandom = "random";
 
+        /// <summary>环境音随当前地图主题走（<see cref="ThemeAudioProfile"/>）。</summary>
+        public const string AmbienceThemed = "themed";
         public const string AmbienceClassicWind = "wind";
         public const string AmbienceOpenCavern = "open_cavern";
         public const string AmbienceOpenCyber = "open_cyber";
@@ -91,7 +93,10 @@ namespace PenguinRun.Game.Save
 
         public const string DefaultLobbyBgmTrack = LobbyBgmOpenSwing;
         public const string DefaultRunBgmTrack = RunBgmOpenWisdom;
-        public const string DefaultAmbienceTrack = AmbienceClassicWind;
+        // 默认改为随图。老存档只有在玩家**显式**选过环境音时才写过这个 key，
+        // 因此 GetString 的默认值分支只影响从未改过设置的玩家，显式选择仍被保留——
+        // 不需要 SaveSchema 迁移。
+        public const string DefaultAmbienceTrack = AmbienceThemed;
         public const string DefaultSfxStyle = SfxStyleClassic;
 
         public const string ResumeLevelIce = "ice";
@@ -172,7 +177,7 @@ namespace PenguinRun.Game.Save
                 var s = PlayerPrefs.GetString(KeyAmbienceTrack, DefaultAmbienceTrack);
                 return s switch
                 {
-                    AmbienceClassicWind or AmbienceOpenCavern or AmbienceOpenCyber => s,
+                    AmbienceThemed or AmbienceClassicWind or AmbienceOpenCavern or AmbienceOpenCyber => s,
                     _ => DefaultAmbienceTrack,
                 };
             }

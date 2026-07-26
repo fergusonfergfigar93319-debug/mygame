@@ -74,22 +74,21 @@ namespace PenguinRun
             return fx;
         }
 
-        /// <summary>质量分档：Android 中低档默认关 Bloom（性能预算优先）。</summary>
+        /// <summary>
+        /// 质量分档：Bloom 开关与 fastMode 由 <see cref="RunnerDeviceTier"/> 的档位决定。
+        ///
+        /// 此前这里读 <c>QualitySettings.GetQualityLevel()</c>，但项目中没有任何代码按设备
+        /// 能力设置过该等级，读到的永远是构建默认值——分档实际从未生效。整段还被包在
+        /// <c>#if UNITY_ANDROID &amp;&amp; !UNITY_EDITOR</c> 里，编辑器内既跑不到也测不了。
+        /// 现在决策集中在 RunnerDeviceTier，编辑器与真机走同一条路径，可被门禁覆盖。
+        /// </summary>
         private static void ApplyQualityTier(RunnerPostFx fx)
         {
             if (fx.bloom == null) return;
-#if UNITY_ANDROID && !UNITY_EDITOR
-            var tier = QualitySettings.GetQualityLevel();
-            var maxTier = QualitySettings.names.Length - 1;
-            if (tier < maxTier)
-            {
-                fx.bloom.active = false;
-            }
-            else
-            {
-                fx.bloom.fastMode.Override(true);
-            }
-#endif
+
+            var budget = RunnerQualityBudget.For(RunnerDeviceTier.Current);
+            fx.bloom.active = budget.BloomEnabled;
+            if (budget.BloomEnabled) fx.bloom.fastMode.Override(budget.BloomFastMode);
         }
 
         /// <summary>死亡瞬间暗角加深（0=常态，1=死亡定格）。</summary>

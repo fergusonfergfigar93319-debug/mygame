@@ -183,11 +183,9 @@ Boss 活跃时，HUD 应优先显示生命、当前招式、破绽进度和必�
 
 ## 后续优先级
 
-1. 为六个主题补足更明显的音频差异（视觉差异已在 2026-07-20 批次落地）。
-2. Android 实机（骁龙 7 系）60fps 性能实测与 Post Processing 分档校准（含主角 Avatar 材质批次）。
-3. 主角视觉瑕疵（见 2026-07-25 节待办）：胸口游离菱形面片、侧视翅膀/护目镜几何、跑酷实距可读性。
+1. Android 实机（骁龙 7 系）60fps 性能实测与 Post Processing 分档校准（含主角 Avatar 材质批次）。
 
-已完成并移出列表：减轻首局信息量（能力驱动新手期，见 2026-07-25 节）、移动端输入阈值响应式（`RunnerGestureThresholds.ForViewport`）、跑酷 HUD 迁 uGUI 并与大厅同一套 `UiTheme` 令牌（IMGUI `RunnerHud` 已裁撤）、Boss 战 HUD 压缩（Boss 态只保留生命/招式/反制提示）。
+已完成并移出列表：六主题音频差异（见 2026-07-26 节）、主角视觉瑕疵与跑酷实距可读性（见 2026-07-26 节）、减轻首局信息量（能力驱动新手期，见 2026-07-25 节）、移动端输入阈值响应式（`RunnerGestureThresholds.ForViewport`）、跑酷 HUD 迁 uGUI 并与大厅同一套 `UiTheme` 令牌（IMGUI `RunnerHud` 已裁撤）、Boss 战 HUD 压缩（Boss 态只保留生命/招式/反制提示）。
 
 ## 2026-07-20 建模/特效/判定/页面全面优化
 
@@ -231,6 +229,105 @@ powershell -ExecutionPolicy Bypass -File tools/CompileFullRoslyn.ps1
 
 1. Android 实机 60fps 与主角材质批次数实测（本机无连接设备）。
 2. 视觉瑕疵下一轮：所有视角胸口游离棕色菱形面片；`side.png` 翅膀呈惨白椭圆并与身体穿插、护目镜镜片拉扁；跑酷实距下红围巾与护目镜糊进深色身体，仅橙色脚掌清晰可读。
+
+## 2026-07-26 代码健康度：止血而非大修
+
+`GAME_OPTIMIZATION_PLAN` 里记的风险是「改 Boss、机关、道具容易互相影响」，根源是它们都落在同几个超大文件里。安全拆分需要运行时验证，而本环境暂时给不了（无 Android 设备；`ProjectPlayerJourneySmokeTest` 在 batchmode 下截不到帧）。因此本批次只做**可验证**的那一半。
+
+- **一次纯搬运的拆分**：`SegmentSpawner.cs` 2645 → 2343 行，障碍外观构建（程序化 Mesh、开源模型挂载、调色板染色、配饰）移入 `SegmentSpawner.ObstacleVisuals.cs`。用 `partial` 而非抽独立类：成员、可见性、调用点全部不变，因此**不可能**改变行为。已用「拆分前后成员声明集合完全相同（133 = 133）」证明是纯搬运。这条缝选得不随意——它正是项目既有的权威边界（碰撞规格由 `ObstacleColliderSpec` 决定，与网格无关），拆分让这条边界在文件树上可见。
+- **新增门禁** `VerifyFileSizeRatchet.ps1`：为六个超大文件记录行数上限（约当前值 +2.5%）。文件可以自由缩小，**不能**继续膨胀。余量足够修 bug，不足以塞进一个新功能；拆分落地时应同步下调上限，上调上限则是一个需要走评审的显式决定。
+
+**明确未做（并说明原因）：** `BossEncounter`（1849 行）、`CampShopPanel`（1771 行）与 `PenguinRunnerGame`（2341 行）的职责下沉未做。这三处的拆分会改变调用关系与生命周期，仅靠编译通过不足以保证正确；应放到能跑实机或能跑通旅程 smoke 的批次里做。棘轮门禁保证在那之前它们不会继续变差。
+
+## 2026-07-26 画质分档校准
+
+处理待办 #2 中不依赖实机的那一半：分档机制本身。
+
+- **根因：分档是死代码。** `RunnerPostFx` 读 `QualitySettings.GetQualityLevel()` 决定是否关 Bloom，但**全项目没有任何代码按设备能力设置过这个等级**——读到的永远是构建默认值，骁龙 4 系与 8 系拿到完全相同的画质。整段还被包在 `#if UNITY_ANDROID && !UNITY_EDITOR` 里，编辑器内既跑不到也测不了，所以「分档没生效」这件事没有任何机制能发现。
+- **补上决策层** `RunnerQualityTier.cs`：按内存 / 核心数 / 显存三项分 Low / Medium / High，任意一项落在低端区间即降档（跑酷是持续 60fps 负载，偶发掉帧比整体画质低更伤手感）。`RunnerDeviceTier.Apply()` 把预算真正写进 QualitySettings。
+- **档位表**（Bloom / 阴影 / 粒子 Raycast / LOD Bias / 骨骼权重 / 贴图 mip）：
+  - Low：关 Bloom、关实时阴影、粒子 16、LOD 0.7、2 骨骼、贴图半分辨率
+  - Medium：关 Bloom、硬阴影 32m、粒子 48、LOD 1.0、2 骨骼
+  - High：Bloom fastMode、软阴影 45m、粒子 64、LOD 1.2、4 骨骼
+- **可测性**：决策不再被 `#if` 编译掉，编辑器与真机走同一条路径。`ApplyMobileQualityBudget` 原本对非移动端直接 return，现在桌面固定落在 High，使编辑器截图门禁与高端机发布版一致。
+- **原先分散的移动端预算**（`particleRaycastBudget = 64` 等硬编码值）收进档位表；`VerifyUiArtP0` 中对应断言已指向新位置，契约不变。
+
+**新增门禁**：
+- `ProjectQualityTierValidation`（Unity 批处理）：三档必须互不相同、按档**单调**（高档不得在任一杠杆上比低档更省），且逐档 `Apply()` 后回读 QualitySettings 确认预算真的写进去了。校验前后对 QualitySettings 做快照还原，不弄脏 `ProjectSettings`。
+- `VerifyQualityTierCalibration.ps1`（静态）：档位表完整、决策来自 `SystemInfo`、运行时确实调用 `Apply()`；并**禁止**重新出现 `QualitySettings.GetQualityLevel()` 与 `#if UNITY_ANDROID` 这两个让旧分档失效的写法。实测能挡回归。
+
+验证：13 个静态门禁全过；全量 Roslyn 编译通过（171 源文件）；`ProjectQualityTierValidation` 通过。
+
+验证命令：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/VerifyQualityTierCalibration.ps1
+& 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.exe' -batchmode -quit -projectPath . -executeMethod PenguinRun.Editor.ProjectQualityTierValidation.ValidateFromCommandLine -logFile _tmp/quality-tier.log
+```
+
+**明确待办（本批次不声称通过）：**
+
+1. **实机 60fps 实测仍未做**（本机无连接 Android 设备）。分档阈值（3GB/4 核/1GB 显存与 6GB/8 核/2GB）是按机型分布定的**先验值**，必须用真机帧率数据回校。
+2. 分辨率缩放未纳入档位表：它会与 `FramingReference`（`ApplyRunnerCameraViewport169` 读 `Screen.width/height`）纠缠，在无实机验证前不引入。
+3. 主角材质批次数（Draw Call）实测未做。
+
+## 2026-07-26 六主题音频差异化
+
+此前六张主题图共用一条 ambience 与同一套撞击/拾取音，音频上的「主题差异」实际只有 BGM 一层——BGM 一停或重复，六张图听起来完全一样。
+
+- **新增 `ThemeAudioProfile`**（与 `ThemePresentationProfile` 对称的纯表现层）：每主题定义环境音床（clip / 音调 / 音量缩放）、落地与受击共用的地面音色、金币调性、Boss 击发音调缩放。
+- **自有合成音频** `tools/generate_theme_audio.py`：用噪声与振荡器合成 6 条 8 秒可循环环境音床 + 6 条地面撞击音，无第三方授权（沿用既有 "Generated Project SFX" 管线）。每主题定种子，重建字节一致。尾部交叉淡回头部保证无缝循环。
+- **客观可分辨**：谱心 449Hz（雾堤，闷）/ 879（珊瑚）/ 1275（雪松）/ 2543（冰湖）/ 3189（天空）/ 4945（极光，嘶），相邻主题至少差 1.3 倍。
+- **切换时机**：`ApplyMapThemeVisuals` 同处切视觉与听感，主题切换后不会出现画面已换、声音还停在上一张图。
+- **叠加而非替换**：地面音色叠在既有 `land`/`slide`/`ice_crack` 之上，音效风格包（`alt_*`）与每招 Boss 音调差异都不受影响。冲刺提速叠在主题基准音调上，不再把音调拉回全局 1.0（否则雾堤的低沉床会在每次冲刺后被抹平）。
+- **玩家设置**：新增「随图」选项并设为默认。老存档只有在玩家**显式**改过环境音时才写过该键，因此显式选择仍被保留，无需 SaveSchema 迁移。
+- **移动端导入参数**：环境音床 `CompressedInMemory` + Vorbis q0.4（8 秒循环，内存与包体优先）；地面短音 `DecompressOnLoad` + PCM（<350ms，解码延迟比 13KB 更值得避免）。
+
+**新增门禁** `VerifyThemeAudioDifferentiation.ps1`：六个主题必须各有完整档案、引用的 clip 必须存在于磁盘，且**不得有两个主题共用同一条床或同一地面音色**。已实测该门禁能挡住回归（人为把雪松的床改成冰湖的床即 FAIL）。
+
+验证：12 个静态门禁全过；全量 Roslyn 编译通过（169 源文件）；Unity 重导入无错误，12 个 `.meta` 正常生成。
+
+验证命令：
+
+```powershell
+python tools/generate_theme_audio.py
+powershell -ExecutionPolicy Bypass -File tools/VerifyThemeAudioDifferentiation.ps1
+```
+
+**明确待办：** 实机听感（尤其手机外放下六张床的可分辨度）与音量平衡尚未在 Android 设备上验收。
+
+## 2026-07-26 主角剪影与实距可读性
+
+收口 2026-07-25 节遗留的三条视觉瑕疵，并找出「实距糊成一团」的真正根因。
+
+- **根因（着色器，不是配色）：** `GugugagaStylized.shader` 的主光是世界空间常量 `(0.35, 0.8, 0.45)`，+Z 指向赛道深处。跑酷时玩家只看得到角色背面（法线约 -Z），点积恒为负，朝向镜头的每个像素都钉在 `0.38` 的 wrap 下限——围巾、护目镜、鳍肢被压成同一团暗色，只剩橙色脚掌可读；大厅吉祥物正面朝 -Z，是同一问题的镜像。**没有任何单一世界方向能同时照亮这两面**，故改为视角空间固定主光（`mul(dir, (float3x3)UNITY_MATRIX_V)`），镜头在哪一侧就照哪一侧。实测角色像素 `meanLuma` 53.8 → 76.0。
+- **面片穿插：** 新增 `conform_inside()`，把腹部/面罩按微放大的宿主体做布尔求交，patch 轮廓不再越过身体轮廓（侧视那块「游离白椭圆」消失）。三块正面 patch 用 clip margin 分层（胸兜 1.006 / 腹部 1.012 / 面罩 1.006）决定叠压顺序，而不是各自往前顶。
+- **护目镜：** 原本整组停在 y=-0.455 的竖直平面上，比该高度的额头前方约 0.12m，侧视整体浮空且镜片退化成线。改为绕枢轴整体后仰 50° 贴合颅顶斜面，镜片 y 半径 0.012 → 0.022 成穹面；头带半径 0.335 大于该高度颅骨截面（0.31/0.29），整圈脱离头部成一块平板，改为按颅骨截面推导的等高椭圆并共用头部 -3° 倾角。
+- **翅膀：** 原为一个胖椭球 + 三个挂在肋侧 x=±0.39 的「羽毛」椭球（在身体轮廓外但不连着翅膀，读作贴在躯干的血块）。新增 `lofted_limb()` 单网格放样，六段截面连续收窄且 y 比 x 收得更快（扁鳍），无内部接缝。
+- **其他：** 胸口 45° 立方体「游离菱形」移除，改为围巾褶上的居中铜扣（贴在真实存在的曲面上）；围巾尾原本伸到 y=0.88（躯干背面之外 0.53m）读作硬板，改为主要向下垂坠；脸颊/眉毛原本停在旧的平面面罩位置，面罩贴合颅骨后会浮空 0.09m，已按颅骨表面重新落座。
+- **配色：** 顶点色即游戏内基色（着色器 `input.color * _Tint`）。Body/BodyAccent 拉开明度台阶使鳍肢在剪影中分离，Bronze/Lens/Scarf 提亮。
+- **面数不升反降：** LOD0 36608 → 29616、LOD1 19160 → 15712、LOD2 7328 → 6792（布尔裁掉了 patch 的隐藏背面，放样比堆叠椭球便宜）。
+
+**新增门禁** `ProjectAvatarGameplayViewCapture`：按 `RunnerCameraTuning` 真实机位（behind 10.5 / height 6.5 / FOV 72）拍三车道**背面**，同机位拍带/不带角色两张求差得到角色掩码，断言 `meanLuma ≥ 65` 与 `detailStdDev ≥ 18`。阈值经过校准——旧着色器的 53.8 会被卡住，即门禁真的能挡回归。近距离的 `ProjectPenguinPreviewCapture` 看不出此问题（4m / 34° 镜头 vs 玩家实际的 10.5m / 72°）。
+
+验证：11 个静态门禁全过；全量 Roslyn 编译通过（168 源文件）；`ProjectRunnerAvatarValidation`（LOD 预算 + 材质≤3）通过；`ProjectPenguinPreviewCapture` 通过且七个姿势像素差全面上升（run 4.34→5.76、slide 11.22→14.90）；`ProjectAvatarGameplayViewCapture` 通过。
+
+验证命令：
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\Blender Foundation\blender-4.5.10-windows-x64\blender.exe" --background --factory-startup --python tools/blender/build_gugugaga_avatar.py
+powershell -ExecutionPolicy Bypass -File tools/VerifyProtagonistAvatarRevamp.ps1
+powershell -ExecutionPolicy Bypass -File tools/CompileFullRoslyn.ps1
+& 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.exe' -batchmode -quit -projectPath . -executeMethod PenguinRun.Editor.RunnerAvatarAssetBuilder.BuildFromCommandLine -logFile _tmp/avatar-rebuild.log
+& 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.exe' -batchmode -quit -projectPath . -executeMethod PenguinRun.Editor.ProjectAvatarGameplayViewCapture.CaptureFromCommandLine -logFile _tmp/avatar-gameplay-view.log
+& 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.exe' -batchmode -quit -projectPath . -executeMethod PenguinRun.Editor.ProjectPenguinPreviewCapture.CaptureAllFromCommandLine -logFile _tmp/avatar-preview.log
+```
+
+**明确待办（本批次不声称通过）：**
+
+1. Android 实机 60fps 与主角材质批次数实测（本机无连接设备）。
+2. 腹部 patch 下缘布尔接缝处有一处轻微凹口，大厅近景可见、玩法视距不可见。
+3. `ProjectPlayerJourneySmokeTest` 在本机 `-batchmode` 下 `ScreenCapture.CaptureScreenshot` 产不出截图（Stage timeout: Capture），本批次未能刷新 `Artifacts/PlayerExperienceAudit` 五张旅程证据；该目录内容已从 git 还原为上一批次版本。属环境/工具问题，与本次改动无关。
 
 ## 2026-07-25 首局新手期闸门
 

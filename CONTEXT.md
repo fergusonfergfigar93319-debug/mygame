@@ -143,6 +143,24 @@
 
 - **意指：** 进入 Boss 战时替换跑步 BGM 的独立音乐轨，由 `RunnerAudio.EnterBossMusic` 切入、`ExitBossMusic` 恢复。每个 Boss 通过 `BossDefinition.BgmClipName` 字段（本次内容包新增）映射至 `Resources/PenguinRun/` 下的 `.ogg` 文件。
 
+### 画质档位（RunnerQualityTier）
+
+- **意指：** 按设备能力（内存 / 核心数 / 显存）选出的 Low / Medium / High 三档，以及每档对应的 `RunnerQualityBudget`（Bloom、阴影、粒子 Raycast、LOD Bias、骨骼权重、贴图 mip）。
+- **权威边界：** 档位决策只在 `RunnerDeviceTier` 一处；`RunnerPostFx` 等消费方一律读 `RunnerQualityBudget.For(RunnerDeviceTier.Current)`，**不得**自行读 `QualitySettings.GetQualityLevel()`——项目里没有任何代码设置那个等级，读它等于读构建默认值，这正是上一版分档从未生效的原因。
+- **可测性约束：** 档位决策**不得**被 `#if UNITY_ANDROID` 之类的平台宏编译掉，否则编辑器门禁无法覆盖。桌面/编辑器固定落在 High。
+- **单调性：** 高档在任一杠杆上都不得比低档更省，由 `ProjectQualityTierValidation` 断言。
+- **调用顺序：** `RunnerDeviceTier.Apply()` 必须早于 `RunnerPostFx.TryAttach`。
+- **勿混淆：** `Application.targetFrameRate` 与 vSync 由 `ConfigureRuntimePerformance` 管理，不属于档位表。
+
+### 主题听感档案（ThemeAudioProfile）
+
+- **意指：** 每个 `RunnerMapTheme` 的听觉身份：循环环境音床（clip + 音调 + 音量缩放）、落地/受击共用的地面音色、金币音调性、Boss 击发音调缩放。与 `ThemePresentationProfile` 对称，同为纯表现层，不改任何判定。
+- **背景：** 此前六张图共用一条 ambience 与同一套撞击音，音频上的主题差异只有 BGM 一层——BGM 一停或重复，六张图听起来完全一样。
+- **执行点：** `PenguinRunnerGame.ApplyMapThemeVisuals` 同时切视觉与听感，避免画面已换、声音还停在上一张图；`RunnerAudio.ApplyTheme` 换床。
+- **玩家设置边界：** 仅当环境音设置为 `PlayerSave.AmbienceThemed`（新默认值）时才随图切换；玩家显式选过风声/洞穴/赛博则保留其选择，此时只应用音效层。老存档未写过该键，因此无需 SaveSchema 迁移。
+- **资源：** 由 `tools/generate_theme_audio.py` 合成（无第三方授权），每主题定种子，重建字节一致。
+- **勿混淆：** Boss 专属 BGM（`BossBgmClip`）按 Boss 走，不按主题走；两者在 Boss 战期间同时生效。
+
 ### 片段池（SegmentPool）
 
 - **意指：** 同一主题下所有 `RunnerSegmentDefinition` 的集合，由 `RunnerSegmentCatalog.GetPool(theme)` 返回，`SegmentWaveDirector` 从中随机选取下一个片段。
@@ -197,6 +215,19 @@
 - **勿混淆：** Boss 骨骼播放走 Legacy `Animation` + `BossRigAnimator`（见 ADR-0002），不属于本表现层。
 - **相关：** `docs/adr/0003-mecanim-for-protagonist-avatar.md`。
 
+### 主角实距读感（AvatarGameplayLegibility）
+
+- **意指：** 主角在 `RunnerCameraTuning` 真实机位（behind 10.5m / height 6.5m / FOV 72°）下的**背面**可辨识度。玩家整局看到的就是这个角度，它与近距离预览（`ProjectPenguinPreviewCapture`，4m / 34°）是两个不同的验收面，后者看不出前者的问题。
+- **权威边界：** `GugugagaStylized.shader` 的主光固定在**视角空间**（`mul(dir, (float3x3)UNITY_MATRIX_V)`），保证镜头所在的一侧总是受光侧。世界空间常量主光只能照亮跑酷背面与大厅正面中的一个，另一个会全部落到 `0.38` 的 wrap 下限。
+- **门禁：** `ProjectAvatarGameplayViewCapture` 断言角色像素 `meanLuma ≥ 65`、`detailStdDev ≥ 18`。
+- **勿混淆：** 顶点色是基色（`input.color * _Tint`），但提亮顶点色不能替代光照方向修正——受光侧不对时，再亮的基色也会被 wrap 下限压平。
+
+### 表面贴片（SurfacePatch）
+
+- **意指：** 贴在身体或头部曲面上、只提供颜色分区而非独立体积的网格（腹部白斑、面罩、胸兜）。
+- **规则：** 必须经 `conform_inside()` 对微放大的宿主体做布尔求交，轮廓不得越过宿主轮廓；固定 y 偏移的扁椭球在宿主收窄处会穿出，侧视读作一块游离的浅色椭圆。多块贴片的叠压顺序由 **clip margin** 决定（当前胸兜 1.006 / 腹部 1.012 / 面罩 1.006），不靠各自往前顶。
+- **连带约束：** 贴片贴合曲面后，原先按旧平面标定的面部装饰（眉毛、脸颊）会浮空，必须按宿主表面重新落座。
+
 ### 新手期（Onboarding Period）
 
 - **意指：** 玩家尚未演示最小动作集时的首局保护期。四个能力位为换道、跳跃、滑铲、收集；全部演示过即毕业，另设 `TotalRuns >= 3` 保险丝强制毕业。
@@ -209,7 +240,7 @@
 
 ## 领域规则
 
-- 每个主题必须同时具有：片段池定义、调色板障碍外观映射、Boss 刷新条件、BGM 映射。
+- 每个主题必须同时具有：片段池定义、调色板障碍外观映射、Boss 刷新条件、BGM 映射、`ThemeAudioProfile` 听感档案（环境音床 + 地面音色，且不得与他主题重复）。
 - 新障碍必须配套 `ObstacleColliderSpec` 规格；不允许未注册碰撞规格的障碍进入 `obstacles` 列表。动态障碍须实现 `ObstacleBehavior.IsCollidable` 并与视觉状态一致。
 - 新道具必须在 `PowerUpKind`、`PickupSystem.ActivatePowerUp`、`WorldDirector`（如有持续状态）、`GetPowerUpColors`、`AddPowerUpEffects`、`PlayPowerUp` 共 6 处同步扩展，缺一处视为未完成。
 - `Resources.Load` 路径区分大小写（部分平台）；模型/音频资源命名必须与代码字符串完全一致。
@@ -218,8 +249,12 @@
 - Boss 招式 FX 必须通过 `BossPatternFxPool` 租用；`BossPatternVfxPlayer.End()` 不得 `Destroy` 已交回池的对象。池容量上限 48，回收由 `pool.ReleaseAll` 统一处理。
 - 新主题必须在 `ThemePresentationProfile` 中填全光照档案字段；不允许新主题复用他主题的主光参数（会退化回「只有雾色不同」）。
 - 共享缓存材质的逐物件染色必须走 `RunnerVisuals.SetRendererColor`（MaterialPropertyBlock）；直接写 `sharedMaterial` 会让同批物件一起变色。
+- 主角网格改动一律改 `tools/blender/build_gugugaga_avatar.py` 后重建，不得直接编辑 FBX；重建后必须依次跑 `RunnerAvatarAssetBuilder`（重建预制体 + LOD/材质校验）与 `ProjectAvatarGameplayViewCapture`（实距读感）。
+- 新增贴在角色曲面上的颜色分区必须走 `conform_inside()`；未裁剪的贴片视为未完成（见「表面贴片」）。
 - 每帧刷新的 HUD 文本必须按值变更门控，不得逐帧构造字符串；倒计时类文本以其显示粒度（如 0.1s）为比对单位。
 - `tools/` 下的门禁脚本一律纯 ASCII 注释（无 BOM 时 PowerShell 5.1 按 ANSI 读取，中文会导致误导性解析错误）。
+- `VerifyFileSizeRatchet.ps1` 登记的超大文件只准缩小，不准增长。拆分落地时同步下调上限；上调上限必须在评审中说明理由，不得顺手改。
+- 门禁脚本中的「禁止出现某写法」检查必须先剥掉注释再匹配，否则解释该规则的注释本身会让门禁失败。
 
 ---
 

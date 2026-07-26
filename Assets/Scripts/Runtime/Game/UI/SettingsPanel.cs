@@ -303,6 +303,7 @@ namespace PenguinRun.Game.UI
             containerBg.color = new Color(0.04f, 0.09f, 0.16f, 1f);
             UiBuilder.AddOutline(stripGo, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
 
+            AddAmbiencePick(stripGo.transform, "随图", PlayerSave.AmbienceThemed);
             AddAmbiencePick(stripGo.transform, "风声", PlayerSave.AmbienceClassicWind);
             AddAmbiencePick(stripGo.transform, "洞穴", PlayerSave.AmbienceOpenCavern);
             AddAmbiencePick(stripGo.transform, "赛博", PlayerSave.AmbienceOpenCyber);

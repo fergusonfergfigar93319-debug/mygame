@@ -786,6 +786,9 @@ namespace PenguinRun
             TrackTerrain.SetThemeProfile(theme);
             var profile = ThemePresentationProfile.For(theme);
 
+            // 听感与视觉在同一处切换，避免主题切换后画面已变、环境音还停在上一张图。
+            if (runnerAudio != null) runnerAudio.ApplyTheme(theme);
+
             RenderSettings.fogColor = profile.FogColor;
             RenderSettings.ambientLight = profile.AmbientLight;
             RenderSettings.fogStartDistance = profile.FogStart;
@@ -2132,10 +2135,12 @@ namespace PenguinRun
 
         private static void ApplyMobileQualityBudget()
         {
-            if (!Application.isMobilePlatform) return;
-            QualitySettings.particleRaycastBudget = 64;
-            QualitySettings.shadowDistance = Mathf.Min(QualitySettings.shadowDistance, 45f);
-            QualitySettings.asyncUploadTimeSlice = Mathf.Max(QualitySettings.asyncUploadTimeSlice, 4);
+            // 原本是一套写死的移动端预算，所有 Android 设备共用；改为按设备能力选档。
+            // 必须早于 RunnerPostFx.TryAttach——后处理档位读的就是这里写入的结果。
+            //
+            // 与旧版的另一处差别：旧版对非移动端直接 return，桌面/编辑器沿用项目默认画质档；
+            // 现在桌面固定落在 High 档，使编辑器截图门禁看到的画面与高端机发布版一致。
+            RunnerDeviceTier.Apply();
         }
 
         private void OnGUI()

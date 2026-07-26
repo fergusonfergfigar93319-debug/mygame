@@ -8,6 +8,7 @@ namespace PenguinRun
     {
         private const float PlayerMarginX = 0.04f;
         private const float PlayerMarginZ = 0.02f;
+        private const int PerfectDodgePruneThreshold = 64;
 
         private readonly RunnerAudio audio;
         private readonly RunnerCombatTuning combat;
@@ -41,9 +42,17 @@ namespace PenguinRun
             System.Action pulseHaptic,
             PlayerMotor motor = null,
             System.Action onPerfectDodge = null,
-            System.Action onPlayerDamaged = null)
+            System.Action onPlayerDamaged = null,
+            float obstacleSweepDz = 0f)
         {
             if (world.HitInvulnerabilityTimer > 0f) return false;
+
+            // 完美闪避去重表整局只增不减，长局会攒下上千个已销毁障碍的引用。
+            // 同时处于判定带内的障碍只有个位数，超过阈值即清掉已销毁项。
+            if (perfectDodged.Count > PerfectDodgePruneThreshold)
+            {
+                perfectDodged.RemoveWhere(o => o == null);
+            }
 
             // 蹲姿判定盒：滑铲立即压低、结束后逐渐起身；无 motor 时按站姿处理
             var bodyHeight = motor?.BodyHeight ?? 1.56f;
@@ -64,8 +73,21 @@ namespace PenguinRun
                 }
 #endif
 
-                var dz = Mathf.Abs(obstacle.transform.position.z - pz);
-                if (dz > spec.HalfDz + PlayerMarginZ) continue;
+                // Z 轴判定：常规同帧重叠 + 掉帧穿透补判。
+                //
+                // 障碍每帧统一沿 -Z 平移 obstacleSweepDz，本帧从 oz+sweep 走到 oz。只测当前位置时，
+                // 若单帧位移大于判定带宽度，障碍会整个跳过玩家而不触发命中——
+                // maxSpeed 32m/s 下 30fps 单帧走 1.07m，而 LowSlideGate 判定带只有 0.68m 宽。
+                //
+                // 补判必须严格限定在「上一帧还在身前、这一帧已到身后」的障碍上：直接把判定带
+                // 向 +Z 拉长会把上一帧已经判过、此刻已在身后的障碍重新拉进判定，导致玩家跳过去
+                // 之后又在落地帧被判中。tunneled 条件只在 sweep > 2*halfDz 时才可能成立，
+                // 因此 60fps 常规帧率下行为与扫掠前完全一致。
+                var relZ = pz - obstacle.transform.position.z;
+                var halfDz = spec.HalfDz + PlayerMarginZ;
+                var overlapsNow = relZ >= -halfDz && relZ <= halfDz;
+                var tunneledPast = relZ > halfDz && relZ < obstacleSweepDz - halfDz;
+                if (!overlapsNow && !tunneledPast) continue;
                 var dx = Mathf.Abs(obstacle.transform.position.x - px);
                 if (dx > spec.HalfDx + PlayerMarginX) continue;
 

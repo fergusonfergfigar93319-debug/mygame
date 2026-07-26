@@ -19,6 +19,10 @@ namespace PenguinRun
         private string sfxStyle = PlayerSave.DefaultSfxStyle;
         private string baseRunClipName;
 
+        // 当前地图主题的听感档案。默认值只在 ApplyTheme 之前的一两帧生效。
+        private ThemeAudioProfile themeAudio = ThemeAudioProfile.For(RunnerMapTheme.IceLakeEcho);
+        private RunnerMapTheme appliedTheme = (RunnerMapTheme)(-1);
+
         private void OnEnable()
         {
             EventBus.On<int>(GameEvents.CoinCollected, OnCoinCollected);
@@ -97,6 +101,27 @@ namespace PenguinRun
             }
         }
 
+        /// <summary>
+        /// 切换到某个地图主题的听感。开局与每次主题切换时调用。
+        /// 玩家若在设置里显式选了某条固定环境音，则只应用音效层，不换床。
+        /// </summary>
+        public void ApplyTheme(RunnerMapTheme theme)
+        {
+            if (theme == appliedTheme) return;
+            appliedTheme = theme;
+            themeAudio = ThemeAudioProfile.For(theme);
+
+            if (ambienceSource == null || ambienceTrack != PlayerSave.AmbienceThemed) return;
+
+            var clip = LoadClip(themeAudio.AmbienceClip);
+            if (clip == null || ambienceSource.clip == clip) return;
+
+            ambienceSource.Stop();
+            ambienceSource.clip = clip;
+            ambienceSource.pitch = themeAudio.AmbiencePitch;
+            if (bgmEnabled) ambienceSource.Play();
+        }
+
         public void UpdateRunState(float speed01, bool running, bool dashActive, bool magnetActive, bool shieldActive)
         {
             if (bgmSource != null)
@@ -113,23 +138,38 @@ namespace PenguinRun
             {
                 if (bgmEnabled)
                 {
-                    ambienceSource.volume = Mathf.Lerp(ambienceSource.volume, running ? 0.14f + speed01 * 0.1f : 0.16f, Time.deltaTime * 2f);
+                    var target = (running ? 0.14f + speed01 * 0.1f : 0.16f) * themeAudio.AmbienceVolumeScale;
+                    ambienceSource.volume = Mathf.Lerp(ambienceSource.volume, target, Time.deltaTime * 2f);
                 }
 
-                ambienceSource.pitch = Mathf.Lerp(ambienceSource.pitch, dashActive ? 1.12f : 1f, Time.deltaTime * 2f);
+                // 冲刺提速仍叠在主题基准音调上，而不是把音调拉回全局 1.0——
+                // 否则雾堤的低沉床和极光的高频床会在每次冲刺后被抹平成同一个音高。
+                var basePitch = ambienceTrack == PlayerSave.AmbienceThemed ? themeAudio.AmbiencePitch : 1f;
+                ambienceSource.pitch = Mathf.Lerp(ambienceSource.pitch,
+                    dashActive ? basePitch * 1.12f : basePitch, Time.deltaTime * 2f);
             }
         }
 
         public void PlayJump() => Play("jump", 0.82f);
 
-        public void PlayLand() => Play("land", 0.7f);
+        // 落地与滑铲叠一层主题地面音色，让脚下的材质听起来像当前这张图。
+        // 基础 land/slide 保留，主题层是叠加而非替换，音效风格包（alt_*）不受影响。
+        public void PlayLand()
+        {
+            Play("land", 0.7f);
+            Play(themeAudio.SurfaceClip, 0.34f, themeAudio.SurfacePitch);
+        }
 
-        public void PlaySlide() => Play("slide", 0.62f);
+        public void PlaySlide()
+        {
+            Play("slide", 0.62f);
+            Play(themeAudio.SurfaceClip, 0.20f, themeAudio.SurfacePitch * 0.88f);
+        }
 
         public void PlayCoin(int combo)
         {
             var pitch = Mathf.Clamp(0.92f + combo * 0.055f, 0.92f, 1.35f);
-            Play("coin_pickup", 0.55f, pitch);
+            Play("coin_pickup", 0.55f, pitch * themeAudio.CoinPitchScale);
         }
 
         public void PlayPowerUp(PowerUpKind kind)
@@ -205,7 +245,12 @@ namespace PenguinRun
 
         public void PlayCheckpoint() => Play("checkpoint", 0.58f);
 
-        public void PlayPlayerHurt() => Play("ice_crack", 0.74f, 0.94f);
+        // 受击也带主题地面音色：撞在雪松木桩和撞在珊瑚上不该是同一个声音。
+        public void PlayPlayerHurt()
+        {
+            Play("ice_crack", 0.74f, 0.94f);
+            Play(themeAudio.SurfaceClip, 0.42f, themeAudio.SurfacePitch * 0.82f);
+        }
 
         public void PlayBossLand() => Play("boss_land", 0.95f, 0.95f);
 
@@ -233,6 +278,8 @@ namespace PenguinRun
             }
 
             ResolveBossStrikePlayback(clipName, out var vol, out var pitch);
+            // 主题缩放叠在每招的固有音调差异之上，保持「哪一招」仍可听辨。
+            pitch *= themeAudio.BossStrikePitchScale;
 
             if (LoadClip(clipName) != null)
             {
@@ -401,6 +448,7 @@ namespace PenguinRun
         {
             return ambienceTrack switch
             {
+                PlayerSave.AmbienceThemed => themeAudio.AmbienceClip,
                 PlayerSave.AmbienceOpenCavern => "ambience_open_cavern",
                 PlayerSave.AmbienceOpenCyber => "ambience_open_cyber",
                 _ => "ambience_wind",

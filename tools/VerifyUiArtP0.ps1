@@ -115,7 +115,11 @@ Require-Pattern $powerProfile 'PulseScale' 'power-up pulse scale'
 $spawner = Require-Path 'Assets/Scripts/Runtime/PenguinRun/Systems/SegmentSpawner.cs'
 Require-Pattern $spawner 'PowerUpVisualProfile\.For\(kind, config\.MapTheme\)' 'spawner applies power-up visual profile'
 Require-Pattern $runnerGame 'ApplyMobileQualityBudget' 'runner applies mobile quality budget'
-Require-Pattern $runnerGame 'particleRaycastBudget\s*=\s*64' 'mobile budget caps particle raycasts'
+# The cap moved out of a single hardcoded value in PenguinRunnerGame and into the
+# per-tier table, where a low-end device now gets 16 rather than the same 64 as a
+# flagship. The contract being held is unchanged: the mobile path must cap it.
+$qualityTier = Require-Path 'Assets/Scripts/Runtime/PenguinRun/RunnerQualityTier.cs'
+Require-Pattern $qualityTier 'QualitySettings\.particleRaycastBudget\s*=\s*budget\.ParticleRaycastBudget' 'mobile budget caps particle raycasts'
 
 $bossEncounter = Require-Path 'Assets/Scripts/Runtime/PenguinRun/Systems/BossEncounter.cs'
 Require-Pattern $bossEncounter 'SnowKingIceCore' 'Snow King ice core module'

@@ -742,7 +742,9 @@ namespace PenguinRun
                     pulseHaptic,
                     motor,
                     HandlePerfectDodge,
-                    RecordThemeDamage);
+                    RecordThemeDamage,
+                    // 障碍本帧沿 -Z 的位移，供扫掠判定补齐掉帧时被跳过的命中。
+                    effectiveSpeed * dt);
 
             if (world.Lives < livesBeforeCollision)
             {

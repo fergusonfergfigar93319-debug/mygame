@@ -41,3 +41,28 @@ Each generated SFX exists in both:
 
 - `app/src/main/res/raw/`
 - `Assets/Resources/PenguinRun/`
+
+## Generated Per-Theme Audio
+
+Built by `tools/generate_theme_audio.py` from noise and oscillators only, so they
+carry no third-party licence. The generator seeds each theme deterministically,
+so a rebuild is byte-identical and diffs stay reviewable.
+
+| File | Theme | Texture | Spectral centroid |
+| --- | --- | --- | --- |
+| `ambience_theme_ice_lake.wav` / `surface_ice_lake.wav` | IceLakeEcho | Low wind, sparse cracks echoing over the lake | 2543 Hz |
+| `ambience_theme_cedar_ruins.wav` / `surface_cedar_ruins.wav` | CedarRuins | Mid-band woodland wind, slow timber creaks | 1275 Hz |
+| `ambience_theme_aurora_field.wav` / `surface_aurora_field.wav` | AuroraField | Electromagnetic hum, sweeping hiss | 4945 Hz |
+| `ambience_theme_mist_dike.wav` / `surface_mist_dike.wav` | MistDike | Muffled low bed, distant horn | 449 Hz |
+| `ambience_theme_ocean_reef.wav` / `surface_ocean_reef.wav` | OceanReef | Slow surge, rising bubble trails | 879 Hz |
+| `ambience_theme_sky_flight.wav` / `surface_sky_flight.wav` | SkyFlight | Broadband rush, thin high whistle | 3189 Hz |
+
+Ambience beds are 8 s mono at 22.05 kHz and loop seamlessly (the tail is
+crossfaded back over the head). `tools/VerifyThemeAudioDifferentiation.ps1`
+holds every theme to a distinct bed and surface timbre.
+
+Regenerate with:
+
+```powershell
+python tools/generate_theme_audio.py
+```

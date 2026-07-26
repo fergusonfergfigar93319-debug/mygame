@@ -58,9 +58,20 @@ Shader "PenguinRun/Gugugaga Stylized"
             {
                 float3 normal = normalize(input.worldNormal);
                 float3 viewDirection = normalize(UnityWorldSpaceViewDir(input.worldPosition));
-                // A stable key light keeps the avatar readable in menus, gameplay,
-                // and automated previews without depending on a specific pipeline.
-                float3 lightDirection = normalize(float3(0.35, 0.8, 0.45));
+                // Key light is fixed in VIEW space, not world space, so whichever side of
+                // the avatar the camera is on is the side that gets lit.
+                //
+                // This used to be a world-space constant of (0.35, 0.8, 0.45). Its +Z faces
+                // down the track, and during a run the player only ever sees the avatar's
+                // back (normals near -Z), so every camera-facing pixel clamped to the 0.38
+                // wrap floor: the scarf, goggles and flippers collapsed into one dark mass
+                // and only the orange feet stayed legible. The lobby had the mirror problem,
+                // since the mascot faces -Z there. No single world direction lights both.
+                //
+                // mul(v, M) is a row-vector product, i.e. transpose(V) * v, and for the
+                // orthonormal view rotation transpose(V) is view->world. +Z in view space
+                // points back at the camera, so this reads as an over-the-shoulder key.
+                float3 lightDirection = normalize(mul(float3(0.35, 0.55, 0.75), (float3x3)UNITY_MATRIX_V));
                 float diffuse = saturate(dot(normal, lightDirection));
                 float wrappedDiffuse = diffuse * 0.62 + 0.38;
                 float rim = pow(1.0 - saturate(dot(normal, viewDirection)), _RimPower);
