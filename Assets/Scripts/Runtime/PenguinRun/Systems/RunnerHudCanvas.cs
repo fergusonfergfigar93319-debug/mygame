@@ -17,7 +17,7 @@ namespace PenguinRun
         private const int MaxHeartSlots = 5;
         private readonly GameObject canvasObject;
         private readonly GameObject normalStatsRoot;
-        private readonly GameObject bossRoot;
+        private readonly BossHudPanel bossPanel;
         private readonly GameObject pauseRoot;
         private readonly GameObject pauseActionRoot;
         private readonly GameObject feedbackRoot;
@@ -30,10 +30,6 @@ namespace PenguinRun
         private readonly GameObject buffRoot;
         private readonly TextMeshProUGUI buffText;
         private readonly TextMeshProUGUI feedbackText;
-        private readonly TextMeshProUGUI bossNameText;
-        private readonly TextMeshProUGUI bossPatternText;
-        private readonly TextMeshProUGUI bossHintText;
-        private readonly Image bossHealthFill;
         private readonly GameObject routeRoot;
         private readonly TextMeshProUGUI routeTitleText;
         private readonly TextMeshProUGUI routeChoiceText;
@@ -69,14 +65,13 @@ namespace PenguinRun
         private string cachedRouteSafe;
         private string cachedRouteRisk;
 
-        private RunnerHudCanvas(GameObject canvasObject, GameObject normalStatsRoot, GameObject bossRoot,
+        private RunnerHudCanvas(GameObject canvasObject, GameObject normalStatsRoot, BossHudPanel bossPanel,
             GameObject pauseRoot, GameObject pauseActionRoot, GameObject feedbackRoot,
             TextMeshProUGUI modeText,
             TextMeshProUGUI scoreText, TextMeshProUGUI distanceText, TextMeshProUGUI comboText,
             TextMeshProUGUI fishText, Image[] heartIcons, GameObject buffRoot,
             TextMeshProUGUI buffText,
-            TextMeshProUGUI feedbackText, TextMeshProUGUI bossNameText,
-            TextMeshProUGUI bossPatternText, TextMeshProUGUI bossHintText, Image bossHealthFill,
+            TextMeshProUGUI feedbackText,
             GameObject routeRoot, TextMeshProUGUI routeTitleText, TextMeshProUGUI routeChoiceText,
             GameObject upgradeRoot, TextMeshProUGUI upgradeText,
             GameObject skillRoot, TextMeshProUGUI skillText,
@@ -86,7 +81,7 @@ namespace PenguinRun
         {
             this.canvasObject = canvasObject;
             this.normalStatsRoot = normalStatsRoot;
-            this.bossRoot = bossRoot;
+            this.bossPanel = bossPanel;
             this.pauseRoot = pauseRoot;
             this.pauseActionRoot = pauseActionRoot;
             this.feedbackRoot = feedbackRoot;
@@ -99,10 +94,6 @@ namespace PenguinRun
             this.buffRoot = buffRoot;
             this.buffText = buffText;
             this.feedbackText = feedbackText;
-            this.bossNameText = bossNameText;
-            this.bossPatternText = bossPatternText;
-            this.bossHintText = bossHintText;
-            this.bossHealthFill = bossHealthFill;
             this.routeRoot = routeRoot;
             this.routeTitleText = routeTitleText;
             this.routeChoiceText = routeChoiceText;
@@ -216,17 +207,7 @@ namespace PenguinRun
             var feedback = CreateHudText("Message", feedbackRoot, string.Empty, UiTheme.H2, Color.white,
                 new Vector2(0.04f, 0.08f), new Vector2(0.96f, 0.92f), TextAlignmentOptions.Center);
 
-            var bossRoot = CreateHudCard("BossFocus", root, new Vector2(0.25f, 0.75f), new Vector2(0.75f, 0.97f));
-            var bossName = CreateHudText("BossName", bossRoot, string.Empty, UiTheme.H2, UiTheme.WarmGold,
-                new Vector2(0.04f, 0.62f), new Vector2(0.55f, 0.95f), TextAlignmentOptions.Left);
-            var pattern = CreateHudText("Pattern", bossRoot, string.Empty, UiTheme.Body, Color.white,
-                new Vector2(0.55f, 0.62f), new Vector2(0.96f, 0.95f), TextAlignmentOptions.Right);
-            var hint = CreateHudText("Hint", bossRoot, string.Empty, UiTheme.Caption, UiTheme.TextSecondary,
-                new Vector2(0.04f, 0.10f), new Vector2(0.96f, 0.47f), TextAlignmentOptions.Center);
-            var healthTrack = UiBuilder.CreateProgressFill("Health", bossRoot,
-                new Color(1f, 1f, 1f, 0.14f), UiTheme.Danger, out var healthFill);
-            Place(healthTrack.rectTransform, new Vector2(0.04f, 0.49f), new Vector2(0.96f, 0.59f));
-            bossRoot.gameObject.SetActive(false);
+            var bossPanel = BossHudPanel.Create(root);
 
             var pauseRoot = UiBuilder.CreateRect("Paused", root, new Vector2(0.25f, 0.18f),
                 new Vector2(0.75f, 0.82f), Vector2.zero, Vector2.zero,
@@ -249,9 +230,9 @@ namespace PenguinRun
             returnToCamp.onClick.AddListener(() => onReturnToCamp?.Invoke());
             pauseRoot.gameObject.SetActive(false);
 
-            var hud = new RunnerHudCanvas(canvasObject, normal.gameObject, bossRoot.gameObject,
+            var hud = new RunnerHudCanvas(canvasObject, normal.gameObject, bossPanel,
                 pauseRoot.gameObject, pause.gameObject, feedbackRoot.gameObject, mode, score, distance, combo,
-                fish, hearts, buffCard.gameObject, buffs, feedback, bossName, pattern, hint, healthFill,
+                fish, hearts, buffCard.gameObject, buffs, feedback,
                 routeRoot.gameObject, routeTitle, routeChoice,
                 upgradeRoot.gameObject, upgradeText,
                 skillRoot.gameObject, skillText,
@@ -442,18 +423,16 @@ namespace PenguinRun
         {
             var active = boss != null && boss.BossActive && boss.CurrentBoss != null;
             bossMode = active;
-            bossRoot.SetActive(active);
             normalStatsRoot.SetActive(!active);
-            if (active) mechanicRoot.SetActive(false);
-            if (!active) return;
+            if (!active)
+            {
+                bossPanel.Hide();
+                return;
+            }
 
-            bossNameText.text = boss.CurrentBoss.Definition.DisplayName;
-            bossPatternText.text = boss.CurrentBossPatternLabel;
-            bossHintText.text = string.IsNullOrWhiteSpace(boss.CurrentBossCounterHint)
-                ? boss.CurrentBossDodgeHint
-                : boss.CurrentBossCounterHint;
-            UiBuilder.SetProgress01(bossHealthFill,
-                boss.CurrentBoss.HitsRemaining / (float)BossSystem.BossMaxHits);
+            mechanicRoot.SetActive(false);
+            bossPanel.Show();
+            bossPanel.Refresh(boss);
         }
 
         public void SetPaused(bool paused)

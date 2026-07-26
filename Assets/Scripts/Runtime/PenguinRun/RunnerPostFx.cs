@@ -23,10 +23,19 @@ namespace PenguinRun
         private const string RigResourcePath = "PenguinRun/PostFx/postfx_rig";
         private const int VolumeLayer = 1; // TransparentFX：专用于后处理体积
 
+        private static readonly Color NeutralVignette = new(0f, 0f, 0f, 1f);
+        private static readonly Color DangerVignette = new(0.30f, 0.02f, 0.06f, 1f);
+        private static readonly Color VulnerableVignette = new(0.02f, 0.22f, 0.10f, 1f);
+
         private PostProcessVolume volume;
         private Vignette vignette;
         private Bloom bloom;
         private float baseVignetteIntensity;
+        private float deathEmphasis;
+        private float bossDanger;
+        private float bossVulnerable;
+        private float lastVignetteIntensity = -1f;
+        private Color lastVignetteColor = Color.clear;
 
         public static RunnerPostFx TryAttach(Camera camera)
         {
@@ -86,8 +95,50 @@ namespace PenguinRun
         /// <summary>死亡瞬间暗角加深（0=常态，1=死亡定格）。</summary>
         public void SetDeathEmphasis(float amount01)
         {
+            deathEmphasis = Mathf.Clamp01(amount01);
+            ApplyVignette();
+        }
+
+        /// <summary>
+        /// Boss 战氛围：危险窗口收紧暗角并压向危险色，破绽窗口转为暖绿。
+        /// 纯表现层——命中判定不读本方法的任何状态。
+        /// </summary>
+        public void SetBossEmphasis(float danger01, float vulnerable01)
+        {
+            bossDanger = Mathf.Clamp01(danger01);
+            bossVulnerable = Mathf.Clamp01(vulnerable01);
+            ApplyVignette();
+        }
+
+        public void ClearBossEmphasis()
+        {
+            if (bossDanger <= 0f && bossVulnerable <= 0f) return;
+            bossDanger = 0f;
+            bossVulnerable = 0f;
+            ApplyVignette();
+        }
+
+        private void ApplyVignette()
+        {
             if (vignette == null) return;
-            vignette.intensity.Override(Mathf.Lerp(baseVignetteIntensity, 0.44f, Mathf.Clamp01(amount01)));
+
+            // 死亡定格优先级最高，其次危险窗口，破绽只做轻微提亮。
+            var intensity = Mathf.Lerp(baseVignetteIntensity, 0.44f, deathEmphasis);
+            intensity = Mathf.Max(intensity, Mathf.Lerp(baseVignetteIntensity, 0.34f, bossDanger));
+            if (!Mathf.Approximately(intensity, lastVignetteIntensity))
+            {
+                lastVignetteIntensity = intensity;
+                vignette.intensity.Override(intensity);
+            }
+
+            var target = NeutralVignette;
+            if (bossDanger > 0.01f) target = Color.Lerp(NeutralVignette, DangerVignette, bossDanger);
+            else if (bossVulnerable > 0.01f) target = Color.Lerp(NeutralVignette, VulnerableVignette, bossVulnerable);
+            if (target != lastVignetteColor)
+            {
+                lastVignetteColor = target;
+                vignette.color.Override(target);
+            }
         }
 
         public void Dispose()

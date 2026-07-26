@@ -32,6 +32,8 @@ namespace PenguinRun
         private RunnerAudio runnerAudio;
         private Camera runnerCamera;
         private RunnerPostFx postFx;
+        private Light keyLight;
+        private Light rimFillLight;
         private Material gradientSkyboxMaterial;
         private GameObject deathOverlay;
         private Vector3 cameraVelocity;
@@ -341,6 +343,24 @@ namespace PenguinRun
             hudCanvas.SetUpgradeSummary(game.RunUpgrades);
             hudCanvas.SetSkillSnapshot(game.SkillScore);
             hudCanvas.SetPaused(game.IsPaused);
+            UpdateBossAtmosphere();
+        }
+
+        /// <summary>Boss 战氛围后处理：危险窗口收暗角压红，破绽窗口转暖绿。纯表现层。</summary>
+        private void UpdateBossAtmosphere()
+        {
+            if (postFx == null) return;
+            var boss = game.Boss;
+            var encounter = boss?.CurrentBoss;
+            if (encounter == null || !boss.BossActive)
+            {
+                postFx.ClearBossEmphasis();
+                return;
+            }
+
+            var danger = encounter.IsPatternDangerous ? 1f : 0f;
+            var vulnerable = encounter.Phase == BossPhase.Vulnerable ? 1f : 0f;
+            postFx.SetBossEmphasis(danger, vulnerable);
         }
 
         private void RequestFinishRunFromHud()
@@ -759,46 +779,25 @@ namespace PenguinRun
         private void ApplyMapThemeVisuals(RunnerMapTheme theme)
         {
             TrackTerrain.SetThemeProfile(theme);
-            switch (theme)
+            var profile = ThemePresentationProfile.For(theme);
+
+            RenderSettings.fogColor = profile.FogColor;
+            RenderSettings.ambientLight = profile.AmbientLight;
+            RenderSettings.fogStartDistance = profile.FogStart;
+            RenderSettings.fogEndDistance = profile.FogEnd;
+            if (runnerCamera != null) runnerCamera.backgroundColor = profile.HorizonColor;
+
+            // 主光/边光随主题走：光向、色温与强度是各主题之间最强的区分手段。
+            if (keyLight != null)
             {
-                case RunnerMapTheme.CedarRuins:
-                    RenderSettings.fogColor = new Color(0.55f, 0.42f, 0.55f);
-                    RenderSettings.ambientLight = new Color(0.48f, 0.38f, 0.42f);
-                    if (runnerCamera != null)
-                        runnerCamera.backgroundColor = new Color(0.42f, 0.52f, 0.72f);
-                    break;
-                case RunnerMapTheme.AuroraField:
-                    RenderSettings.fogColor = new Color(0.35f, 0.52f, 0.62f);
-                    RenderSettings.ambientLight = new Color(0.36f, 0.44f, 0.58f);
-                    if (runnerCamera != null)
-                        runnerCamera.backgroundColor = new Color(0.28f, 0.38f, 0.58f);
-                    break;
-                case RunnerMapTheme.MistDike:
-                    RenderSettings.fogColor = new Color(0.42f, 0.46f, 0.5f);
-                    RenderSettings.ambientLight = new Color(0.32f, 0.38f, 0.44f);
-                    if (runnerCamera != null)
-                        runnerCamera.backgroundColor = new Color(0.38f, 0.44f, 0.5f);
-                    break;
-                case RunnerMapTheme.OceanReef:
-                    // 海洋主题：蓝绿色调，仿佛在水下
-                    RenderSettings.fogColor = new Color(0.2f, 0.55f, 0.65f);
-                    RenderSettings.ambientLight = new Color(0.25f, 0.55f, 0.6f);
-                    if (runnerCamera != null)
-                        runnerCamera.backgroundColor = new Color(0.15f, 0.45f, 0.55f);
-                    break;
-                case RunnerMapTheme.SkyFlight:
-                    // 天空主题：明亮的蓝天白云
-                    RenderSettings.fogColor = new Color(0.7f, 0.85f, 0.98f);
-                    RenderSettings.ambientLight = new Color(0.65f, 0.75f, 0.9f);
-                    if (runnerCamera != null)
-                        runnerCamera.backgroundColor = new Color(0.55f, 0.75f, 0.95f);
-                    break;
-                default:
-                    RenderSettings.fogColor = new Color(0.66f, 0.82f, 0.9f);
-                    RenderSettings.ambientLight = new Color(0.42f, 0.58f, 0.68f);
-                    if (runnerCamera != null)
-                        runnerCamera.backgroundColor = new Color(0.54f, 0.77f, 0.95f);
-                    break;
+                keyLight.color = profile.KeyLightColor;
+                keyLight.intensity = profile.KeyLightIntensity;
+                keyLight.transform.rotation = Quaternion.Euler(profile.KeyLightEuler);
+            }
+            if (rimFillLight != null)
+            {
+                rimFillLight.color = profile.RimLightColor;
+                rimFillLight.intensity = profile.RimLightIntensity;
             }
 
             ApplyThemeSkybox(theme);
@@ -896,18 +895,19 @@ namespace PenguinRun
             RenderSettings.fogStartDistance = 55f;   // 雾气起始距离后移
             RenderSettings.fogEndDistance = 180f;  // 雾气结束距离增加，后方跑道可见更远
 
-            var light = new GameObject("Moon Light").AddComponent<Light>();
-            light.type = LightType.Directional;
-            light.intensity = 1.2f;
-            light.transform.rotation = Quaternion.Euler(48f, -28f, 0f);
+            // 主光与边光的颜色/强度/朝向由 ApplyMapThemeVisuals 按主题覆盖；此处只建常态默认值。
+            keyLight = new GameObject("Key Light").AddComponent<Light>();
+            keyLight.type = LightType.Directional;
+            keyLight.intensity = 1.2f;
+            keyLight.transform.rotation = Quaternion.Euler(48f, -28f, 0f);
 
-            // 反向低强度补光（冷色 Rim），提升角色与障碍立体感
-            var rimLight = new GameObject("Rim Fill Light").AddComponent<Light>();
-            rimLight.type = LightType.Directional;
-            rimLight.intensity = 0.35f;
-            rimLight.color = new Color(0.6f, 0.74f, 1f);
-            rimLight.transform.rotation = Quaternion.Euler(24f, 152f, 0f);
-            rimLight.shadows = LightShadows.None;
+            // 反向低强度补光（Rim），提升角色与障碍立体感
+            rimFillLight = new GameObject("Rim Fill Light").AddComponent<Light>();
+            rimFillLight.type = LightType.Directional;
+            rimFillLight.intensity = 0.35f;
+            rimFillLight.color = new Color(0.6f, 0.74f, 1f);
+            rimFillLight.transform.rotation = Quaternion.Euler(24f, 152f, 0f);
+            rimFillLight.shadows = LightShadows.None;
 
             player = new GameObject("Penguin Character");
             // 使用程序化 Mesh 生成的可爱卡通企鹅，替代 Primitive 拼接版本

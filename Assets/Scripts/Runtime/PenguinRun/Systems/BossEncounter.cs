@@ -614,10 +614,22 @@ namespace PenguinRun
             var intervalMultiplier = themeTrait.AttackIntervalMultiplier > 0f
                 ? themeTrait.AttackIntervalMultiplier
                 : 1f;
+            intervalMultiplier *= HealthAggressionMultiplier();
             lo *= intervalMultiplier;
             hi *= intervalMultiplier;
             patternIntervalDuration = Random.Range(lo, Mathf.Max(lo + 0.25f, hi));
             patternIntervalTimer = patternIntervalDuration;
+        }
+
+        /// <summary>
+        /// 残血压迫：Boss 每掉一管血，招式之间的喘息就缩短一档（满血 1.0 / 二段 0.88 / 残血 0.76）。
+        /// 只压缩「攻击之间的间隔」，不动前摇与预警窗口——那两项是玩家的反应预算，
+        /// 缩短它们会把难度变成不公平而不是更有压迫感。
+        /// </summary>
+        private float HealthAggressionMultiplier()
+        {
+            var lost = Mathf.Clamp(BossSystem.BossMaxHits - HitsRemaining, 0, BossSystem.BossMaxHits - 1);
+            return 1f - 0.12f * lost;
         }
 
         private void StartNextPattern()
@@ -1746,6 +1758,13 @@ namespace PenguinRun
                     var vuFreq = 6f * Definition.VulnerableShakeFreq;
                     var pulse = (Mathf.Sin(Time.time * vuFreq) + 1f) * 0.5f;
                     target = Color.Lerp(baseColor, new Color(0.5f, 1f, 0.7f), pulse * 0.4f);
+                }
+                else if (HitsRemaining == 1)
+                {
+                    // 残血狂暴：慢速余烬脉动。与破绽期的绿色明确区分，
+                    // 让玩家不用看 HUD 也能读出 Boss 已进入最后阶段（此时攻击间隔已压缩）。
+                    var ember = (Mathf.Sin(Time.time * 3.4f) + 1f) * 0.5f;
+                    target = Color.Lerp(baseColor, new Color(1f, 0.42f, 0.28f), 0.14f + ember * 0.16f);
                 }
                 else
                 {

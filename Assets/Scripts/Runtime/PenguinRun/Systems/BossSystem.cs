@@ -343,6 +343,12 @@ namespace PenguinRun
                 EventBus.Emit(GameEvents.BossDefeated);
                 MarkDefeatRewardPending(fishReward, scoreReward, speedTier, speedFish, speedScore);
             }
+            else if (boss.HitsRemaining == 1)
+            {
+                // 最后一管血同时触发攻击间隔压缩与本体余烬脉动，提示必须跟上这个变化。
+                feedbackText = $"{boss.Definition.DisplayName} 进入狂暴：出招更急，抓稳破绽窗口！";
+                feedbackTimer = 1.6f;
+            }
             else
             {
                 feedbackText = $"BOSS 受伤！剩余血量 {boss.HitsRemaining}/{BossMaxHits}";

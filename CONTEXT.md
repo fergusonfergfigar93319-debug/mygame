@@ -118,6 +118,27 @@
 - **意指：** 进入 `BossAttackPhase.Strike` 首帧（或齐射弹道落地时）在 **Boss 预警带**（`PlayerTelegraphZ`）触发的冲击环、碎片散射与配套震屏/音效，由 `BossPatternVfxProfile` 配置。
 - **相关：** `BossPatternVfxPlayer`、`RunnerAudio.PlayBossPatternStrike`。
 
+### Boss 残血压迫（BossHealthAggression）
+
+- **意指：** Boss 每损失一管血，招式之间的**攻击间隔**收紧一档（满血 ×1.0 / 二段 ×0.88 / 残血 ×0.76，见 `BossEncounter.HealthAggressionMultiplier`）。三段血此前节奏完全相同，压迫感不随战斗推进。
+- **公平边界：** 只压缩攻击**间隔**。前摇（`ApplySignatureWindup`）与预警窗口（`patternDangerDelay` / `patternActiveWindow`）是玩家的反应预算，**不得**随血量缩短——缩短它们会把难度变成不公平而非更有压迫感。
+- **可读信号：** 残血阶段（`HitsRemaining == 1`）Boss 本体在 `UpdateBodyTint` 中持续余烬脉动（暖橙），与破绽期的绿色脉动明确区分；进入该阶段时另给一次文字提示。
+- **相关：** Boss 招式阶段（BossAttackPhase）、Boss 战 HUD 面板（BossHudPanel）。
+
+### Boss 战 HUD 面板（BossHudPanel）
+
+- **意指：** Boss 战期间替换常规资源面板的专属 HUD（`BossHudPanel`），承载四类信息：分段血条（段数恒等于 `BossSystem.BossMaxHits`）、破绽倒数节拍点、招式名与反击提示、速杀奖励窗口条。
+- **设计取舍：** 血条为**离散分段**而非连续 fill——跑酷中玩家只有余光，离散段位比连续长度好读。速杀条只在窗口内可见，过期即隐藏，不给玩家留已失效的信息。
+- **数据来源：** 只读 `BossSystem` 的公开快照（`CurrentBossPatternsUntilVulnerable`、`CurrentBossSpeedRewardTimeLeft` 等），**不参与任何命中判定**。
+- **勿混淆：** 常规 HUD（`RunnerHudCanvas.normalStatsRoot`）与本面板互斥显示，由 `SetBossMode` 切换。
+
+### 主题光照档案（ThemeLightingProfile）
+
+- **意指：** `ThemePresentationProfile` 中的光照字段组（`KeyLightColor` / `KeyLightIntensity` / `KeyLightEuler` / `RimLightColor` / `RimLightIntensity` / `AmbientLight` / `FogColor` / `FogStart` / `FogEnd`），决定每个主题的主光色温与朝向、边光配色与雾带景深。
+- **背景：** 此前六个主题共用同一套方向光与雾距，仅雾色不同，导致每张图的「光」完全一样。光向与色温是主题之间最强的区分手段。
+- **执行点：** `PenguinRunnerGame.ApplyMapThemeVisuals` 消费档案并覆盖 `keyLight` / `rimFillLight`；`BuildScene` 只建默认值。主题切换时重新应用。
+- **勿混淆：** Boss 战氛围（`RunnerPostFx.SetBossEmphasis`）是叠加在主题光照之上的临时后处理，不修改 `RenderSettings`。
+
 ### Boss 专属 BGM（BossBgmClip）
 
 - **意指：** 进入 Boss 战时替换跑步 BGM 的独立音乐轨，由 `RunnerAudio.EnterBossMusic` 切入、`ExitBossMusic` 恢复。每个 Boss 通过 `BossDefinition.BgmClipName` 字段（本次内容包新增）映射至 `Resources/PenguinRun/` 下的 `.ogg` 文件。
@@ -187,6 +208,10 @@
 - CC-BY 素材在引入前必须先记录作者、来源链接、许可证和本地文件名到 credits 文件；未记录即不允许提交。
 - 任何新增 UI/相机调参必须按横屏基准设计；引入会受 aspect 影响的逻辑前需先在 CONTEXT.md 与 ADR 中变更画面构图基准（`FramingReference`）。
 - Boss 招式 FX 必须通过 `BossPatternFxPool` 租用；`BossPatternVfxPlayer.End()` 不得 `Destroy` 已交回池的对象。池容量上限 48，回收由 `pool.ReleaseAll` 统一处理。
+- 新主题必须在 `ThemePresentationProfile` 中填全光照档案字段；不允许新主题复用他主题的主光参数（会退化回「只有雾色不同」）。
+- 共享缓存材质的逐物件染色必须走 `RunnerVisuals.SetRendererColor`（MaterialPropertyBlock）；直接写 `sharedMaterial` 会让同批物件一起变色。
+- 每帧刷新的 HUD 文本必须按值变更门控，不得逐帧构造字符串；倒计时类文本以其显示粒度（如 0.1s）为比对单位。
+- `tools/` 下的门禁脚本一律纯 ASCII 注释（无 BOM 时 PowerShell 5.1 按 ANSI 读取，中文会导致误导性解析错误）。
 
 ---
 

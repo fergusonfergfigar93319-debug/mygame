@@ -74,6 +74,16 @@ foreach ($themeName in 'IceLakeEcho', 'CedarRuins', 'AuroraField', 'MistDike', '
 }
 Require-Pattern $themeProfile 'PrimaryLandmark' 'primary landmark recipe'
 Require-Pattern $themeProfile 'SecondaryLandmark' 'secondary landmark recipe'
+
+# Theme lighting profile. The six themes previously shared one directional light and
+# differed only by fog color; keep direction, temperature and depth in the profile so
+# themes cannot regress to "only the fog color changes".
+foreach ($lightToken in 'KeyLightColor', 'KeyLightIntensity', 'KeyLightEuler', 'RimLightColor', 'RimLightIntensity', 'AmbientLight', 'FogColor', 'FogStart', 'FogEnd') {
+    Require-Pattern $themeProfile "\b$lightToken\b" "theme lighting profile exposes $lightToken"
+}
+Require-Pattern $runnerGame 'profile\.KeyLightColor' 'runner scene drives key light from the theme profile'
+Require-Pattern $runnerGame 'profile\.FogStart' 'runner scene drives fog band from the theme profile'
+Require-Pattern $runnerGame 'keyLight' 'runner scene retains the key light reference for theme swaps'
 Require-Pattern $runnerGame 'ThemePresentationProfile\.For\(theme\)' 'runner scene consumes the theme presentation profile'
 Require-Pattern $runnerGame 'AddProfileLandmark' 'runner scene builds profile-selected landmarks'
 Require-Pattern $runnerGame 'ThemeLandmarkKind\.CloudIsland' 'runner scene supports cloud island landmarks'
@@ -108,6 +118,28 @@ Require-Pattern $bossEncounter 'CoralHeartCore' 'Coral Kraken heart core module'
 Require-Pattern $bossEncounter 'CoralCrest' 'Coral Kraken crest modules'
 Require-Pattern $bossEncounter 'StormCore' 'Storm Eagle lightning core module'
 Require-Pattern $bossEncounter 'StormTailFeather' 'Storm Eagle tail feather modules'
+
+# Boss HUD panel: segmented health plus the two rhythm read-outs (vulnerability
+# countdown, speed-kill window). BossSystem always computed both but neither had a HUD
+# outlet; this contract keeps them wired.
+$bossHud = Require-Path 'Assets/Scripts/Runtime/PenguinRun/Systems/BossHudPanel.cs'
+Require-Pattern $bossHud 'class\s+BossHudPanel' 'Boss HUD panel type'
+Require-Pattern $bossHud 'MaxHealthSegments\s*=\s*BossSystem\.BossMaxHits' 'Boss health segments track BossMaxHits'
+Require-Pattern $bossHud 'CurrentBossPatternsUntilVulnerable' 'Boss HUD surfaces the vulnerability countdown'
+Require-Pattern $bossHud 'CurrentBossSpeedRewardTimeLeft' 'Boss HUD surfaces the speed-kill window'
+$hudCanvas = Require-Path 'Assets/Scripts/Runtime/PenguinRun/Systems/RunnerHudCanvas.cs'
+Require-Pattern $hudCanvas 'BossHudPanel' 'runner HUD delegates the boss panel'
+
+# Boss low-health pressure compresses the gap between attacks only. Windup and telegraph
+# stay untouched: those are the player's reaction budget.
+Require-Pattern $bossEncounter 'HealthAggressionMultiplier' 'Boss escalates pressure as health drops'
+Require-Pattern $bossEncounter 'HitsRemaining\s*==\s*1' 'Boss final phase has a persistent body tell'
+
+# Boss atmosphere post-FX stays in the presentation layer and never feeds hit resolution.
+$postFx = Require-Path 'Assets/Scripts/Runtime/PenguinRun/RunnerPostFx.cs'
+Require-Pattern $postFx 'SetBossEmphasis' 'post-FX exposes boss atmosphere'
+Require-Pattern $postFx 'ClearBossEmphasis' 'post-FX clears boss atmosphere when the fight ends'
+Require-Pattern $runnerGame 'UpdateBossAtmosphere' 'runner drives boss atmosphere from the presentation loop'
 
 $fontAsset = Join-Path $ProjectRoot 'Assets/Resources/PenguinRun/Fonts/NotoSansCJKsc-Regular.otf'
 if (-not (Test-Path -LiteralPath $fontAsset)) { $failures.Add('Missing bundled Noto Sans CJK SC font asset') }
