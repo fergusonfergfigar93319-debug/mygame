@@ -244,12 +244,25 @@ namespace PenguinRun.Game.UI.Lobby
 
         private void CreateSnowMotes(Transform parent)
         {
+            // 雪花每帧改 anchoredPosition，会把所在 Canvas 标脏。放进独立的嵌套 Canvas，
+            // 让重建圈在装饰层内，不波及营地建筑与热点按钮的合批。
+            var layer = new GameObject("SnowLayer", typeof(RectTransform), typeof(Canvas));
+            layer.transform.SetParent(parent, false);
+            var layerRt = (RectTransform)layer.transform;
+            layerRt.anchorMin = Vector2.zero;
+            layerRt.anchorMax = Vector2.one;
+            layerRt.sizeDelta = Vector2.zero;
+            layerRt.anchoredPosition = Vector2.zero;
+            var snowCanvas = layer.GetComponent<Canvas>();
+            snowCanvas.overrideSorting = true;
+            snowCanvas.sortingOrder = 1;
+
             for (var i = 0; i < 18; i++)
             {
                 var x = Mathf.Repeat(i * 0.6180339f, 1f);
                 var y = Mathf.Repeat(i * 0.381966f + 0.17f, 1f);
                 var size = 3f + i % 4 * 1.4f;
-                var mote = UiBuilder.CreateRect($"SnowMote_{i}", parent, new Vector2(x, y), new Vector2(x, y),
+                var mote = UiBuilder.CreateRect($"SnowMote_{i}", layer.transform, new Vector2(x, y), new Vector2(x, y),
                     new Vector2(size, size), Vector2.zero, new Color(1f, 1f, 1f, 0.24f + i % 3 * 0.07f), circle: true);
                 mote.GetComponent<Image>().raycastTarget = false;
                 var drift = mote.gameObject.AddComponent<LobbyCampSnowMote>();

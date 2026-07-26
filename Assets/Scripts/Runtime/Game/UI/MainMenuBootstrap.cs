@@ -1,4 +1,4 @@
-﻿using PenguinRun.Game.Mission;
+using PenguinRun.Game.Mission;
 using PenguinRun.Game.Save;
 using PenguinRun.Game.Shop;
 using PenguinRun.Game.Leaderboard;
@@ -343,10 +343,15 @@ namespace PenguinRun.Game.UI
 
             // ========== 背景大气层：极夜极光主题 ==========
             // 控制大面积光层 alpha，避免出现半透明矩形“盖板感”。
+            //
+            // 氛围层挂在**嵌套 Canvas** 上：星点每帧改 alpha、极光每帧位移，都会把 Graphic
+            // 标脏。若与交互 UI 同处一个 Canvas，则每帧重建整张主菜单的合批。嵌套 Canvas
+            // 把这些重建圈在装饰层内部，交互层保持静止。
+            var ambient = CreateAmbientLayer(canvas.transform);
 
             // 顶部夜空辉光（轻量）
             var skyGlow = UiBuilder.CreateRect(
-                "SkyGlow", canvas.transform,
+                "SkyGlow", ambient,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(2200f, 1200f), new Vector2(0f, 220f),
                 new Color(0.14f, 0.32f, 0.62f, 0.22f), glow: true);
@@ -354,7 +359,7 @@ namespace PenguinRun.Game.UI
 
             // 极光光层1：紫粉（左上）
             var aurora1 = UiBuilder.CreateRect(
-                "Aurora1", canvas.transform,
+                "Aurora1", ambient,
                 new Vector2(0.3f, 1f), new Vector2(0.3f, 1f),
                 new Vector2(1200f, 560f), new Vector2(-120f, -260f),
                 new Color(0.72f, 0.42f, 0.92f, 0.11f), glow: true);
@@ -364,7 +369,7 @@ namespace PenguinRun.Game.UI
 
             // 极光光层2：青绿（右上）
             var aurora2 = UiBuilder.CreateRect(
-                "Aurora2", canvas.transform,
+                "Aurora2", ambient,
                 new Vector2(0.7f, 1f), new Vector2(0.7f, 1f),
                 new Vector2(1100f, 520f), new Vector2(180f, -330f),
                 new Color(0.12f, 0.86f, 0.92f, 0.1f), glow: true);
@@ -374,7 +379,7 @@ namespace PenguinRun.Game.UI
 
             // 标题后方局部柔光（替代横跨全屏的光层）
             var titleHalo = UiBuilder.CreateRect(
-                "TitleHalo", canvas.transform,
+                "TitleHalo", ambient,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(980f, 260f), new Vector2(0f, -180f),
                 new Color(0.35f, 0.8f, 1f, 0.08f), glow: true);
@@ -382,7 +387,7 @@ namespace PenguinRun.Game.UI
 
             // 中央吉祥物光晕（聚焦用）
             var centerGlow = UiBuilder.CreateRect(
-                "CenterGlow", canvas.transform,
+                "CenterGlow", ambient,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(1200f, 1200f), new Vector2(0f, 60f),
                 new Color(0.35f, 0.75f, 1f, 0.08f), glow: true);
@@ -390,7 +395,7 @@ namespace PenguinRun.Game.UI
 
             // 底部冰面光晕（降低 alpha，避免形成明显横条）
             var iceGlow = UiBuilder.CreateRect(
-                "IceGlow", canvas.transform,
+                "IceGlow", ambient,
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                 new Vector2(2200f, 1100f), new Vector2(0f, -70f),
                 new Color(0.1f, 0.42f, 0.8f, 0.24f), glow: true);
@@ -398,34 +403,34 @@ namespace PenguinRun.Game.UI
 
             // 地平线薄光
             var horizonGlow = UiBuilder.CreateRect(
-                "HorizonGlow", canvas.transform,
+                "HorizonGlow", ambient,
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                 new Vector2(1800f, 200f), new Vector2(0f, 255f),
                 new Color(0.5f, 0.9f, 1f, 0.09f), glow: true);
             horizonGlow.GetComponent<Image>().raycastTarget = false;
 
             // ========== 星点 ==========
-            CreateStarParticle(canvas.transform, new Vector2(0.06f, 0.88f), 5f, 0.85f);
-            CreateStarParticle(canvas.transform, new Vector2(0.12f, 0.76f), 3.5f, 0.65f);
-            CreateStarParticle(canvas.transform, new Vector2(0.20f, 0.94f), 4.5f, 0.8f);
-            CreateStarParticle(canvas.transform, new Vector2(0.28f, 0.82f), 3f, 0.55f);
-            CreateStarParticle(canvas.transform, new Vector2(0.35f, 0.96f), 4f, 0.7f);
-            CreateStarParticle(canvas.transform, new Vector2(0.72f, 0.90f), 5f, 0.9f);
-            CreateStarParticle(canvas.transform, new Vector2(0.80f, 0.78f), 3.5f, 0.6f);
-            CreateStarParticle(canvas.transform, new Vector2(0.88f, 0.94f), 4.5f, 0.8f);
-            CreateStarParticle(canvas.transform, new Vector2(0.94f, 0.72f), 3f, 0.5f);
-            CreateStarParticle(canvas.transform, new Vector2(0.04f, 0.68f), 2.5f, 0.45f);
-            CreateStarParticle(canvas.transform, new Vector2(0.96f, 0.66f), 2.5f, 0.45f);
-            CreateStarParticle(canvas.transform, new Vector2(0.45f, 0.74f), 2f, 0.4f);
-            CreateStarParticle(canvas.transform, new Vector2(0.55f, 0.86f), 2.5f, 0.5f);
-            CreateStarParticle(canvas.transform, new Vector2(0.15f, 0.62f), 2f, 0.35f);
-            CreateStarParticle(canvas.transform, new Vector2(0.85f, 0.58f), 2f, 0.35f);
+            CreateStarParticle(ambient, new Vector2(0.06f, 0.88f), 5f, 0.85f);
+            CreateStarParticle(ambient, new Vector2(0.12f, 0.76f), 3.5f, 0.65f);
+            CreateStarParticle(ambient, new Vector2(0.20f, 0.94f), 4.5f, 0.8f);
+            CreateStarParticle(ambient, new Vector2(0.28f, 0.82f), 3f, 0.55f);
+            CreateStarParticle(ambient, new Vector2(0.35f, 0.96f), 4f, 0.7f);
+            CreateStarParticle(ambient, new Vector2(0.72f, 0.90f), 5f, 0.9f);
+            CreateStarParticle(ambient, new Vector2(0.80f, 0.78f), 3.5f, 0.6f);
+            CreateStarParticle(ambient, new Vector2(0.88f, 0.94f), 4.5f, 0.8f);
+            CreateStarParticle(ambient, new Vector2(0.94f, 0.72f), 3f, 0.5f);
+            CreateStarParticle(ambient, new Vector2(0.04f, 0.68f), 2.5f, 0.45f);
+            CreateStarParticle(ambient, new Vector2(0.96f, 0.66f), 2.5f, 0.45f);
+            CreateStarParticle(ambient, new Vector2(0.45f, 0.74f), 2f, 0.4f);
+            CreateStarParticle(ambient, new Vector2(0.55f, 0.86f), 2.5f, 0.5f);
+            CreateStarParticle(ambient, new Vector2(0.15f, 0.62f), 2f, 0.35f);
+            CreateStarParticle(ambient, new Vector2(0.85f, 0.58f), 2f, 0.35f);
 
             // ========== 四角暗角（柔和过渡） ==========
-            CreateCornerVignette(canvas.transform, "VigBL", new Vector2(0f, 0f), new Vector2(-460f, -460f), 0.34f);
-            CreateCornerVignette(canvas.transform, "VigBR", new Vector2(1f, 0f), new Vector2(460f, -460f), 0.34f);
-            CreateCornerVignette(canvas.transform, "VigTL", new Vector2(0f, 1f), new Vector2(-460f, 460f), 0.22f);
-            CreateCornerVignette(canvas.transform, "VigTR", new Vector2(1f, 1f), new Vector2(460f, 460f), 0.22f);
+            CreateCornerVignette(ambient, "VigBL", new Vector2(0f, 0f), new Vector2(-460f, -460f), 0.34f);
+            CreateCornerVignette(ambient, "VigBR", new Vector2(1f, 0f), new Vector2(460f, -460f), 0.34f);
+            CreateCornerVignette(ambient, "VigTL", new Vector2(0f, 1f), new Vector2(-460f, 460f), 0.22f);
+            CreateCornerVignette(ambient, "VigTR", new Vector2(1f, 1f), new Vector2(460f, 460f), 0.22f);
 
             // ========== 面板层 ==========
             panelLayer = new GameObject("PanelLayer", typeof(RectTransform)).transform;
@@ -436,6 +441,27 @@ namespace PenguinRun.Game.UI
             prt.sizeDelta = Vector2.zero;
             prt.anchoredPosition = Vector2.zero;
             panelRouter = new LobbyPanelRouter(panelLayer, OnPanelRouterChanged, BringLobbyUiToFront);
+        }
+
+        /// <summary>
+        /// 纯装饰氛围层的嵌套 Canvas。星点闪烁与极光漂移每帧都会把 Graphic 标脏；
+        /// 独立 Canvas 让这些重建不波及交互 UI 的合批。层内不接收射线。
+        /// </summary>
+        private static Transform CreateAmbientLayer(Transform parent)
+        {
+            var go = new GameObject("AmbientLayer", typeof(RectTransform), typeof(Canvas));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.sizeDelta = Vector2.zero;
+            rt.anchoredPosition = Vector2.zero;
+
+            // 装饰层永远压在交互 UI 之下。
+            var nested = go.GetComponent<Canvas>();
+            nested.overrideSorting = true;
+            nested.sortingOrder = -1;
+            return go.transform;
         }
 
         /// <summary>四角软暗角：使用大圆，alpha 自然衰减替代硬边矩形 vignette。</summary>

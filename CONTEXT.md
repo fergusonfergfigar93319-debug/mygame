@@ -173,6 +173,14 @@
 - **今日建议：** 仅保留左侧单张战略卡，由 `MainMenuBootstrap.RefreshStrategyCard` 按优先级提示下一步（签到、任务、营地等），与底栏职责区分清晰。
 - **相关：** 画面构图基准（FramingReference）、我的战绩 Sheet（`ProfileStatsPanel`）。
 
+### 装饰层 Canvas 隔离（AmbientCanvasIsolation）
+
+- **意指：** 每帧持续演化的**纯装饰**元素（星点闪烁、极光漂移、雪花飘落）必须挂在自己的**嵌套 Canvas** 上，与交互 UI 分离。
+- **原因：** 改 `Image.color` 或 `RectTransform.anchoredPosition` 会把 Graphic 标脏，触发所在 Canvas 的合批重建。装饰与交互同处一个 Canvas 时，十几个星点就会让整张界面每帧重建一次。
+- **执行点：** 大厅 `MainMenuBootstrap.CreateAmbientLayer`（`sortingOrder = -1`，压在交互层下）；营地 `LobbyCampScene.CreateSnowMotes` 的 `SnowLayer`（`sortingOrder = 1`，浮在场景上）。两者均 `overrideSorting = true`，且层内 Image 一律 `raycastTarget = false`。
+- **勿混淆：** 一次性交互动效（按钮弹跳、面板进场）走 `TweenExtensions`，不需要独立 Canvas；本规则只针对**持续循环**的装饰。
+- **相关：** 画面构图基准（FramingReference）。
+
 ### 开源素材包（OpenAssetPack）
 
 - **意指：** 通过 CC0 或 CC-BY 授权引入项目的第三方资源（模型、贴图、音乐、音效）。

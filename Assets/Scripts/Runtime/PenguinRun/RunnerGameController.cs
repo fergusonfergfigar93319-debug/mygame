@@ -39,6 +39,11 @@ namespace PenguinRun
         private readonly ThemeMechanicRuntime mechanicRuntime;
         private readonly ThemeMechanicSpawner mechanicSpawner;
         private readonly ThemeMasteryTracker themeMastery;
+
+        // 每帧传给 CollectCoins 的两个回调。捕获 this 的 lambda 与实例方法组都不会被
+        // 编译器缓存，写在调用点上等于每帧各新建一个委托；这里建一次复用整局。
+        private readonly System.Action onAirCollection;
+        private readonly System.Action<int> onFishCollected;
         private readonly OnboardingState onboarding;
         private readonly Transform sceneRoot;
         private readonly System.Action pulseHaptic;
@@ -100,6 +105,8 @@ namespace PenguinRun
             themeMastery = new ThemeMasteryTracker(
                 config.MapTheme, config.ThemeMechanicMode, config.RunSeed,
                 ThemeMasteryStore.For(config.MapTheme).TutorialSeen);
+            onAirCollection = () => AwardSkill(SkillAction.AirCollection, 60);
+            onFishCollected = themeMastery.RecordFish;
             pickups = new PickupSystem(tuning.pickup, tuning.powerUp, config, runUpgradeState);
             collisions = new CollisionSystem(runnerAudio, tuning.combat, runUpgradeState);
             bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth, tuning.combat);
@@ -603,9 +610,9 @@ namespace PenguinRun
             }
 
             pickups.CollectCoins(playerTransform, motor.PlayerY, !motor.Grounded,
-                () => AwardSkill(SkillAction.AirCollection, 60),
+                onAirCollection,
                 world, spawner.coins, ref feedbackText, ref feedbackTimer,
-                themeMastery.RecordFish);
+                onFishCollected);
             if (world.Coins > lastCoinCountForOnboarding)
             {
                 onboarding.RecordCollect();

@@ -62,6 +62,25 @@ $runnerGame = Require-Path 'Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.
 Require-Pattern $runnerGame 'RunnerDeathOverlay\.Show' 'PenguinRunnerGame invokes the uGUI death overlay'
 Require-Pattern $runnerGame 'RestartRunFromDeathOverlay' 'PenguinRunnerGame supports the retry short path'
 
+# The corridor fade writes through a per-renderer property block, so it must read the same
+# way. Reading GetColor(sharedMaterial) returns the globally shared cache color, which never
+# reflects the write: the lerp restarts from the same baseline every frame and props inside
+# the corridor never reach the faded alpha.
+Require-Pattern $runnerGame 'GetRendererColor\(renderer\)\.a' 'corridor fade reads the per-renderer override'
+if ($runnerGame -match 'currentAlpha\s*=\s*RunnerVisuals\.GetColor\(') {
+    $failures.Add('Regression: corridor fade reads shared material alpha instead of the renderer override')
+}
+
+# Scenery per-frame animation reads cached flags. GameObject.name marshals a fresh string on
+# every access; with ~100 props and three name tests each that dominated runner GC pressure.
+Require-Pattern $runnerGame 'sceneryPropInfos' 'scenery animation iterates cached prop info'
+Require-Pattern $runnerGame 'AddSceneryProp' 'scenery registration funnels through one entry point'
+foreach ($perFrameName in 'prop\.name\.StartsWith', 'ShouldForceHideSceneryInCorridor\(prop\.name\)') {
+    if ($runnerGame -match $perFrameName) {
+        $failures.Add("Regression: scenery loop reads GameObject.name per frame ($perFrameName)")
+    }
+}
+
 $particles = Require-Path 'Assets/Scripts/Runtime/PenguinRun/Systems/ParticleEffectPool.cs'
 Require-Pattern $particles 'ParticleSystem' 'particle pool uses Unity ParticleSystem'
 Require-Pattern $particles 'EmitParams' 'particle pool emits configured particles'
@@ -134,6 +153,19 @@ Require-Pattern $hudCanvas 'BossHudPanel' 'runner HUD delegates the boss panel'
 # stay untouched: those are the player's reaction budget.
 Require-Pattern $bossEncounter 'HealthAggressionMultiplier' 'Boss escalates pressure as health drops'
 Require-Pattern $bossEncounter 'HitsRemaining\s*==\s*1' 'Boss final phase has a persistent body tell'
+
+# Per-frame animated decoration lives on its own nested Canvas. Twinkling stars and
+# drifting motes dirty their Graphic every frame; sharing a Canvas with interactive UI
+# rebuilds the whole menu batch each frame.
+$mainMenu = Require-Path 'Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs'
+Require-Pattern $mainMenu 'CreateAmbientLayer' 'lobby ambient decoration is isolated on a nested canvas'
+Require-Pattern $mainMenu 'overrideSorting' 'ambient layer overrides sorting so it stays behind interactive UI'
+$campScene = Require-Path 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyCampScene.cs'
+Require-Pattern $campScene 'SnowLayer' 'camp snow motes are isolated on a nested canvas'
+
+# Countdown text updates only when the displayed whole second changes.
+$upgradeOverlay = Require-Path 'Assets/Scripts/Runtime/Game/UI/RunUpgradeChoiceOverlay.cs'
+Require-Pattern $upgradeOverlay 'shownSeconds' 'upgrade countdown text is change-gated'
 
 # Boss atmosphere post-FX stays in the presentation layer and never feeds hit resolution.
 $postFx = Require-Path 'Assets/Scripts/Runtime/PenguinRun/RunnerPostFx.cs'

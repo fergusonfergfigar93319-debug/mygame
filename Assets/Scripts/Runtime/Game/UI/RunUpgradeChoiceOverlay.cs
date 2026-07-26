@@ -15,6 +15,7 @@ namespace PenguinRun.Game.UI
         private RunUpgradeOffer offer;
         private TextMeshProUGUI countdownText;
         private float remainingSeconds;
+        private int shownSeconds = -1;
         private bool resolved;
 
         public static RunUpgradeChoiceOverlay Show(
@@ -38,9 +39,12 @@ namespace PenguinRun.Game.UI
             if (resolved) return;
 
             remainingSeconds = Mathf.Max(0f, remainingSeconds - Time.unscaledDeltaTime);
-            if (countdownText != null)
+            // 倒计时按整秒显示：只在秒数真正变化时改写文本，避免每帧构造字符串并把 Graphic 标脏。
+            var wholeSeconds = Mathf.CeilToInt(remainingSeconds);
+            if (countdownText != null && wholeSeconds != shownSeconds)
             {
-                countdownText.text = $"{Mathf.CeilToInt(remainingSeconds)} 秒后自动选择";
+                shownSeconds = wholeSeconds;
+                countdownText.text = $"{wholeSeconds} 秒后自动选择";
             }
 
             if (remainingSeconds <= 0f)

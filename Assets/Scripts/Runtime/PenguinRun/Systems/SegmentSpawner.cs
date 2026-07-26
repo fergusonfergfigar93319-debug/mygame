@@ -84,6 +84,7 @@ namespace PenguinRun
         public readonly List<ObstacleBehavior> obstacleBehaviors = new();
         public readonly List<GameObject> coins = new();
         public readonly Dictionary<GameObject, PowerUpKind> powerUps = new();
+        private readonly List<GameObject> powerKeyScratch = new();
         public readonly List<GameObject> speedGates = new();
 
         public void Reset()
@@ -326,8 +327,11 @@ namespace PenguinRun
             }
 
             // ── 回收被 PickupSystem 设为非活跃的道具 ──────────────
-            var powerKeys = new List<GameObject>(powerUps.Keys);
-            foreach (var power in powerKeys)
+            // 复用 scratch 列表：仅为了能在遍历中安全 Remove，内容每帧大多不变，
+            // 没必要每帧新建两个 List。
+            powerKeyScratch.Clear();
+            powerKeyScratch.AddRange(powerUps.Keys);
+            foreach (var power in powerKeyScratch)
             {
                 if (power == null || !power.activeSelf)
                 {
@@ -336,8 +340,9 @@ namespace PenguinRun
                 }
             }
 
-            powerKeys = new List<GameObject>(powerUps.Keys);
-            foreach (var power in powerKeys)
+            powerKeyScratch.Clear();
+            powerKeyScratch.AddRange(powerUps.Keys);
+            foreach (var power in powerKeyScratch)
             {
                 if (power == null)
                 {

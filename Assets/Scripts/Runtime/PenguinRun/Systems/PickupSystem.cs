@@ -7,6 +7,7 @@ namespace PenguinRun
 {
     internal sealed class PickupSystem
     {
+        private readonly List<GameObject> powerKeyScratch = new();
         private readonly RunnerPickupTuning pickupTuning;
         private readonly RunnerPowerUpTuning powerUpTuning;
         private readonly RunnerSessionConfig config;
@@ -86,8 +87,10 @@ namespace PenguinRun
             var collectZ = magnetActive ? Mathf.Min(pickupTuning.magnetCollectZ, 2.15f) : 1.32f;
             var halfY = 1.9f;
 
-            var powerKeys = new List<GameObject>(powerUps.Keys);
-            foreach (var power in powerKeys)
+            // 复用 scratch 列表：只为在遍历中安全 Remove，不必每帧新建。
+            powerKeyScratch.Clear();
+            powerKeyScratch.AddRange(powerUps.Keys);
+            foreach (var power in powerKeyScratch)
             {
                 if (power == null)
                 {

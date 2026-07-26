@@ -51,6 +51,7 @@ namespace PenguinRun
         private int cachedMaxLives = int.MinValue;
         private string cachedBuffs;
         private readonly StringBuilder buffSb = new StringBuilder(128);
+        private int cachedBuffFingerprint = int.MinValue;
         private float overrideFeedbackUntil;
         private bool bossMode;
         private int cachedUpgradeSelectionCount = -1;
@@ -281,14 +282,21 @@ namespace PenguinRun
                 }
             }
 
-            // 道具倒计时显示粒度为 0.1s：复用 StringBuilder 并按内容比对，仅在显示值真正变化时才生成新串。
-            buffSb.Clear();
-            BuildBuffSummary(world, buffSb);
-            if (!ContentEquals(buffSb, cachedBuffs))
+            // 道具倒计时显示粒度为 0.1s。先用「量化后的显示值指纹」判断这一帧的显示内容
+            // 是否会变；不变就整段跳过——否则即便最终不改 text，StringBuilder 的构建和其中
+            // 每个 buff 的 ToString("0.0") 仍会每帧分配。
+            var buffFingerprint = ComputeBuffFingerprint(world);
+            if (buffFingerprint != cachedBuffFingerprint)
             {
-                cachedBuffs = buffSb.ToString();
-                buffText.text = cachedBuffs;
-                buffRoot.SetActive(!string.IsNullOrWhiteSpace(cachedBuffs));
+                cachedBuffFingerprint = buffFingerprint;
+                buffSb.Clear();
+                BuildBuffSummary(world, buffSb);
+                if (!ContentEquals(buffSb, cachedBuffs))
+                {
+                    cachedBuffs = buffSb.ToString();
+                    buffText.text = cachedBuffs;
+                    buffRoot.SetActive(!string.IsNullOrWhiteSpace(cachedBuffs));
+                }
             }
 
             if (Time.unscaledTime >= overrideFeedbackUntil)
@@ -506,6 +514,36 @@ namespace PenguinRun
                 if (sb[i] != value[i]) return false;
             }
             return true;
+        }
+
+        /// <summary>
+        /// 把所有 buff 的**显示值**（0.1s 量化后的秒数与计数）折成一个整数指纹。
+        /// 指纹相同即代表这一帧渲染出来的摘要与上一帧逐字符相同，可以整段跳过重建。
+        /// </summary>
+        private static int ComputeBuffFingerprint(WorldDirector world)
+        {
+            var h = 17;
+            h = h * 31 + Tenths(world.DashTimer);
+            h = h * 31 + Tenths(world.MagnetTimer);
+            h = h * 31 + Tenths(world.ShieldTimer);
+            h = h * 31 + Tenths(world.GlideTimer);
+            h = h * 31 + Tenths(world.DoubleFishTimer);
+            h = h * 31 + Tenths(world.ScoreBoostTimer);
+            h = h * 31 + Tenths(world.SlowMoTimer);
+            h = h * 31 + Tenths(world.IceMirrorTimer);
+            h = h * 31 + Tenths(world.AuroraChainTimer);
+            h = h * 31 + Tenths(world.FogLanternTimer);
+            h = h * 31 + Tenths(world.ThunderFeatherTimer);
+            h = h * 31 + world.TreantArmorHits;
+            h = h * 31 + (world.CoralBounceReady ? 1 : 0);
+            h = h * 31 + world.FishBombs;
+            return h;
+        }
+
+        /// <summary>秒数量化到 0.1s，与 AppendBuff 的 "0.0" 显示格式对齐。</summary>
+        private static int Tenths(float seconds)
+        {
+            return seconds <= 0.05f ? -1 : Mathf.RoundToInt(seconds * 10f);
         }
 
         private static void BuildBuffSummary(WorldDirector world, StringBuilder sb)

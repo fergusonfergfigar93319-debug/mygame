@@ -20,6 +20,9 @@ namespace PenguinRun
         private readonly List<Renderer> laneGuideRenderers = new();
         private readonly List<GameObject> trackMarkers = new();
         private readonly List<GameObject> sceneryProps = new();
+
+        // 与 sceneryProps 索引对齐的逐道具缓存；两者只在 AddSceneryProp 追加、在重建主题时一起清空。
+        private readonly List<SceneryPropInfo> sceneryPropInfos = new();
         private readonly List<GameObject> roadTiles = new();
         private readonly Dictionary<string, Texture2D> textureCache = new();
         private readonly Dictionary<string, GameObject> modelPrefabCache = new();
@@ -1008,9 +1011,9 @@ namespace PenguinRun
             }
 
             // 月亮：辉光贴图 Billboard（替代双 Sphere），柔边光晕
-            sceneryProps.Add(SceneryBillboards.CreateGlowQuad("Moon", new Vector3(8.6f, 13f, 58f),
+            AddSceneryProp(SceneryBillboards.CreateGlowQuad("Moon", new Vector3(8.6f, 13f, 58f),
                 new Vector2(6.4f, 6.4f), new Color(0.95f, 0.97f, 1f, 0.98f), SceneryBillboards.MoonTexture()));
-            sceneryProps.Add(SceneryBillboards.CreateGlowQuad("Moon Glow", new Vector3(8.6f, 13f, 58.2f),
+            AddSceneryProp(SceneryBillboards.CreateGlowQuad("Moon Glow", new Vector3(8.6f, 13f, 58.2f),
                 new Vector2(11f, 11f), new Color(0.74f, 0.92f, 1f, 0.3f), SceneryBillboards.HaloTexture()));
             for (var i = 0; i < 5; i++)
             {
@@ -1023,7 +1026,7 @@ namespace PenguinRun
                     SceneryBillboards.AuroraBandTexture(),
                     billboard: false);
                 aurora.transform.rotation = Quaternion.Euler(0f, 0f, -18f + i * 13f);
-                sceneryProps.Add(aurora);
+                AddSceneryProp(aurora);
             }
 
             for (var i = 0; i < 8; i++)
@@ -1193,7 +1196,7 @@ namespace PenguinRun
                     new Color(0.15f, 0.65f + Random.value * 0.2f, 0.35f));
                 seaweed.transform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-15f, 15f));
             }
-            sceneryProps.Add(group);
+            AddSceneryProp(group);
         }
 
         private void AddSeashell(float x, float z)
@@ -1202,7 +1205,7 @@ namespace PenguinRun
             group.transform.position = new Vector3(x, 0.02f, z);
             AddChildPrimitive(group.transform, "Shell Base", PrimitiveType.Sphere, Vector3.zero, new Vector3(0.18f, 0.08f, 0.15f), new Color(0.95f, 0.85f, 0.78f));
             AddChildPrimitive(group.transform, "Shell Glow", PrimitiveType.Cube, new Vector3(0f, 0.06f, 0.02f), new Vector3(0.06f, 0.02f, 0.08f), new Color(0.3f, 0.9f, 1f, 0.6f), true);
-            sceneryProps.Add(group);
+            AddSceneryProp(group);
         }
 
         private void AddBubbleStream(float x, float z)
@@ -1217,7 +1220,7 @@ namespace PenguinRun
                     Vector3.one * size,
                     new Color(0.7f, 0.95f, 1f, 0.4f), true);
             }
-            sceneryProps.Add(group);
+            AddSceneryProp(group);
         }
 
         private void AddFloatingCloud(float x, float z, float scale)
@@ -1270,7 +1273,7 @@ namespace PenguinRun
             var flag = AddChildPrimitive(group.transform, "Blue Snow Flag", PrimitiveType.Cube, new Vector3(leftSide ? -0.28f : 0.28f, 1.36f, 0f), new Vector3(0.56f, 0.28f, 0.035f), new Color(0.05f, 0.48f, 0.9f));
             flag.transform.localRotation = Quaternion.Euler(0f, 0f, leftSide ? -5f : 5f);
             AddChildPrimitive(flag.transform, "Flag Highlight", PrimitiveType.Cube, new Vector3(0f, 0.16f, -0.03f), new Vector3(0.92f, 0.16f, 0.5f), new Color(0.48f, 0.88f, 1f, 0.38f), true);
-            sceneryProps.Add(group);
+            AddSceneryProp(group);
         }
 
         private void AddCrystalCluster(float x, float z)
@@ -1291,7 +1294,7 @@ namespace PenguinRun
                 crystal.transform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-16f, 16f));
             }
 
-            sceneryProps.Add(group);
+            AddSceneryProp(group);
         }
 
         private void AddThemeSetPiece(RunnerMapTheme theme, float z, int index)
@@ -1458,7 +1461,7 @@ namespace PenguinRun
                     new Color(0.65f, 0.85f, 1f, 0.85f), true);
                 tentacle.transform.localRotation = Quaternion.Euler(15f, 0f, 0f);
             }
-            sceneryProps.Add(group);
+            AddSceneryProp(group);
         }
 
         private void AddTreasureChest(float x, float z)
@@ -1469,7 +1472,7 @@ namespace PenguinRun
             AddChildPrimitive(group.transform, "Chest Lid", PrimitiveType.Cube, new Vector3(0f, 0.42f, -0.15f), new Vector3(0.55f, 0.18f, 0.18f), new Color(0.55f, 0.35f, 0.2f));
             AddChildPrimitive(group.transform, "Chest Lock", PrimitiveType.Cube, new Vector3(0f, 0.32f, 0.22f), new Vector3(0.1f, 0.12f, 0.05f), new Color(1f, 0.85f, 0.3f));
             AddChildPrimitive(group.transform, "Chest Glow", PrimitiveType.Sphere, new Vector3(0f, 0.55f, 0f), Vector3.one * 0.3f, new Color(1f, 0.85f, 0.3f, 0.55f), true);
-            sceneryProps.Add(group);
+            AddSceneryProp(group);
         }
 
         private void AddSkyArch(float x, float z, int index)
@@ -1537,7 +1540,7 @@ namespace PenguinRun
             var beam = AddChildPrimitive(group.transform, "Fallen Cedar Beam", PrimitiveType.Cube, new Vector3(-side * 0.42f, 0.42f, 0.48f), new Vector3(1.55f, 0.22f, 0.24f), new Color(0.48f, 0.34f, 0.22f));
             beam.transform.localRotation = Quaternion.Euler(0f, side * 16f, side * (index % 2 == 0 ? -12f : 8f));
             AddChildPrimitive(group.transform, "Snow On Beam", PrimitiveType.Cube, new Vector3(-side * 0.42f, 0.58f, 0.48f), new Vector3(1.38f, 0.08f, 0.2f), new Color(0.82f, 0.9f, 0.9f));
-            sceneryProps.Add(group);
+            AddSceneryProp(group);
         }
 
         private void AddAuroraBeacon(float x, float z, int index)
@@ -1548,7 +1551,7 @@ namespace PenguinRun
             core.transform.localRotation = Quaternion.Euler(0f, 28f + index * 11f, 0f);
             AddChildPrimitive(group.transform, "Beacon Halo", PrimitiveType.Cylinder, new Vector3(0f, 1.15f, 0f), new Vector3(1.8f, 0.04f, 1.8f), new Color(0.46f, 0.28f, 1f, 0.18f), true);
             AddChildPrimitive(group.transform, "Beacon Foot Glow", PrimitiveType.Sphere, new Vector3(0f, 0.2f, 0f), new Vector3(1.6f, 0.34f, 1.6f), new Color(0.18f, 1f, 0.78f, 0.14f), true);
-            sceneryProps.Add(group);
+            AddSceneryProp(group);
         }
 
         private void AddMistVeil(float x, float z, int index)
@@ -1569,7 +1572,7 @@ namespace PenguinRun
             }
 
             AddChildPrimitive(group.transform, "Dike Marker", PrimitiveType.Cylinder, new Vector3(0f, 0.48f, -0.52f), new Vector3(0.16f, 0.48f, 0.16f), new Color(0.28f, 0.36f, 0.42f));
-            sceneryProps.Add(group);
+            AddSceneryProp(group);
         }
 
         private void AddCheckpointGate(float z)
@@ -1582,7 +1585,7 @@ namespace PenguinRun
             left.transform.SetParent(group.transform, false);
             right.transform.SetParent(group.transform, false);
             top.transform.SetParent(group.transform, false);
-            sceneryProps.Add(group);
+            AddSceneryProp(group);
         }
 
         private static GameObject AddChildPrimitive(Transform parent, string name, PrimitiveType type, Vector3 localPosition, Vector3 localScale, Color color, bool transparent = false)
@@ -1634,7 +1637,7 @@ namespace PenguinRun
                 }
             }
 
-            sceneryProps.Add(go);
+            AddSceneryProp(go);
         }
 
         private GameObject LoadModelPrefab(string modelName)
@@ -1686,7 +1689,7 @@ namespace PenguinRun
             var sparkle = AddChildPrimitive(group.transform, "Snow Sparkle", PrimitiveType.Cube, new Vector3(0.15f, 0.38f, -0.18f), new Vector3(0.08f, 0.08f, 0.08f), new Color(0.84f, 1f, 1f, 0.62f), true);
             sparkle.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
 
-            sceneryProps.Add(group);
+            AddSceneryProp(group);
         }
 
         private void AddMountainGroup(float x, float z, float height)
@@ -1770,35 +1773,62 @@ namespace PenguinRun
             var playerPos = player != null ? player.transform.position : Vector3.zero;
             var camPos = runnerCamera != null ? runnerCamera.transform.position : playerPos;
 
-            for (var i = 0; i < sceneryProps.Count; i++)
+            for (var i = 0; i < sceneryPropInfos.Count; i++)
             {
-                var prop = sceneryProps[i];
-                if (prop.name.StartsWith("Aurora Ribbon", System.StringComparison.Ordinal))
+                var info = sceneryPropInfos[i];
+                var tr = info.Tr;
+                if (tr == null) continue;
+
+                if (info.IsAuroraRibbon)
                 {
-                    prop.transform.localScale = Vector3.Lerp(prop.transform.localScale, new Vector3(0.95f + Mathf.Sin(Time.time + i) * 0.22f, 8.5f, 0.08f), Mathf.Clamp01(dt * 2f));
+                    tr.localScale = Vector3.Lerp(tr.localScale, new Vector3(0.95f + Mathf.Sin(Time.time + i) * 0.22f, 8.5f, 0.08f), Mathf.Clamp01(dt * 2f));
                     continue;
                 }
 
-                var oldZ = prop.transform.position.z;
-                prop.transform.Translate(Vector3.back * (effectiveSpeed * dt * 0.72f), Space.World);
-                if (prop.name.StartsWith("Checkpoint Gate", System.StringComparison.Ordinal) && oldZ >= 0f && prop.transform.position.z < 0f)
+                var oldZ = tr.position.z;
+                tr.Translate(Vector3.back * (effectiveSpeed * dt * 0.72f), Space.World);
+                if (info.IsCheckpointGate && oldZ >= 0f && tr.position.z < 0f)
                 {
                     runnerAudio.PlayCheckpoint();
                 }
 
-                if (prop.transform.position.z < propRecycleZ)
+                if (tr.position.z < propRecycleZ)
                 {
-                    prop.transform.position += Vector3.forward * 132f;
+                    tr.position += Vector3.forward * 132f;
                 }
 
-                EnsureSceneryLateralOffset(prop, d);
-                AlignSceneryToTrack(prop, d, gy);
+                EnsureSceneryLateralOffset(info, d);
+                AlignSceneryToTrack(info, d, gy);
 
-                if (!ShouldSkipViewCorridorFade(prop))
+                if (!info.SkipCorridorFade)
                 {
-                    ApplyViewCorridorFade(prop, playerPos, camPos, d, dt);
+                    ApplyViewCorridorFade(info, playerPos, camPos, d, dt);
                 }
             }
+        }
+
+        /// <summary>
+        /// 布景注册的唯一入口：按名字算一次逐帧动画所需的常量属性并缓存。
+        /// 每帧循环只读 <see cref="SceneryPropInfo"/>，不再碰 <c>GameObject.name</c> 或 <c>GetComponent</c>。
+        /// </summary>
+        private SceneryPropInfo AddSceneryProp(GameObject prop)
+        {
+            if (prop == null) return null;
+            var name = prop.name;
+            var info = new SceneryPropInfo
+            {
+                Go = prop,
+                Tr = prop.transform,
+                Lateral = prop.GetComponent<SceneryLateralOffset>(),
+                IsAuroraRibbon = name.StartsWith("Aurora Ribbon", System.StringComparison.Ordinal),
+                IsCheckpointGate = name.StartsWith("Checkpoint Gate", System.StringComparison.Ordinal),
+                SkipCorridorFade = ShouldSkipViewCorridorFadeName(name),
+                ForceHideInCorridor = ShouldForceHideSceneryInCorridor(name),
+                SnapToGround = IsGroundSceneryName(name),
+            };
+            sceneryProps.Add(prop);
+            sceneryPropInfos.Add(info);
+            return info;
         }
 
         private void RegisterSceneryProp(GameObject prop, float worldX, float worldZ, bool snapToGround = true)
@@ -1811,19 +1841,20 @@ namespace PenguinRun
 
             lateral.LateralOffset = worldX - TrackTerrain.WorldCurveX(worldZ, 0f);
             lateral.SnapToGround = snapToGround;
-            sceneryProps.Add(prop);
+            var info = AddSceneryProp(prop);
+            if (info != null) info.Lateral = lateral;
             sceneryPropRenderers[prop] = prop.GetComponentsInChildren<Renderer>(false);
         }
 
-        private void EnsureSceneryLateralOffset(GameObject prop, float runDistance)
+        private static void EnsureSceneryLateralOffset(SceneryPropInfo info, float runDistance)
         {
-            if (prop.GetComponent<SceneryLateralOffset>() != null) return;
-            if (ShouldSkipViewCorridorFade(prop)) return;
+            if (info.Lateral != null || info.SkipCorridorFade) return;
 
-            var pos = prop.transform.position;
-            var lateral = prop.AddComponent<SceneryLateralOffset>();
+            var pos = info.Tr.position;
+            var lateral = info.Go.AddComponent<SceneryLateralOffset>();
             lateral.LateralOffset = pos.x - TrackTerrain.WorldCurveX(pos.z, runDistance);
-            lateral.SnapToGround = IsGroundSceneryName(prop.name);
+            lateral.SnapToGround = info.SnapToGround;
+            info.Lateral = lateral;
         }
 
         private static bool ShouldForceHideSceneryInCorridor(string name)
@@ -1847,19 +1878,19 @@ namespace PenguinRun
                 && name != "Moon Glow";
         }
 
-        private static void AlignSceneryToTrack(GameObject prop, float runDistance, float groundY)
+        private static void AlignSceneryToTrack(SceneryPropInfo info, float runDistance, float groundY)
         {
-            var lateral = prop.GetComponent<SceneryLateralOffset>();
+            var lateral = info.Lateral;
             if (lateral == null) return;
 
-            var pos = prop.transform.position;
+            var pos = info.Tr.position;
             pos.x = TrackTerrain.WorldCurveX(pos.z, runDistance) + lateral.LateralOffset;
             if (lateral.SnapToGround)
             {
                 pos.y = TrackTerrain.SurfaceY(pos.z, runDistance, groundY);
             }
 
-            prop.transform.position = pos;
+            info.Tr.position = pos;
         }
 
         private static float ClampScenerySideX(float x)
@@ -1875,10 +1906,8 @@ namespace PenguinRun
             return side * Random.Range(SceneryMinAbsX, 11.5f);
         }
 
-        private static bool ShouldSkipViewCorridorFade(GameObject prop)
+        private static bool ShouldSkipViewCorridorFadeName(string n)
         {
-            if (prop == null) return true;
-            var n = prop.name;
             return n.StartsWith("Aurora Ribbon", System.StringComparison.Ordinal)
                 || n == "Moon"
                 || n == "Moon Glow";
@@ -1894,8 +1923,9 @@ namespace PenguinRun
             return worldPos.z >= zMin && worldPos.z <= zMax;
         }
 
-        private void ApplyViewCorridorFade(GameObject prop, Vector3 playerPos, Vector3 camPos, float runDistance, float dt)
+        private void ApplyViewCorridorFade(SceneryPropInfo info, Vector3 playerPos, Vector3 camPos, float runDistance, float dt)
         {
+            var prop = info.Go;
             if (!sceneryPropRenderers.TryGetValue(prop, out var renderers))
             {
                 renderers = prop.GetComponentsInChildren<Renderer>(false);
@@ -1913,7 +1943,7 @@ namespace PenguinRun
 
             var inCorridor = IsInViewCorridor(center, playerPos, camPos, runDistance);
             var fadeRate = Mathf.Clamp01(dt * 12f);
-            var forceHide = inCorridor && ShouldForceHideSceneryInCorridor(prop.name);
+            var forceHide = inCorridor && info.ForceHideInCorridor;
 
             foreach (var renderer in renderers)
             {
@@ -1940,7 +1970,10 @@ namespace PenguinRun
                 renderer.enabled = baseEnabled;
 
                 var targetAlpha = inCorridor ? Mathf.Min(baseAlpha, ViewCorridorFadedAlpha) : baseAlpha;
-                var currentAlpha = RunnerVisuals.GetColor(renderer.sharedMaterial).a;
+                // 必须读逐渲染器的 MPB 覆盖值：写侧走 SetRendererAlpha（MPB），若这里读
+                // sharedMaterial，读到的是全场同色物件共享、永不变化的缓存材质，插值每帧
+                // 都从同一基准重来，走廊内物件永远淡不到目标 alpha。
+                var currentAlpha = RunnerVisuals.GetRendererColor(renderer).a;
                 RunnerVisuals.SetRendererAlpha(renderer, Mathf.Lerp(currentAlpha, targetAlpha, fadeRate));
             }
         }
@@ -2248,6 +2281,7 @@ namespace PenguinRun
             ClearObjects(roadTiles);
             ClearObjects(trackMarkers);
             ClearObjects(sceneryProps);
+            sceneryPropInfos.Clear();
             BuildIceWorld(theme);
         }
 
