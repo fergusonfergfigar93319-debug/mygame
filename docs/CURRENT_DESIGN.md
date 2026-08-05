@@ -187,6 +187,15 @@ Boss 活跃时，HUD 应优先显示生命、当前招式、破绽进度和必�
 
 已完成并移出列表：六主题音频差异（见 2026-07-26 节）、主角视觉瑕疵与跑酷实距可读性（见 2026-07-26 节）、减轻首局信息量（能力驱动新手期，见 2026-07-25 节）、移动端输入阈值响应式（`RunnerGestureThresholds.ForViewport`）、跑酷 HUD 迁 uGUI 并与大厅同一套 `UiTheme` 令牌（IMGUI `RunnerHud` 已裁撤）、Boss 战 HUD 压缩（Boss 态只保留生命/招式/反制提示）。
 
+## 2026-08-05 CC0 场景增量与 Cube Pet 主角
+
+用户选型落地：场景侧采用 Kenney Nature Kit 增量 + Platformer Kit 雪地/道具；主角采用 Kenney Cube Pets 企鹅（C3）。
+
+- 新开源 FBX 精选入库 `Assets/Resources/PenguinRun/Models/`，六主题路边 `AddOpenNatureProp` 映射更新（冰湖雪松/雪块，雪松木桥营火，极光秋叶，雾堤菌石，珊瑚高棕榈，天空旗与木箱）。
+- 局内主角优先 `CubePetPenguinCharacter`（Resources `Characters/CubePetPenguin/animal-penguin`），无完整跑酷片库故用程序化 bob/squash；失败时回退 Gugugaga Mecanim，再回退程序化可爱网格。
+- itch/Google Drive 上的 Quaternius Stylized Nature、Ultimate Nature 全量与 KayKit Forest：自动化 `/file` 拉取返回 `invalid key`，Drive 单文件也被限流；已加 `tools/FetchItchCc0Pack.ps1` 供浏览器手动领取。Kenney 第二批 25 个 FBX 已补入库并刷新主题映射。
+- 静态门禁：`tools/VerifyCubePetAndNatureProps.ps1`。
+
 ## 2026-07-20 建模/特效/判定/页面全面优化
 
 本批次四条线完成代码与资产落地：

@@ -26,11 +26,12 @@ Keep this file if you redistribute the project to preserve source/license tracea
      tex_fabric_surface.png     from blue_textile.png
 
 ──────────────────────────────────────────────────────────────────────────────
-3. Nature Kit + CC0 Lowpoly Model Add-ons (OpenGameArt)
+3. Nature Kit + CC0 Lowpoly Model Add-ons (OpenGameArt / Kenney)
    Sources:
      https://opengameart.org/content/nature-kit
      https://opengameart.org/content/lowpoly-stones
      https://opengameart.org/content/lowpoly-leaf-tree
+     https://kenney.nl/assets/nature-kit  (2026-08 incremental import)
    License : CC0 / no mandatory attribution per source pages.
    Files used (Resources/PenguinRun/Models/):
      tree_pineSmallA.fbx
@@ -47,6 +48,52 @@ Keep this file if you redistribute the project to preserve source/license tracea
      stone_2.fbx
      cactus_tall.fbx
      leaftree.fbx  (+leaftree.PNG)
+     # 2026-08 Nature Kit increment (batch 1+2):
+     tree_pineTallB/C/D_detailed.fbx, tree_pineRoundA.fbx, tree_oak*.fbx,
+     tree_*_fall.fbx, tree_palmTall.fbx, rock_tallA/B/C.fbx, rock_largeB.fbx,
+     stone_tallA/B.fbx, cliff_half_stone.fbx, log_single/log_large.fbx,
+     campfire_stones.fbx, bridge_wood.fbx, plant_bush*.fbx, flower_*.fbx,
+     mushroom_tanGroup/mushroom_redTall.fbx, path_stone.fbx, canoe.fbx,
+     tent_detailedOpen.fbx
+
+──────────────────────────────────────────────────────────────────────────────
+3b. Kenney Platformer Kit (roadside / IceLake snow props)
+   URL     : https://kenney.nl/assets/platformer-kit
+   Archive : https://kenney.nl/media/pages/assets/platformer-kit/1585cf62b4-1775122253/kenney_platformer-kit.zip
+   License : CC0 1.0
+   Files used (Resources/PenguinRun/Models/, renamed):
+     tree_pine_snow.fbx          from tree-pine-snow.fbx
+     tree_pine_snow_small.fbx    from tree-pine-snow-small.fbx
+     tree_snow.fbx               from tree-snow.fbx
+     tree_pine.fbx / tree_pine_small.fbx
+     block_snow.fbx / block_snow_large.fbx / block_snow_hexagon.fbx
+     prop_flag.fbx, prop_crate.fbx, prop_ladder.fbx, ladder_long.fbx
+     crate_strong.fbx, trap_spikes.fbx
+
+──────────────────────────────────────────────────────────────────────────────
+3c. Kenney Cube Pets (protagonist + roadside ambience)
+   URL     : https://kenney.nl/assets/cube-pets
+   Archive : https://kenney.nl/media/pages/assets/cube-pets/44e58e945f-1774520254/kenney_cube-pets_1.0.zip
+   License : CC0 1.0
+   Files used:
+     Characters/CubePetPenguin/animal-penguin.fbx
+     Models/CubePets/cubepet_{fox,polar,deer,fish,crab,chick}.fbx
+   Notes  : Static meshes; protagonist via CubePetPenguinCharacter (procedural
+            bob/squash). Gugugaga Mecanim avatar remains as fallback.
+
+3d. Kenney Starter Kit 3D Platformer (selected props)
+   URL     : https://github.com/KenneyNL/Starter-Kit-3D-Platformer
+   License : MIT code / CC0 assets (see repo README)
+   Files used:
+     Models/sky_cloud.glb   from models/cloud.glb
+     Models/prop_grass.glb  from models/grass.glb
+
+3e. Deferred itch packs (manual drop-in)
+   KayKit Forest / Quaternius Stylized Nature / Ultimate Nature: automated
+   /file download returns invalid key from this environment.
+   Place real zips (>200KB) in _vendor/packs/ then run menu
+   PenguinRun/Assets/Import Vendor CC0 Packs
+   (VendorCc0PackImporter) or tools/FetchItchCc0Pack.ps1 to open the browser.
 
 ──────────────────────────────────────────────────────────────────────────────
 4. Theme-differentiated obstacle/pickup sculptures (RESOLVED, project-original)

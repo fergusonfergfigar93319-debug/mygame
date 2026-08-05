@@ -918,10 +918,14 @@ namespace PenguinRun
             rimFillLight.shadows = LightShadows.None;
 
             player = new GameObject("Penguin Character");
-            // 使用程序化 Mesh 生成的可爱卡通企鹅，替代 Primitive 拼接版本
-            var avatarDefinition = Resources.Load<RunnerAvatarDefinition>(
-                "PenguinRun/Characters/Gugugaga/GugugagaAvatar");
-            character = PlayerAvatarPresenter.Create(player.transform, avatarDefinition);
+            // Prefer Kenney Cube Pets penguin (CC0); fall back to Gugugaga Mecanim, then procedural cute mesh.
+            character = CubePetPenguinCharacter.TryCreate(player.transform);
+            if (character == null)
+            {
+                var avatarDefinition = Resources.Load<RunnerAvatarDefinition>(
+                    "PenguinRun/Characters/Gugugaga/GugugagaAvatar");
+                character = PlayerAvatarPresenter.Create(player.transform, avatarDefinition);
+            }
             player.transform.localScale = Vector3.one * Mathf.Clamp(tuning.camera.playerVisualScale, 0.72f, 1f);
             SetPlayerRenderersVisible(player.transform, true);
 
@@ -1306,57 +1310,63 @@ namespace PenguinRun
         {
             switch (theme)
             {
+                case RunnerMapTheme.IceLakeEcho:
+                    AddOpenNatureProp(index % 2 == 0 ? "tree_pine_snow" : "tree_snow",
+                        index % 2 == 0 ? -10.4f : 10.4f, z + 5.2f,
+                        new Vector3(1.2f, 1.2f, 1.2f), new Color(0.78f, 0.9f, 1f));
+                    AddOpenNatureProp(index % 2 == 0 ? "block_snow_large" : "CubePets/cubepet_polar",
+                        index % 2 == 0 ? 9.8f : -9.8f, z + 11f,
+                        new Vector3(1.1f, 1.1f, 1.1f), new Color(0.85f, 0.93f, 1f));
+                    break;
                 case RunnerMapTheme.CedarRuins:
                     AddCedarRuin(-7.1f, z + 2.2f, index);
                     AddCedarRuin(7.1f, z + 8.4f, index + 1);
                     if (index % 2 == 0)
-                    {
-                        AddOpenNatureProp("tree_pineTallA", -10.6f, z + 5.4f, new Vector3(1.25f, 1.25f, 1.25f), new Color(0.52f, 0.72f, 0.58f));
-                    }
+                        AddOpenNatureProp("tree_pineTallC_detailed", -10.6f, z + 5.4f, new Vector3(1.25f, 1.25f, 1.25f), new Color(0.52f, 0.72f, 0.58f));
                     else
-                    {
-                        AddOpenNatureProp("rock_largeA", 10.2f, z + 4.8f, new Vector3(1.4f, 1.2f, 1.4f), new Color(0.62f, 0.7f, 0.78f));
-                    }
+                        AddOpenNatureProp("tent_detailedOpen", 10.2f, z + 4.8f, new Vector3(1.1f, 1.1f, 1.1f), new Color(0.72f, 0.55f, 0.4f));
+                    AddOpenNatureProp(index % 3 == 0 ? "CubePets/cubepet_deer" : "campfire_stones",
+                        index % 2 == 0 ? -9.2f : 9.2f, z + 12f, Vector3.one, new Color(0.7f, 0.7f, 0.72f));
                     break;
                 case RunnerMapTheme.AuroraField:
                     AddAuroraBeacon(-7.8f, z + 2.6f, index);
                     AddAuroraBeacon(7.8f, z + 9.1f, index + 1);
-                    AddOpenNatureProp(index % 2 == 0 ? "leaftree" : "tree_simple",
-                        index % 2 == 0 ? -10.8f : 10.8f,
-                        z + 5.1f,
-                        new Vector3(1.05f, 1.05f, 1.05f),
-                        new Color(0.68f, 0.82f, 1f));
+                    AddOpenNatureProp(index % 2 == 0 ? "tree_detailed_fall" : "tree_thin_fall",
+                        index % 2 == 0 ? -10.8f : 10.8f, z + 5.1f,
+                        new Vector3(1.05f, 1.05f, 1.05f), new Color(0.68f, 0.82f, 1f));
+                    AddOpenNatureProp(index % 2 == 0 ? "flower_purpleA" : "CubePets/cubepet_chick",
+                        index % 2 == 0 ? 9.5f : -9.5f, z + 14f, Vector3.one * 1.4f, new Color(0.75f, 0.55f, 1f));
                     break;
                 case RunnerMapTheme.MistDike:
                     AddMistVeil(-6.9f, z + 2.8f, index);
                     AddMistVeil(6.9f, z + 8.7f, index + 1);
-                    AddOpenNatureProp(index % 2 == 0 ? "mushroom_redGroup" : "stone_2",
-                        index % 2 == 0 ? -9.9f : 9.9f,
-                        z + 5.6f,
+                    AddOpenNatureProp(index % 2 == 0 ? "mushroom_redTall" : "cliff_half_stone",
+                        index % 2 == 0 ? -9.9f : 9.9f, z + 5.6f,
                         index % 2 == 0 ? new Vector3(0.9f, 0.9f, 0.9f) : new Vector3(1.3f, 1.3f, 1.3f),
                         new Color(0.74f, 0.86f, 0.94f));
+                    AddOpenNatureProp(index % 2 == 0 ? "CubePets/cubepet_fox" : "plant_bushDetailed",
+                        index % 2 == 0 ? 10.1f : -10.1f, z + 13f, Vector3.one, new Color(0.55f, 0.7f, 0.62f));
                     break;
                 case RunnerMapTheme.OceanReef:
                     AddCoralReef(-7.5f, z + 2.5f, index);
                     AddCoralReef(7.5f, z + 9.0f, index + 1);
                     if (index % 3 == 0)
                         AddTreasureChest(-6.2f, z + 5.5f);
-                    AddOpenNatureProp(index % 2 == 0 ? "stone_1" : "rock_smallA",
-                        index % 2 == 0 ? -10.5f : 10.5f,
-                        z + 6.2f,
-                        new Vector3(1.15f, 1.15f, 1.15f),
-                        new Color(0.58f, 0.82f, 0.86f));
+                    AddOpenNatureProp(index % 2 == 0 ? "tree_palmTall" : "canoe",
+                        index % 2 == 0 ? -10.5f : 10.5f, z + 6.2f,
+                        new Vector3(1.15f, 1.15f, 1.15f), new Color(0.58f, 0.82f, 0.86f));
+                    AddOpenNatureProp(index % 2 == 0 ? "CubePets/cubepet_fish" : "CubePets/cubepet_crab",
+                        index % 2 == 0 ? 9.4f : -9.4f, z + 14f, Vector3.one, new Color(0.7f, 0.9f, 0.95f));
                     break;
                 case RunnerMapTheme.SkyFlight:
                     AddSkyArch(-8.0f, z + 3.0f, index);
                     AddSkyArch(8.0f, z + 9.5f, index + 1);
                     if (index % 3 == 0)
                         AddRainbow(z + 26f);
-                    AddOpenNatureProp(index % 2 == 0 ? "tree_pineSmallA" : "tree_simple",
-                        index % 2 == 0 ? -11.2f : 11.2f,
-                        z + 5.8f,
-                        new Vector3(0.95f, 0.95f, 0.95f),
-                        new Color(0.82f, 0.9f, 1f));
+                    AddOpenNatureProp(index % 2 == 0 ? "prop_flag" : "sky_cloud",
+                        index % 2 == 0 ? -11.2f : 11.2f, z + 5.8f,
+                        new Vector3(0.95f, 0.95f, 0.95f), new Color(0.82f, 0.9f, 1f));
+                    AddOpenNatureProp("crate_strong", index % 2 == 0 ? 9.6f : -9.6f, z + 15f, Vector3.one, new Color(0.86f, 0.7f, 0.5f));
                     break;
             }
 
@@ -1624,6 +1634,8 @@ namespace PenguinRun
             go.transform.position = new Vector3(x, 0f, z);
             go.transform.localScale = scale;
             go.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+            foreach (var collider in go.GetComponentsInChildren<Collider>(true))
+                Object.Destroy(collider);
 
             foreach (var renderer in go.GetComponentsInChildren<Renderer>(true))
             {
