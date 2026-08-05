@@ -253,13 +253,13 @@ chapterBody  = kind == StartJourney ? "..."      : recommendation.Body;
 
 那张 1.3MB 的立绘（帽子、护目镜、红围巾、挎包）**一直躺在仓库里**，只是从来没被加载过。已补回导入块并保留 GUID。
 
-**第二个白圆是伙伴。** `CampVisualAssetCatalog` 声明了 `companion_tuantuan` / `companion_dror` / `mascot_gugugaga_premium` / `camp_panorama_premium` 四条路径，但 `tools/generate_premium_home_assets.py` 只产出 8 个 `camp_*` 文件——**这四个资源从未被生成过**。伙伴的回退链是 `?? Mascot`，所以修好 meta 之后它会变成「两只一模一样的企鹅」。已改为缺美术时返回 null 并隐藏伙伴与羁绊铭牌（与前景道具用的是同一条既有约定）；羁绊进度在顶栏 Ticker 与战绩 Sheet 仍然可见。
+**第二个白圆是伙伴。** `CampVisualAssetCatalog` 声明了 `companion_tuantuan` / `companion_dror` / `mascot_gugugaga_premium` / `camp_panorama_premium` 四条路径，但 `tools/generate_premium_home_assets.py` 只产出 8 个 `camp_*` 文件——当时这四个资源从未被生成过。伙伴的回退链曾经是 `?? Mascot`，所以修好 meta 之后会变成「两只一模一样的企鹅」。代码先改为缺美术时返回 null；2026-07-28 已正式补入团团（盾牌与青绿色斗篷）、Dror（极光磁针与地图）两张透明伙伴立绘，并复用已验收的正式营地全景与主角立绘补齐 premium 稳定路径。
 
-**新增门禁** `ProjectLobbyArtValidation`：吉祥物不得解析为占位圆，全景图必须可加载，伙伴可以缺席但**不得**退化成吉祥物或占位圆。`VerifyStorybookPalette.ps1` 另外锁住两个 `.meta` 必须含 `TextureImporter:` 与 `textureType: 8`——实测能挡住 meta 被剥空的回归。
+**新增门禁** `ProjectLobbyArtValidation`：premium 全景、主角与两位伙伴现在都必须可加载，且任何角色都不得解析为占位圆或重复主角。`VerifyPremiumStorybookHome.ps1` 同时锁住 12 张大厅素材的完整 `TextureImporter`，并要求四张主视觉按 Sprite 导入。
 
-验证：15 个静态门禁全过；全量 Roslyn 编译通过（175 源文件）；4 个 Unity 校验器通过，`ProjectLobbyArtValidation` 报告「mascot and panorama are real assets; companion art absent (node hidden)」。
+原问题阶段的验证记录：15 个静态门禁、全量 Roslyn 编译与 4 个 Unity 校验器通过。2026-07-28 的素材补齐批次改由加强后的 `VerifyPremiumStorybookHome.ps1` 和 `ProjectLobbyArtValidation` 覆盖四张 premium 主视觉。
 
-**明确待办：** 伙伴立绘（团团 / Dror）与 premium 全景图仍缺美术，属**资源待产出**，不是代码问题。门禁已保证它们缺席时大厅不会再画出占位或重复角色。
+**已完成：** 伙伴立绘（团团 / Dror）、premium 全景图与 premium 主角路径均已落盘；大厅不再依赖隐藏伙伴或旧图回退来保持画面正确。
 
 ## 2026-07-26 结算页与调色板收口
 

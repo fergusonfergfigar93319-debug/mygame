@@ -51,15 +51,20 @@ namespace PenguinRun.Editor
             if (StorybookArtCatalog.LobbyPanorama == null)
                 errors.Add("Lobby panorama failed to load; check its .meta has a TextureImporter block.");
 
-            // 伙伴允许缺席（美术尚未产出），但**不允许**退化成吉祥物或占位圆——
-            // 那会在大厅里画出两个同样的角色。
+            // 四张 premium 主视觉已经正式产出，不再允许静默回落到旧图或隐藏伙伴。
+            if (Resources.Load<Sprite>(CampVisualAssetCatalog.PanoramaPath) == null)
+                errors.Add("Premium camp panorama failed to load.");
+            if (Resources.Load<Sprite>(CampVisualAssetCatalog.MascotPath) == null)
+                errors.Add("Premium mascot failed to load.");
+
             foreach (var drorUnlocked in new[] { false, true })
             {
                 var companion = CampVisualAssetCatalog.Companion(drorUnlocked);
-                if (companion == null) continue;
-                if (companion == circle)
+                if (companion == null)
+                    errors.Add($"Companion (dror={drorUnlocked}) failed to load.");
+                else if (companion == circle)
                     errors.Add($"Companion (dror={drorUnlocked}) fell back to the placeholder circle.");
-                if (companion == mascot)
+                else if (companion == mascot)
                     errors.Add($"Companion (dror={drorUnlocked}) resolves to the mascot sprite; " +
                                "the lobby would draw the same character twice.");
             }
@@ -71,9 +76,7 @@ namespace PenguinRun.Editor
                 throw new UnityException(message);
             }
 
-            var companionPresent = CampVisualAssetCatalog.Companion(false) != null;
-            Debug.Log("[ProjectLobbyArtValidation] PASS: mascot and panorama are real assets; " +
-                      $"companion art {(companionPresent ? "present" : "absent (node hidden)")}.");
+            Debug.Log("[ProjectLobbyArtValidation] PASS: premium panorama, mascot, TuanTuan, and Dror are real assets.");
         }
     }
 }

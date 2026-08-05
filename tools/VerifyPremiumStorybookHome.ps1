@@ -27,8 +27,14 @@ foreach ($component in 'LobbyTopRibbon','LobbyJournalPage','LobbyChapterPage','L
     Require $text "(class|struct)\s+$component" "premium home component $component"
 }
 
-foreach ($asset in 'camp_bonfire_atlas','camp_workshop_atlas','camp_companion_hut_atlas','camp_library_atlas','camp_lookout_atlas','camp_foreground_props','camp_smoke_soft','camp_glow_soft') {
+foreach ($asset in 'camp_panorama_premium','mascot_gugugaga_premium','companion_tuantuan','companion_dror','camp_bonfire_atlas','camp_workshop_atlas','camp_companion_hut_atlas','camp_library_atlas','camp_lookout_atlas','camp_foreground_props','camp_smoke_soft','camp_glow_soft') {
     Read-Required "Assets/Resources/PenguinRun/StorybookUI/PremiumHome/$asset.png" | Out-Null
+    $meta = Read-Required "Assets/Resources/PenguinRun/StorybookUI/PremiumHome/$asset.png.meta"
+    Require $meta 'TextureImporter:' "$asset has a complete Unity texture importer"
+}
+foreach ($asset in 'camp_panorama_premium','mascot_gugugaga_premium','companion_tuantuan','companion_dror') {
+    $meta = Read-Required "Assets/Resources/PenguinRun/StorybookUI/PremiumHome/$asset.png.meta"
+    Require $meta 'textureType:\s*8' "$asset imports as a Unity Sprite"
 }
 
 $campScene = Read-Required 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyCampScene.cs'
