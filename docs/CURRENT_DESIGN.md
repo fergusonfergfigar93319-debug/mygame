@@ -194,6 +194,9 @@ Boss 活跃时，HUD 应优先显示生命、当前招式、破绽进度和必�
 - 新开源 FBX 精选入库 `Assets/Resources/PenguinRun/Models/`，六主题路边 `AddOpenNatureProp` 映射更新（冰湖雪松/雪块，雪松木桥营火，极光秋叶，雾堤菌石，珊瑚高棕榈，天空旗与木箱）。
 - 局内主角优先 `CubePetPenguinCharacter`（Resources `Characters/CubePetPenguin/animal-penguin`），无完整跑酷片库故用程序化 bob/squash；失败时回退 Gugugaga Mecanim，再回退程序化可爱网格。
 - itch/Google Drive 上的 Quaternius Stylized Nature、Ultimate Nature 全量与 KayKit Forest：自动化 `/file` 拉取返回 `invalid key`，Drive 单文件也被限流；已加 `tools/FetchItchCc0Pack.ps1` 供浏览器手动领取。Kenney 第二批 25 个 FBX 已补入库并刷新主题映射。
+- **KayKit Forest Nature Pack 1.0 FREE** 已手动入库：18 个精选 `vendor_*` FBX + `kaykit_forest_texture.png`；`VendorCc0PackImporter` 收紧为只处理 KayKit/Quaternius zip（跳过 Kenney），并改为白名单精选。
+- **Quaternius Ultimate Nature**（`vendor_un_*`）与 **Stylized Nature MegaKit Standard**（`Models/vendor_sn/` + 贴图）已手动入库；主题模型选型下沉到 `NaturePropCatalog`（含包级缩放与 KayKit 混用）；`AddOpenNatureProp` 改为 `RegisterSceneryProp` 跟弯道贴地；`VendorModelImportRepair` 补全 Quaternius stub meta（`useFileScale`）。
+- 大厅双 Coral CTA：底坞「出发」降为导航项，主页不再默认高亮；章节卡「翻开旅程」保留唯一主 CTA。
 - 静态门禁：`tools/VerifyCubePetAndNatureProps.ps1`。
 
 ## 2026-07-20 建模/特效/判定/页面全面优化
@@ -287,10 +290,10 @@ chapterBody  = kind == StartJourney ? "..."      : recommendation.Body;
 
 **明确待办：**
 
-1. **大厅两张卡内容完全重复**：`01-home.png` 里左「今日手记」与右「下一章」标题正文一字不差（都是「让营火更亮一些 / 星火篝火已经备齐修复材料」）。未修。
-2. **大厅吉祥物渲染成两个白色圆块**而非企鹅。未修，需要先定位是资源缺失还是渲染回退。
+1. **大厅两张卡内容完全重复**：已在 `MainMenuBootstrap.BuildLobbyViewModel` 按主题区分手记/下一章文案（旧审计截图过时）。
+2. **大厅吉祥物渲染成两个白色圆块**：已修（meta + premium 立绘路径）。
 3. **UI 代码里还有约 30 处裸 Unicode 字形**（`CampShopPanel` / `CodexPanel` / `LeaderboardPanel` 等）。已知 ★ ✓ 渲染正常、➞ ❀ ⌛ ✨ 是豆腐块，逐个靠肉眼排查不可行。曾尝试写字形覆盖门禁但**已删除**：项目用动态字体图集，`TMP_FontAsset.HasCharacter` 查的是「当前图集有没有」而非「源字体有没有」，会把正常显示的 ★ 误报为缺失；且需要先剥离注释（`—`、`""`、`─` 大量出现在注释里）。要做对需要改查源字体文件覆盖。
-4. 大厅存在两个橙色主 CTA（底栏「出发」与右侧「翻开旅程」）互相竞争，未处理。
+4. 大厅两个橙色主 CTA：已处理——底坞「出发」降为导航项，主页不再默认高亮；章节「翻开旅程」保留唯一 Coral 主 CTA。
 
 ## 2026-07-26 代码健康度：止血而非大修
 

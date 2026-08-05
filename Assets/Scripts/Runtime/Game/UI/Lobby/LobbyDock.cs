@@ -51,7 +51,8 @@ namespace PenguinRun.Game.UI.Lobby
 
             dock.AddItem(root, 0, "CampShop", "营地", actions.Camp);
             dock.AddItem(root, 1, "Missions", "任务", actions.Missions);
-            dock.AddItem(root, 2, "Run", "出发", actions.Run, primary: true);
+            // Home already has Coral primary CTA「翻开旅程」; dock Run is nav, not a second primary.
+            dock.AddItem(root, 2, "Run", "出发", actions.Run, primary: false);
             dock.AddItem(root, 3, "Codex", "图鉴", actions.Codex);
             dock.AddItem(root, 4, "Settings", "设置", actions.Settings);
             return dock;
@@ -61,7 +62,8 @@ namespace PenguinRun.Game.UI.Lobby
         {
             foreach (var item in items)
             {
-                var selected = item.Name == panelName || (panelName == null && item.Name == "Run");
+                // On the home surface (null panel) leave dock unhighlighted so chapter CTA stays the only Coral action.
+                var selected = !string.IsNullOrEmpty(panelName) && item.Name == panelName;
                 item.Background.color = selected ? UiTheme.CoralAction :
                     new Color(UiTheme.PaperWarm.r, UiTheme.PaperWarm.g, UiTheme.PaperWarm.b, 0f);
                 item.Label.color = selected ? Color.white : UiTheme.InkPrimary;

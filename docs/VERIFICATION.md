@@ -40,7 +40,7 @@ Get-ChildItem tools/Verify*.ps1 | ForEach-Object {
 | `VerifyProtagonistAvatarRevamp.ps1` | 主角表现层边界、视角空间主光、贴片轮廓裁剪 |
 | `VerifyVisualJudgmentRevamp.ps1` | 2026-07-20 建模/特效/判定批次，含 LOD 阈值防回归 |
 | `VerifyCustomMapAssetsBatch1.ps1` | 自定义地图资产批次一 |
-| `VerifyCubePetAndNatureProps.ps1` | Cube Pet 主角路径 + 六主题路边开源 FBX 与 credits |
+| `VerifyCubePetAndNatureProps.ps1` | Cube Pet 主角路径 + 六主题路边开源 FBX（KayKit / Quaternius `vendor_*`）与 credits |
 | `VerifyQualityTierCalibration.ps1` | 画质分档由设备能力驱动、真的写入、且编辑器可达 |
 | `VerifyFileSizeRatchet.ps1` | 六个超大文件只准缩小，不准增长 |
 

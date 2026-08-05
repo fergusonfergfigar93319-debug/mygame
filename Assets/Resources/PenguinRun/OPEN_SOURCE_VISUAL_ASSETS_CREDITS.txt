@@ -88,12 +88,45 @@ Keep this file if you redistribute the project to preserve source/license tracea
      Models/sky_cloud.glb   from models/cloud.glb
      Models/prop_grass.glb  from models/grass.glb
 
-3e. Deferred itch packs (manual drop-in)
-   KayKit Forest / Quaternius Stylized Nature / Ultimate Nature: automated
-   /file download returns invalid key from this environment.
-   Place real zips (>200KB) in _vendor/packs/ then run menu
-   PenguinRun/Assets/Import Vendor CC0 Packs
-   (VendorCc0PackImporter) or tools/FetchItchCc0Pack.ps1 to open the browser.
+3e. KayKit Forest Nature Pack 1.0 FREE (ingested)
+   Author  : Kay Lousberg (https://www.kaylousberg.com)
+   URL     : https://kaylousberg.itch.io/kaykit-forest
+   License : CC0 1.0
+   Archive : KayKit_Forest_Nature_Pack_1.0_FREE.zip (drop in _vendor/packs/)
+   Files used (curated, vendor_ prefix):
+     Models/vendor_Tree_{1,2,3,4}_A_Color1.fbx
+     Models/vendor_Tree_Bare_{1,2}_A_Color1.fbx
+     Models/vendor_Bush_{1,2,3,4}_A_Color1.fbx
+     Models/vendor_Rock_{1_A,1_G,2_A,2_E,3_A,3_H}_Color1.fbx
+     Models/vendor_Grass_{1,2}_A_Color1.fbx
+     Models/kaykit_forest_texture.png
+   Wired into Cedar / Mist / Aurora roadside props via AddOpenNatureProp.
+   Credit appreciated (not required by CC0): Kay Lousberg / KayKit.
+
+3f. Quaternius Ultimate Nature Pack (ingested)
+   Author  : Quaternius (https://quaternius.com)
+   URL     : https://quaternius.itch.io/150-lowpoly-nature-models
+   License : CC0 1.0
+   Archive : Ultimate Nature Pack by Quaternius.zip (_vendor/packs/)
+   Files used (curated, vendor_un_ prefix):
+     Models/vendor_un_{PineTree,BirchTree}_Snow_1.fbx, Rock_Snow_1, Bush_Snow_1
+     Models/vendor_un_PineTree_1.fbx, CommonTree_1, WoodLog_Moss, TreeStump_Moss
+     Models/vendor_un_{BirchTree,Willow,CommonTree}_Autumn_1.fbx
+     Models/vendor_un_Rock_Moss_1.fbx, CommonTree_Dead_1, BushBerries_1, Willow_Dead_1
+     Models/vendor_un_PalmTree_{1,2}.fbx, Lilypad, Rock_1, Flowers
+   Wired into IceLake / Aurora / Mist / Ocean roadside + SnowPine/FogStone landmarks.
+
+3g. Quaternius Stylized Nature MegaKit Standard (ingested)
+   Author  : Quaternius (https://quaternius.com)
+   URL     : https://quaternius.itch.io/stylized-nature-megakit
+   License : CC0 1.0 (free Standard subset 68/116 models)
+   Archive : Stylized_Nature_MegaKit_Standard.zip (_vendor/packs/)
+   Files used (Models/vendor_sn/ + Textures atlas):
+     Pine_1, Pine_3, CommonTree_1, TwistedTree_1, DeadTree_1
+     Bush_Common, Bush_Common_Flowers, Mushroom_Common, Mushroom_Laetiporus
+     Rock_Medium_1, Fern_1, Grass_Common_Tall, Flower_3_Group, Plant_1_Big
+     + Textures/*.png colocated for material resolve
+   Wired into Cedar / Aurora / Mist roadside props.
 
 ──────────────────────────────────────────────────────────────────────────────
 4. Theme-differentiated obstacle/pickup sculptures (RESOLVED, project-original)
