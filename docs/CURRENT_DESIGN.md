@@ -197,6 +197,7 @@ Boss 活跃时，HUD 应优先显示生命、当前招式、破绽进度和必�
 - **KayKit Forest Nature Pack 1.0 FREE** 已手动入库：18 个精选 `vendor_*` FBX + `kaykit_forest_texture.png`；`VendorCc0PackImporter` 收紧为只处理 KayKit/Quaternius zip（跳过 Kenney），并改为白名单精选。
 - **Quaternius Ultimate Nature**（`vendor_un_*`）与 **Stylized Nature MegaKit Standard**（`Models/vendor_sn/` + 贴图）已手动入库；主题模型选型下沉到 `NaturePropCatalog`（含包级缩放与 KayKit 混用）；`AddOpenNatureProp` 改为 `RegisterSceneryProp` 跟弯道贴地；`VendorModelImportRepair` 补全 Quaternius stub meta（`useFileScale`）。
 - 大厅双 Coral CTA：底坞「出发」降为导航项，主页不再默认高亮；章节卡「翻开旅程」保留唯一主 CTA。
+- 路边验收：`ProjectOpenNaturePreviewCapture`（RenderTexture）按六主题拍 `Artifacts/OpenNaturePreviews/`，断言道具像素覆盖与明度；batchmode 可用，补 journey smoke 截不到帧的缺口。
 - 静态门禁：`tools/VerifyCubePetAndNatureProps.ps1`。
 
 ## 2026-07-20 建模/特效/判定/页面全面优化

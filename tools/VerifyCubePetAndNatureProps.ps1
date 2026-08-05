@@ -101,6 +101,12 @@ $repair = Require-File 'Assets/Scripts/Editor/PenguinRun/VendorModelImportRepair
 Require-Match $repair 'VendorModelImportRepair' 'vendor model import repair exists'
 Require-Match $repair 'useFileScale' 'repair enables useFileScale'
 
+$preview = Require-File 'Assets/Scripts/Editor/PenguinRun/ProjectOpenNaturePreviewCapture.cs'
+Require-Match $preview 'ProjectOpenNaturePreviewCapture' 'open nature preview capture exists'
+Require-Match $preview 'CaptureAllFromCommandLine' 'open nature preview has CLI entry'
+Require-Match $preview 'NaturePropCatalog' 'open nature preview uses NaturePropCatalog'
+Require-Match $preview 'RenderTexture' 'open nature preview uses RenderTexture path'
+
 $dock = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyDock.cs'
 Require-Match $dock 'primary:\s*false' 'dock Run is not a second Coral primary'
 Require-Match $dock '!string\.IsNullOrEmpty\(panelName\)' 'home dock leaves chapter CTA as sole Coral'

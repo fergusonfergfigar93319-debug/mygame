@@ -81,6 +81,7 @@ $unity = 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.exe'
 | `PenguinRun.Editor.ProjectBossPreviewCapture.CaptureAllFromCommandLine` | `Artifacts/BossPreviews/` | 无 |
 | `PenguinRun.Editor.ProjectVisualPreviewCapture.CaptureAllFromCommandLine` | `Artifacts/VisualPreviews/` | 无 |
 | `PenguinRun.Editor.ProjectThemeMechanicPreviewCapture.CaptureFromCommandLine` | `Artifacts/ThemeMechanicPreviews/` | 无 |
+| `PenguinRun.Editor.ProjectOpenNaturePreviewCapture.CaptureAllFromCommandLine` | `Artifacts/OpenNaturePreviews/` | 六主题路边 CC0：对真实 FBX 做网格高度校验，并用等高胶囊做 RT 像素差（`occupied≥1200`、`meanLuma≥28`）。batchmode 下导入材质不稳定，故图为等高代理剪影；**不要加 `-nographics`** |
 
 ### 构建器（改了源数据后需要重跑）
 
