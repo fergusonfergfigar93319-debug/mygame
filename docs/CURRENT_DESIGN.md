@@ -135,6 +135,8 @@ Boss 招式视觉节拍为：
 3. `Strike`：危险窗口，与命中判定对齐。
 4. `Recovery`：收招和淡出。
 
+击发同步约定：命中判定、Strike 特效、骨骼攻击收势与齐射落地共用 `PatternStrikeImpactTime`（危险窗起点）；招式时钟在本帧视觉更新前推进，避免「先扣血后出特效」。
+
 Boss 活跃时，HUD 应优先显示生命、当前招式、破绽进度和必要提示；非关键统计应弱化，避免遮挡跑道。
 
 ## 大厅设计
@@ -198,6 +200,12 @@ Boss 活跃时，HUD 应优先显示生命、当前招式、破绽进度和必�
 - **Quaternius Ultimate Nature**（`vendor_un_*`）与 **Stylized Nature MegaKit Standard**（`Models/vendor_sn/` + 贴图）已手动入库；主题模型选型下沉到 `NaturePropCatalog`（含包级缩放与 KayKit 混用）；`AddOpenNatureProp` 改为 `RegisterSceneryProp` 跟弯道贴地；`VendorModelImportRepair` 补全 Quaternius stub meta（`useFileScale`）。
 - 大厅双 Coral CTA：底坞「出发」降为导航项，主页不再默认高亮；章节卡「翻开旅程」保留唯一主 CTA。
 - 路边验收：`ProjectOpenNaturePreviewCapture`（RenderTexture）按六主题拍 `Artifacts/OpenNaturePreviews/`，断言道具像素覆盖与明度；batchmode 可用，补 journey smoke 截不到帧的缺口。
+- 冰湖过白修正（2026-08-06）：靛紫天空 + 琥珀边光/描边、灰蓝雪面、路边道具暖橙/青蓝染色；Cube Pet 程序化跑跳滑铲（stride 颠簸/侧倾/落地挤压）并暖化近白材质。
+- 局内货币金币（2026-08-06）：Kenney `coin_gold`（1.15×）优先，否则分层薄金币；弱自发光 + 绕 Y 旋转；拾取缩放 1.05（避免叠成光团）；开局三串 +「散鱼」可拾取。经济语义仍为「鱼干」。
+- Boss / 重叠（2026-08-06）：各难度首 Boss 与间隔大幅延后（普通约 2200m / 2100m）；Boss 临近 120m 停刷障碍并清净空；金币生成避开障碍车道（旁道重试或跳过）。
+- 操作手感（2026-08-06）：滑铲预输入 0.16s；落地滑铲优先于过期跳跃缓冲；换道更跟手（LaneLerp 29）；斜滑取主轴；键盘 Shift/F 冲刺 + 冷却预输入；Esc 暂停。
+- Boss 判定公平（2026-08-06）：收窄车道命中盒、加长前摇/缩短危险窗；齐射最多两道且仅落地瞬间判伤，跳跃或冲刺可躲；各难度 min 预警上调（普通约 0.75s）。
+- Boss 击发同步（2026-08-06）：判定 / Strike VFX / 骨骼收势 / 齐射落地锁定同一击发时刻；身体前冲用 `StrikeImpact01` 峰值；弹道由招式 elapsed 驱动。
 - 静态门禁：`tools/VerifyCubePetAndNatureProps.ps1`。
 
 ## 2026-07-20 建模/特效/判定/页面全面优化
@@ -361,6 +369,43 @@ powershell -ExecutionPolicy Bypass -File tools/VerifyThemeAudioDifferentiation.p
 ```
 
 **明确待办：** 实机听感（尤其手机外放下六张床的可分辨度）与音量平衡尚未在 Android 设备上验收。
+
+## 2026-08-13 场景美术与交互体验提升
+
+在同日修复批次之上的表现层提升，不改任何判定：
+
+**地图场景（六主题辨识度）**
+
+- **天象按主题布置（新文件 `ThemeSkyDressing`）：** 此前六图共用一轮月亮 + 五条极光带——天空白昼挂月亮、海洋礁湖飘极光。现在极光图独占满编极光带（冰湖留两条弱余晖），雪松是低位琥珀暮月，雾堤只剩被雾漫开的冷光晕，海洋是高位小冷月，天空换成日盘 + 暖光晕。天空盒极光带颜色随 `SkyAuroraColor` 走，非极光主题为黑（无带）。
+- **雾与天际拉开三张夜图：** 冰湖雾偏靛紫且最远（52–172）、极光偏青绿且更短（42–148）、海洋深青更饱和（32–126）且地平压深；此前冰湖与极光雾距完全相同、50m 外不可分。
+- **寒带套件不再全图共用：** 冰晶簇只属于冰湖/极光/雾堤，雪堆只属于冰湖/雪松/雾堤；远山剪影配色随主题传入（雪松暮紫 / 海洋礁蓝 / 天空云白），构建拆到新文件 `ThemeRidgeScenery`。
+- **走廊合规与泄漏修复：** 旗帜从 ±5.65 移到护坡外 ±8.6；海草/贝壳/气泡从三车道上移到 |x|≥8.6（原先海草长在跑道上会被误读成障碍）；冰裂改为路面瓦片子物体（随路滚动、随瓦片销毁——此前不注册、切主题跨图残留且不随路动）；IceArch 地标从"一条 2.8m 冰裂"改为真正的双柱冰拱。
+- **逐主题后处理色调：** `ThemePresentationProfile` 新增 `PostTemperature/PostSaturation`，`RunnerPostFx.ApplyThemeGrading` 在主题切换时覆盖（雪松 +16 暖、极光 -10 冷 +12 饱和、雾堤 -10 去饱和等）。
+- **地形渐入提前：** 起伏 55–520m → 45–360m、弯道 140–860m → 110–560m（相机 yaw/bank 同步），海洋的"糙"与天空的"高"第一分钟内可读。
+
+**页面交互（DOTween 已启用，本批全面接线）**
+
+- 按钮按压反馈：全局改为 PointerDown 压缩 0.96 / PointerUp 回弹（`PressScaleFeedback`），替代 onClick 后置弹跳；补接底栏 Tab、营地热点、难度行、局内三选一卡。
+- 面板过渡：`PlayPanelPopIn` 升级为缩放 + 淡入（OutBack）；新增 `PlayPanelPopOut` 退场（淡出+收缩，首帧封锁输入），`LobbyPanelRouter` 关闭不再瞬切；暂停面板弹出。
+- 结算节拍：结算页与死亡卡分数 0→总分滚动（`PlayCountUp`，整数变化帧才写 text）；三张统计卡错峰入场；死亡卡补进场。
+- HUD 离散跳动：鱼干增加、连击推进、生命增减（对应心形图标）、提示条换文案时各 punch 一次；分数每帧变化故不跳动。
+- 列表入场：`CreateScrollListRow` 前 10 行按兄弟序号错峰淡入（只动 scale/alpha，不与 LayoutGroup 抢位置）。
+- 加载页：提示文案每 2.2s 轮换（进跑酷=玩法贴士 / 回营地=氛围文案）；进度条显示值平滑推进。
+
+**验证：** `CompileFullRoslyn`（185 源文件）与全部静态门禁 + `VerifyFileSizeRatchet` 通过（远山与天象拆出后 `PenguinRunnerGame.cs` 余量回到 11 行）。**明确待办：** 本机 Unity license 失效（licensing 初始化失败即中止），六主题实距截图、`ProjectAvatarGameplayViewCapture` 亮度断言与 Android 实机验收未能运行，属运行时待验证。
+
+## 2026-08-13 判定公平性与页面回归修复
+
+三路审查（核心判定 / 未提交批次 / UI 层）后的集中修复批次，全部为已确认缺陷，不引入新玩法：
+
+- **Boss 公平性：** DiveHigh 命中改读开战锁定的 `DiveLaneX`（根节点 x 向中线回插导致命中带与预警反向）；俯冲期间 Boss 本体保持在锁定车道上方。齐射改为落地时刻 ±0.14s 冲击窗判伤（原 `IsSalvoImpactActive` 为恒真式）；齐射全局击发不再被 Strike 相位预占 `strikeFired` 短路。SweepLow/QuakePulse 躲避与障碍共用蹲姿盒 `IsLowPosture`（含起身宽容窗）。
+- **防御契约：** 障碍路径护盾碎裂补上 `invulnAfterShieldBreak` 无敌（与 Boss 路径同条款，`ShieldGraceSeconds` 随之生效）；珊瑚回弹不再附赠护盾。
+- **Boss 前奏：** `NextBossDefinition` 懒加载抽取并缓存、`SpawnBoss` 消费同一定义——第一场 Boss 也有前奏，且预告与出场必然一致；`Reset` 清空缓存。
+- **操作手感：** 跳跃预输入落地帧先兑现再扣时（不再吞掉缓冲末帧）；空中急坠不再重复发 `PlayerSlid`（滑铲音只响一次）。
+- **生成/道具：** Boss 清场先回收叠障金币再毁障碍（原顺序使重叠检测恒 false、金币残留净空带）；雾灯补上「雾距外推提前照亮障碍」的核心玩法（+45m/+70m 平滑插值）；`BossPatternFxPool` 改按 primitive 类型分桶，Release 路径彻底不 Destroy。
+- **页面（纸张回归）：** 修复米黄底白字标题、排行榜旧深蓝底、领取/购买/签到 CTA 霓虹青、Tab 选中态误用 Coral、豆腐块 Unicode（➞/⌛ 等）；Snackbar/Settings 深色容器改纸面。
+- **页面（性能）：** 结算庆祝星/金色光晕移入独立嵌套 Canvas，卡上脉冲限时收敛；营地篝火光晕/炊烟/角色呼吸各挂嵌套 Canvas（角色层带 GraphicRaycaster 保持可点击）；HUD 主题机关文本、共鸣条、Boss 速杀条、反馈文本、商店/任务倒计时全部按值变更门控。
+- **小项：** CubePet 局末归位姿态基线（重开不误触落地挤压）；运行时金币实例剥除 FBX Collider；破绽反击文案补键盘 Shift/F。
 
 ## 2026-07-26 主角剪影与实距可读性
 

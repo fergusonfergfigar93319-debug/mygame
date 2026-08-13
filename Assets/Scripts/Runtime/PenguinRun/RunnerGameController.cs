@@ -69,6 +69,8 @@ namespace PenguinRun
         private RunnerAction lastRunnerAction;
         private float secondsSinceDamage = 99f;
         private int lastCoinCountForOnboarding;
+        private bool bossArenaCleared;
+        private float dashBufferTimer;
 
         public RunnerGameController(
             RunnerTuning tuning,
@@ -183,6 +185,7 @@ namespace PenguinRun
             if (start && ShopStore.TryConsumePendingLuckyStartForRunStart())
                 world.AddExtraLife();
             bossSystem.Reset();
+            bossArenaCleared = false;
             routeEventDirector.Reset();
             runUpgradeState.Reset();
             skillScoreTracker.Reset();
@@ -209,6 +212,7 @@ namespace PenguinRun
             feedbackTimer = 0f;
             waitingForGuidedReaction = false;
             manualDashCooldownTimer = 0f;
+            dashBufferTimer = 0f;
             lastLifeCount = world.Lives;
 
             if (start)
@@ -433,7 +437,14 @@ namespace PenguinRun
                 action = RunnerAction.None;
             }
             var dt = Mathf.Min(rawDt, 0.05f);
+            var dashCdBefore = manualDashCooldownTimer;
             manualDashCooldownTimer = Mathf.Max(0f, manualDashCooldownTimer - dt);
+            dashBufferTimer = Mathf.Max(0f, dashBufferTimer - dt);
+            if (dashCdBefore > 0f && manualDashCooldownTimer <= 0f && dashBufferTimer > 0f)
+            {
+                dashBufferTimer = 0f;
+                TriggerManualDash(ref feedbackText, ref feedbackTimer);
+            }
             if (world.Paused)
             {
                 pauseHoldUI = Mathf.Max(0f, pauseHoldUI - dt);
@@ -552,11 +563,27 @@ namespace PenguinRun
                 }
             }
 
+            // Boss 临近 120m 起停刷障碍，避免 Boss 落在障碍堆上。
+            var bossApproachClear = bossSystem.IsBossApproaching(world.Distance, 120f);
             spawner.SpawnPaused = bossSystem.ShouldPauseSpawning
+                || bossApproachClear
                 || routeEventDirector.AwaitingChoice
                 || (mechanicRuntime.CurrentRequest.Signature
                     && mechanicRuntime.Snapshot.Phase == ThemeMechanicPhase.Active);
             spawner.Tick(dt, effectiveSpeed, world.Distance);
+
+            if (bossApproachClear || bossSystem.BossActive)
+            {
+                if (!bossArenaCleared)
+                {
+                    spawner.ClearTrackHazardsBetween(-2f, BossSystem.BossSpawnAheadZ + 12f);
+                    bossArenaCleared = true;
+                }
+            }
+            else
+            {
+                bossArenaCleared = false;
+            }
             var mechanicBeat = TickSegmentBanner(dt, out var segmentKind);
             if (mechanicBeat)
             {
@@ -624,8 +651,9 @@ namespace PenguinRun
             var px = playerTransform.position.x;
             var py = motor.PlayerY;
             var prevBossActive = bossSystem.BossActive;
+            // Boss 低空招式与障碍共用蹲姿盒语义：起身宽容窗内同样算低姿态，避免「障碍判过、Boss 判死」。
             var bossHitsPlayer = bossSystem.Tick(dt, world.Distance, px, py, groundY,
-                motor.SlideTimer > 0f, world.DashTimer, world.ShieldTimer,
+                motor.IsLowPosture, world.DashTimer, world.ShieldTimer,
                 ref feedbackText, ref feedbackTimer);
             if (bossSystem.TryConsumeCounter())
             {
@@ -660,6 +688,8 @@ namespace PenguinRun
             if (bossSystem.IsBossApproaching(world.Distance, 100f) && !bossSystem.HasSpawnedPrelude)
             {
                 bossSystem.MarkPreludeSpawned();
+                spawner.ClearTrackHazardsBetween(-2f, BossSystem.BossSpawnAheadZ + 12f);
+                bossArenaCleared = true;
                 var nextDef = bossSystem.NextBossDefinition;
                 if (nextDef != null)
                 {
@@ -1138,15 +1168,17 @@ namespace PenguinRun
         {
             if (manualDashCooldownTimer > 0f)
             {
+                dashBufferTimer = 0.16f;
                 feedbackText = $"冲刺冷却 {manualDashCooldownTimer:0.0}s";
-                feedbackTimer = 0.45f;
+                feedbackTimer = 0.4f;
                 return;
             }
 
             const float touchDashSeconds = 1.2f;
             world.DashTimer = Mathf.Max(world.DashTimer, touchDashSeconds);
             manualDashCooldownTimer = 2.5f;
-            feedbackText = "双击冲刺！";
+            dashBufferTimer = 0f;
+            feedbackText = "冲刺！";
             feedbackTimer = 0.65f;
         }
     }

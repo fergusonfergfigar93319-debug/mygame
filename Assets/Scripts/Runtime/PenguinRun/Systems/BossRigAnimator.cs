@@ -5,7 +5,7 @@ namespace PenguinRun
     /// <summary>
     /// rigged Boss 的骨骼动画播放器：包装 Legacy Animation 片段并按招式阶段程序化驱动。
     /// 不引入 Animator 状态机（见 docs/adr/0002-cc0-rigged-boss-models.md）；
-    /// 攻击片段通过播放速度缩放对齐 BossAttackPhase 的危险窗时序，命中判定不读动画。
+    /// 攻击片段通过播放速度缩放对齐击发时刻（危险窗起点），命中判定不读动画。
     /// </summary>
     internal sealed class BossRigAnimator
     {
@@ -109,10 +109,10 @@ namespace PenguinRun
         }
 
         /// <summary>
-        /// 招式攻击：按招式选片段，并缩放播放速度，让片段在
-        /// 「前摇 + 危险窗大半」内播完（片段收势即击发落点）。
+        /// 招式攻击：按招式选片段，并缩放播放速度，让片段收势落在
+        /// <paramref name="secondsUntilStrikeImpact"/>（危险窗起点 / 判定生效瞬间）。
         /// </summary>
-        public void PlayAttack(BossPattern pattern, float secondsUntilStrikeEnd)
+        public void PlayAttack(BossPattern pattern, float secondsUntilStrikeImpact)
         {
             if (!IsValid || deathPlaying) return;
             var clip = pattern switch
@@ -126,7 +126,7 @@ namespace PenguinRun
 
             var state = anim[clip];
             if (state == null) return;
-            var duration = Mathf.Max(0.3f, secondsUntilStrikeEnd);
+            var duration = Mathf.Max(0.3f, secondsUntilStrikeImpact);
             state.speed = state.length / duration;
             state.time = 0f;
             anim.CrossFade(clip, 0.1f);

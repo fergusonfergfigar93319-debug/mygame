@@ -17,6 +17,7 @@ namespace PenguinRun
         [Header("Feel")]
         public float coyoteTime = 0.16f;
         public float jumpBufferTime = 0.18f;
+        public float slideBufferTime = 0.16f;
         public float groundY = 0.9f;
         public float groundEpsilon = 0.025f;
     }
@@ -61,11 +62,12 @@ namespace PenguinRun
         public float perfectWindowSlideSeconds = 0.50f;
         public float perfectWindowAirSlideSeconds = 0.28f;
         public float perfectWindowDoubleJumpSeconds = 0.28f;
-        public float bossAirDodgeHeight = 0.45f;
-        public float bossSafeLaneHalfFactor = 0.52f;
-        public float bossOffLaneFactor = 0.55f;
-        public float bossSalvoLaneFactor = 0.50f;
-        public float bossCenterBeamLaneFactor = 0.50f;
+        // Boss 判定：安全区宜宽、危险半宽宜窄，换道中途不应仍被“贴边命中”。
+        public float bossAirDodgeHeight = 0.55f;
+        public float bossSafeLaneHalfFactor = 0.72f;
+        public float bossOffLaneFactor = 0.38f;
+        public float bossSalvoLaneFactor = 0.38f;
+        public float bossCenterBeamLaneFactor = 0.32f;
     }
 
     [System.Serializable]
@@ -164,6 +166,7 @@ namespace PenguinRun
                     slideDuration = c.SlideDuration,
                     coyoteTime = c.CoyoteTime,
                     jumpBufferTime = c.JumpBufferTime,
+                    slideBufferTime = c.SlideBufferTime,
                     groundY = c.GroundY,
                     groundEpsilon = c.GroundEpsilon,
                 },

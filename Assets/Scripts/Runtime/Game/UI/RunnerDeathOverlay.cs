@@ -18,11 +18,14 @@ namespace PenguinRun.Game.UI
             var card = UiBuilder.CreateCard("ResultCard", root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(760f, 700f), Vector2.zero, UiTheme.PaperWarm, addBorder: true, addShadow: true);
             UiBuilder.AddOutline(card.gameObject, UiTheme.StitchBorder, new Vector2(2f, -2f));
+            card.PlayPanelPopIn();
 
             // These labels are center-anchored, so a zero X size collapses them to a
             // one-character-wide column. Keep an explicit width at every resolution.
             AddText("Title", card, model.Headline, UiTheme.H1, FontStyle.Bold, new Vector2(0f, 224f), new Vector2(620f, 70f), UiTheme.InkPrimary);
-            AddText("Score", card, model.Score.ToString("N0"), UiTheme.Display, FontStyle.Bold, new Vector2(0f, 126f), new Vector2(620f, 90f), UiTheme.CoralAction);
+            var scoreText = AddText("Score", card, "0", UiTheme.Display, FontStyle.Bold, new Vector2(0f, 126f), new Vector2(620f, 90f), UiTheme.CoralAction);
+            // 分数滚动呈现：只在整数变化帧写 text。
+            TweenExtensions.PlayCountUp(model.Score, 0.7f, v => scoreText.text = v.ToString("N0"));
             AddText("ScoreLabel", card, model.BestComparison, UiTheme.Caption, FontStyle.Normal, new Vector2(0f, 72f), new Vector2(620f, 34f), UiTheme.InkSecondary);
 
             AddStat(card, "距离", $"{model.DistanceMeters}m", new Vector2(-188f, -32f), UiTheme.MistBlue);
@@ -67,13 +70,14 @@ namespace PenguinRun.Game.UI
             AddText("Label", cell, label, UiTheme.Micro, FontStyle.Normal, new Vector2(0f, -39f), new Vector2(142f, 28f), UiTheme.InkSecondary);
         }
 
-        private static void AddText(string name, RectTransform parent, string content, int size, FontStyle style, Vector2 position, Vector2 dimensions, Color color)
+        private static TextMeshProUGUI AddText(string name, RectTransform parent, string content, int size, FontStyle style, Vector2 position, Vector2 dimensions, Color color)
         {
             var text = UiBuilder.CreateTmpText(name, parent, content, size, style, TextAnchor.MiddleCenter, color);
             var rt = (RectTransform)text.transform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = dimensions;
             rt.anchoredPosition = position;
+            return text;
         }
 
         private static void PlaceButton(Button button, Vector2 position, Vector2 dimensions)

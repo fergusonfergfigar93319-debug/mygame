@@ -30,6 +30,8 @@ namespace PenguinRun
         private PostProcessVolume volume;
         private Vignette vignette;
         private Bloom bloom;
+        private ColorGrading colorGrading;
+        private float baseSaturation;
         private float baseVignetteIntensity;
         private float deathEmphasis;
         private float bossDanger;
@@ -68,7 +70,9 @@ namespace PenguinRun
 
             fx.volume.profile.TryGetSettings(out fx.bloom);
             fx.volume.profile.TryGetSettings(out fx.vignette);
+            fx.volume.profile.TryGetSettings(out fx.colorGrading);
             fx.baseVignetteIntensity = fx.vignette != null ? fx.vignette.intensity.value : 0.2f;
+            fx.baseSaturation = fx.colorGrading != null ? fx.colorGrading.saturation.value : 0f;
 
             ApplyQualityTier(fx);
             return fx;
@@ -89,6 +93,17 @@ namespace PenguinRun
             var budget = RunnerQualityBudget.For(RunnerDeviceTier.Current);
             fx.bloom.active = budget.BloomEnabled;
             if (budget.BloomEnabled) fx.bloom.fastMode.Override(budget.BloomFastMode);
+        }
+
+        /// <summary>
+        /// 主题色调：色温直接覆盖、饱和度叠加在 rig 烘焙基线上。
+        /// 主题切换时调用一次，与光照/雾档案同源（ThemePresentationProfile）；纯表现层。
+        /// </summary>
+        public void ApplyThemeGrading(float temperature, float saturationDelta)
+        {
+            if (colorGrading == null) return;
+            colorGrading.temperature.Override(Mathf.Clamp(temperature, -40f, 40f));
+            colorGrading.saturation.Override(Mathf.Clamp(baseSaturation + saturationDelta, -30f, 40f));
         }
 
         /// <summary>死亡瞬间暗角加深（0=常态，1=死亡定格）。</summary>

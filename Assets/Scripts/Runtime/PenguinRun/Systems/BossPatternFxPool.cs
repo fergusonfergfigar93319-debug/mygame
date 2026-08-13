@@ -16,7 +16,8 @@ namespace PenguinRun
     internal sealed class BossPatternFxPool
     {
         private const int MaxPoolSize = 48;
-        private readonly Stack<GameObject> available = new();
+        // 按 primitive 类型分桶：换型租借不再销毁已交回池的对象（领域规则），也避免反复弹栈重建。
+        private readonly Dictionary<PrimitiveType, Stack<GameObject>> availableByType = new();
         private readonly List<GameObject> active = new();
 
         public GameObject Rent(PrimitiveType type, string name, Vector3 worldPos, Vector3 scale, Color color, bool transparent, Transform parent)
@@ -111,18 +112,11 @@ namespace PenguinRun
 
         private GameObject TryPopMatching(PrimitiveType type)
         {
-            while (available.Count > 0)
+            if (!availableByType.TryGetValue(type, out var stack)) return null;
+            while (stack.Count > 0)
             {
-                var candidate = available.Pop();
-                if (candidate == null) continue;
-                var tag = candidate.GetComponent<BossFxPoolTag>();
-                if (tag != null && tag.Primitive != type)
-                {
-                    Object.Destroy(candidate);
-                    continue;
-                }
-
-                return candidate;
+                var candidate = stack.Pop();
+                if (candidate != null) return candidate;
             }
 
             return null;
@@ -141,14 +135,15 @@ namespace PenguinRun
 
                 go.SetActive(false);
                 go.transform.SetParent(null, false);
-                if (available.Count < MaxPoolSize)
+                var tag = go.GetComponent<BossFxPoolTag>();
+                var type = tag != null ? tag.Primitive : PrimitiveType.Cube;
+                if (!availableByType.TryGetValue(type, out var stack))
                 {
-                    available.Push(go);
+                    stack = new Stack<GameObject>();
+                    availableByType[type] = stack;
                 }
-                else
-                {
-                    Object.Destroy(go);
-                }
+                // 只归还不销毁：租借端以 active 上限 48 封顶，池内对象总量天然有界。
+                stack.Push(go);
             }
 
             active.Clear();

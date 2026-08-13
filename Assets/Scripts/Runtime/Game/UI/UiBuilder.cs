@@ -177,6 +177,10 @@ namespace PenguinRun.Game.UI
                 rowImg.color = rowBackground.Value;
             }
 
+            // 前若干行按兄弟序号错峰淡入（一次性，只动 scale/alpha，不与 LayoutGroup 抢位置）。
+            if (Application.isPlaying)
+                rt.PlayListItemEnter(rt.GetSiblingIndex());
+
             return rt;
         }
 
@@ -507,15 +511,15 @@ namespace PenguinRun.Game.UI
             return btn;
         }
 
-        /// <summary>为按钮点击绑定缩放反馈（DOTween 或 ClickScaleFallback）。</summary>
+        /// <summary>
+        /// 为按钮绑定按压缩放反馈：PointerDown 压缩、PointerUp 回弹。
+        /// 比 onClick 后置弹跳更跟手；二者会互抢 localScale，故只保留按压反馈。
+        /// </summary>
         public static void WireClickFeedback(Button btn)
         {
             if (btn == null) return;
-#if !DOTWEEN
-            if (!btn.TryGetComponent<ClickScaleFallback>(out _))
-                btn.gameObject.AddComponent<ClickScaleFallback>();
-#endif
-            btn.onClick.AddListener(() => btn.transform.PlayClickBounce());
+            if (!btn.TryGetComponent<PressScaleFeedback>(out _))
+                btn.gameObject.AddComponent<PressScaleFeedback>();
         }
 
         public static Image CreateProgressFill(string name, Transform parent, Color trackColor, Color fillColor, out Image fill)

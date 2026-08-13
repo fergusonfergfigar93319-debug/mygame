@@ -53,10 +53,12 @@ Require $bossSystem '\blastGeometricHitPattern\b' 'geometric hit pattern capture
 Forbid $bossSystem 'playerShieldTimer > 0f\)\s*\{\s*feedbackText = "护盾抵挡' 'old in-place boss shield early-return'
 
 $motor = Read-Required 'Assets/Scripts/Runtime/PenguinRun/Systems/PlayerMotor.cs'
-foreach ($name in 'BodyHeight', 'StandingBodyHeight', 'SlidingBodyHeight', 'queuedSlideOnLand') {
+foreach ($name in 'BodyHeight', 'StandingBodyHeight', 'SlidingBodyHeight', 'slideBufferTimer') {
     Require $motor "\b$name\b" "crouch hitbox / slide buffering: $name"
 }
 Require $motor 'jumpBufferTimer[\s\S]{0,700}PerfectActionWindow = combatTuning\.perfectWindowJumpSeconds' 'buffered jump grants perfect window'
+Require $motor 'consumedLandSlide' 'land-slide wins over stale jump buffer'
+Require $motor 'tuning\.slideBufferTime' 'slide pre-input uses tuning buffer'
 
 $spec = Read-Required 'Assets/Scripts/Runtime/PenguinRun/ObstacleColliderSpec.cs'
 Require $spec '\bPassUnderMaxHeight\b' 'pass-under height on collider spec'
@@ -185,6 +187,21 @@ foreach ($sample in 'Assets/Resources/PenguinRun/Prefabs/Pickups/fish_snack.pref
 }
 $fishPrefab = Read-Required 'Assets/Resources/PenguinRun/Prefabs/Pickups/fish_snack.prefab'
 Require $fishPrefab 'screenRelativeHeight: 0\.0001' 'fish_snack never-cull LOD1 threshold'
+Require-File 'Assets/Resources/PenguinRun/Models/coin_gold.fbx'
+Require-File 'Assets/Resources/PenguinRun/Models/coin_silver.fbx'
+Require-File 'Assets/Resources/PenguinRun/Models/coin_bronze.fbx'
+$sculpture = Read-Required 'Assets/Scripts/Editor/PenguinRun/RunnerSculptureBuilder.cs'
+Require $sculpture 'AttachVendorCoin' 'pickup sculpture mounts Kenney coin FBX'
+Require $sculpture 'coin_gold' 'FishSnack uses Kenney gold coin'
+$coinVisual = Read-Required 'Assets/Scripts/Runtime/PenguinRun/Visuals/CoinPickupVisual.cs'
+Require $coinVisual 'CoinPivot' 'runtime coin uses spin pivot'
+Require $coinVisual 'BuildLayeredDisc' 'runtime coin has layered disc fallback'
+Require $coinVisual 'VendorCoinScale' 'runtime coin clamps Kenney scale'
+$spawnerCoin = Read-Required 'Assets/Scripts/Runtime/PenguinRun/Systems/SegmentSpawner.cs'
+Require $spawnerCoin 'CoinPickupVisual\.Build' 'spawner uses CoinPickupVisual'
+Require $spawnerCoin 'SpawnCoinLine\(14f' 'opening run seeds a center coin line'
+$catalog = Read-Required 'Assets/Scripts/Runtime/PenguinRun/Visuals/RunnerVisualAssetCatalog.cs'
+Require $catalog 'FishSnack or PickupVisualId.DoubleFishSnack \? 1\.05f' 'coin pickups use reduced attach scale'
 
 # ── Docs ─────────────────────────────────────────────────────────────────
 $context = Read-Required 'CONTEXT.md'

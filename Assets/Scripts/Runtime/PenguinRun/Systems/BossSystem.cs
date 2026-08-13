@@ -118,6 +118,8 @@ namespace PenguinRun
             currentThemeTrait = default;
             lastThemedRelicId = string.Empty;
             BossesDefeated = 0;
+            nextBossDef = null;
+            preludeSpawned = false;
             nextBossDistance = firstBossDistance;
             explainedPatterns.Clear();
             explainedCounterWindow = false;
@@ -182,19 +184,10 @@ namespace PenguinRun
 
         private void SpawnBoss(float runDistance)
         {
-            var ctx = new BossDefinitions.BossSpawnContext
-            {
-                MapTheme = config.MapTheme,
-                Difficulty = config.Difficulty,
-                IsDaily = config.Daily,
-                RunDistance = runDistance,
-                BossesDefeated = BossesDefeated,
-                DefeatedBossIds = PlayerSave.GetDefeatedBossIds() ?? new HashSet<string>(),
-            };
-
-            var def = BossDefinitions.PickFor(ctx);
+            // 前奏已预告的 Boss 优先出场，保证「预告谁、来的就是谁」；无前奏（如极近距离触发）才现抽。
+            var def = nextBossDef ?? BossDefinitions.PickFor(BuildSpawnContext(runDistance));
             currentBossDef = def;
-            nextBossDef = null; // 当前 Boss 已生成，清空预计算
+            nextBossDef = null; // 已消费预告
             preludeSpawned = false; // 重置前奏标记
 
             CurrentBoss = new BossEncounter(def, baseGroundY, laneWidth, runDistance,
@@ -214,17 +207,17 @@ namespace PenguinRun
             guidancePauseRequest = false;
             currentBossElapsed = 0f;
             ResetFightStats(); // 重置本战统计
-
-            // 预计算下一场可能出场的 Boss
-            PrecomputeNextBoss(ctx);
         }
 
-        /// <summary>预计算下一个可能出现的 Boss。</summary>
-        private void PrecomputeNextBoss(BossDefinitions.BossSpawnContext ctx)
+        private BossDefinitions.BossSpawnContext BuildSpawnContext(float runDistance) => new()
         {
-            ctx.BossesDefeated = BossesDefeated + 1; // 假设当前 Boss 将被击败
-            nextBossDef = BossDefinitions.PickFor(ctx);
-        }
+            MapTheme = config.MapTheme,
+            Difficulty = config.Difficulty,
+            IsDaily = config.Daily,
+            RunDistance = runDistance,
+            BossesDefeated = BossesDefeated,
+            DefeatedBossIds = PlayerSave.GetDefeatedBossIds() ?? new HashSet<string>(),
+        };
 
         private bool ProcessCombat(float dt, float runDistance, float playerX, float playerY, float groundY,
             bool playerSliding, float playerDashTimer, float playerShieldTimer,
@@ -428,8 +421,18 @@ namespace PenguinRun
 
         public string LastThemedRelicId => lastThemedRelicId;
 
-        /// <summary>下一场即将出现的 Boss（用于生成前奏段）。</summary>
-        public BossDefinition NextBossDefinition => nextBossDef;
+        /// <summary>
+        /// 下一场即将出现的 Boss（用于生成前奏段）。
+        /// 首次访问时按真实上下文抽取并缓存；SpawnBoss 消费同一定义，保证前奏预告与实际出场一致。
+        /// </summary>
+        public BossDefinition NextBossDefinition
+        {
+            get
+            {
+                if (CurrentBoss != null) return null;
+                return nextBossDef ??= BossDefinitions.PickFor(BuildSpawnContext(nextBossDistance));
+            }
+        }
 
         /// <summary>是否已生成前奏段。</summary>
         public bool HasSpawnedPrelude => preludeSpawned;
@@ -518,56 +521,57 @@ namespace PenguinRun
                 case DifficultyKind.Easy:
                     cadenceMultiplier = 1.2f;
                     intervalMultiplier = 1.3f;
-                    bossDangerWindowRatio = 0.35f;
-                    bossTelegraphLifetimeRatio = 0.88f;
+                    bossDangerWindowRatio = 0.28f;
+                    bossTelegraphLifetimeRatio = 0.92f;
                     bossVulnerableChance = 0.72f;
-                    minPatternDangerDelay = 0.7f;
+                    minPatternDangerDelay = 0.85f;
                     difficultyHintTag = "轻松";
                     break;
                 case DifficultyKind.Hard:
                     cadenceMultiplier = 0.92f;
                     intervalMultiplier = 1.28f;
-                    bossDangerWindowRatio = 0.52f;   // 标准预警
-                    bossTelegraphLifetimeRatio = 0.65f;
-                    bossVulnerableChance = 0.42f;    // 破绽偏少
-                    minPatternDangerDelay = 0.45f;
+                    bossDangerWindowRatio = 0.38f;
+                    bossTelegraphLifetimeRatio = 0.78f;
+                    bossVulnerableChance = 0.42f;
+                    minPatternDangerDelay = 0.65f;
                     difficultyHintTag = "困难";
                     break;
                 case DifficultyKind.Expert:
                     cadenceMultiplier = 0.85f;
                     intervalMultiplier = 1.35f;
-                    bossDangerWindowRatio = 0.58f;   // 更短预警
-                    bossTelegraphLifetimeRatio = 0.55f;
+                    bossDangerWindowRatio = 0.42f;
+                    bossTelegraphLifetimeRatio = 0.70f;
                     bossVulnerableChance = 0.35f;
-                    minPatternDangerDelay = 0.45f;
+                    minPatternDangerDelay = 0.60f;
                     difficultyHintTag = "专家";
                     break;
                 default:
                     cadenceMultiplier = 1f;
                     intervalMultiplier = 1f;
-                    bossDangerWindowRatio = 0.45f;
-                    bossTelegraphLifetimeRatio = 0.72f;
+                    bossDangerWindowRatio = 0.32f;
+                    bossTelegraphLifetimeRatio = 0.85f;
                     bossVulnerableChance = 0.55f;
-                    minPatternDangerDelay = 0.55f;
+                    minPatternDangerDelay = 0.75f;
                     difficultyHintTag = "普通";
                     break;
             }
 
             if (bossRushMode)
             {
+                // Daily/Boss Rush 仍比常规早，但整体大幅延后，避免开局就被 Boss 打断。
                 firstBossDistance = kind switch
                 {
-                    DifficultyKind.Easy => 155f,
-                    DifficultyKind.Hard => 125f,
-                    DifficultyKind.Expert => 95f,
-                    _ => 115f,
+                    DifficultyKind.Easy => 420f,
+                    DifficultyKind.Hard => 340f,
+                    DifficultyKind.Expert => 280f,
+                    _ => 380f,
                 };
                 bossInterval = kind switch
                 {
-                    DifficultyKind.Easy => 375f,
-                    DifficultyKind.Hard => 360f,
-                    DifficultyKind.Expert => 300f,
-                    _ => 320f,
+                    DifficultyKind.Easy => 720f,
+                    DifficultyKind.Hard => 640f,
+                    DifficultyKind.Expert => 560f,
+                    _ => 680f,
                 };
                 speedRewardWindowSeconds = kind switch
                 {
@@ -580,7 +584,7 @@ namespace PenguinRun
             else
             {
                 firstBossDistance = preset.FirstBossDistance;
-                bossInterval = Mathf.Max(120f, preset.BossInterval * intervalMultiplier);
+                bossInterval = Mathf.Max(900f, preset.BossInterval * intervalMultiplier);
                 speedRewardWindowSeconds = kind switch
                 {
                     DifficultyKind.Easy => 16f,
@@ -701,7 +705,7 @@ namespace PenguinRun
                 BossPattern.SweepLow => "滑铲、起跳或换到预警圈标示的安全车道",
                 BossPattern.DiveHigh => "提早换道，或在落地前起跳躲过",
                 BossPattern.ChargeAcross => "换到没有预警圈的安全车道，或起跳越过",
-                BossPattern.RangedSalvo => "看准地面预警圈换位躲弹；冲刺可小段无敌穿过",
+                BossPattern.RangedSalvo => "看准地面预警圈换位；跳跃或冲刺可躲落地瞬间",
                 BossPattern.CenterBeam => "离开正中车道，或起跳越过光束",
                 BossPattern.QuakePulse => "黄圈出现时滑铲贴地，或起跳滞空躲过",
                 _ => "保持移动，紧盯地面预警圈",
@@ -710,7 +714,7 @@ namespace PenguinRun
 
         private static string GetDashHowToHint()
         {
-            return "双击屏幕冲刺；或拾取冲刺道具触发";
+            return "双击屏幕或按 Shift/F 冲刺；或拾取冲刺道具触发";
         }
 
         // 死亡复盘
@@ -729,7 +733,7 @@ namespace PenguinRun
                 BossPattern.SweepLow => "败于低空横扫：红圈出现时滑铲、起跳或换到安全车道",
                 BossPattern.DiveHigh => "败于高空俯冲：BOSS 抬身时提早换道或起跳躲过",
                 BossPattern.ChargeAcross => "败于全场冲锋：换到没有红圈的安全车道，或起跳越过",
-                BossPattern.RangedSalvo => "败于远程齐射：看准落点圈换位；也可用冲刺穿过",
+                BossPattern.RangedSalvo => "败于远程齐射：看准落点圈换位；跳跃或冲刺可躲落地瞬间",
                 BossPattern.CenterBeam => "败于中央光束：离开正中车道或起跳越过",
                 BossPattern.QuakePulse => "败于震地脉冲：黄圈出现时滑铲贴地，或起跳滞空躲过",
                 _ => "被 BOSS 击败：观察预警圈，选择对应躲法"

@@ -8,7 +8,7 @@ namespace PenguinRun
     {
         [Header("Movement")]
         public float LaneWidth = 3f;
-        public float LaneLerp = 23f;
+        public float LaneLerp = 29f;
         public float Gravity = 22f;
         public float JumpVelocity = 12f;
         public float SlideDuration = 0.56f;
@@ -16,6 +16,7 @@ namespace PenguinRun
         public float GroundEpsilon = 0.025f;
         public float CoyoteTime = 0.16f;
         public float JumpBufferTime = 0.18f;
+        public float SlideBufferTime = 0.16f;
 
         [Header("Rhythm")]
         public float StartSpeed = 10f;
@@ -129,11 +130,11 @@ namespace PenguinRun
         public float PerfectWindowDoubleJumpSeconds = 0.28f;
 
         [Header("Boss Dodge")]
-        public float BossAirDodgeHeight = 0.45f;
-        public float BossSafeLaneHalfFactor = 0.52f;
-        public float BossOffLaneFactor = 0.55f;
-        public float BossSalvoLaneFactor = 0.50f;
-        public float BossCenterBeamLaneFactor = 0.50f;
+        public float BossAirDodgeHeight = 0.55f;
+        public float BossSafeLaneHalfFactor = 0.72f;
+        public float BossOffLaneFactor = 0.38f;
+        public float BossSalvoLaneFactor = 0.38f;
+        public float BossCenterBeamLaneFactor = 0.32f;
 
         public static RunnerTuningConfig Default() => new();
     }

@@ -175,23 +175,23 @@ namespace PenguinRun.Game.UI
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(580f, 460f), Vector2.zero,
                 UiBuilder.Surface1, rounded: true);
-            UiBuilder.AddOutline(card.gameObject, UiBuilder.BorderAccent, new Vector2(1.5f, -1.5f));
+            UiBuilder.AddOutline(card.gameObject, UiTheme.StitchBorder, new Vector2(1.5f, -1.5f));
             UiBuilder.AddShadow(card.gameObject, new Color(0f, 0f, 0f, 0.5f), new Vector2(0f, -8f));
 
-            // 企鹅欢迎图标
+            // 企鹅欢迎图标（❖ 在 CJK 字体里是豆腐块，改用 ★；底色走雾蓝纸面）
             var iconBadge = UiBuilder.CreateRect("WelcomeIcon", card,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(96f, 96f), new Vector2(0f, -36f),
-                new Color(0.1f, 0.25f, 0.5f, 1f), circle: true);
+                UiTheme.MistBlue, circle: true);
             iconBadge.pivot = new Vector2(0.5f, 1f);
-            UiBuilder.AddOutline(iconBadge.gameObject, UiBuilder.BorderAccent, new Vector2(2f, -2f));
-            UiBuilder.CreateText("IconText", iconBadge.transform, "❖", 44, FontStyle.Bold,
+            UiBuilder.AddOutline(iconBadge.gameObject, UiTheme.StitchBorder, new Vector2(2f, -2f));
+            UiBuilder.CreateText("IconText", iconBadge.transform, "\u2605", 44, FontStyle.Bold,
                 TextAnchor.MiddleCenter, UiBuilder.AccentActive);
 
-            // 欢迎标题
+            // 欢迎标题（米黄卡面上用墨色）
             var titleStr = streak <= 1 ? "欢迎来到企鹅快跑！" : $"欢迎回来 · 第 {streak} 天";
             UiBuilder.CreateText("Title", card, titleStr,
-                34, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+                34, FontStyle.Bold, TextAnchor.MiddleCenter, UiBuilder.TextPrimary);
             var trt = (RectTransform)card.Find("Title");
             trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(1f, 1f);
@@ -220,26 +220,26 @@ namespace PenguinRun.Game.UI
             grt.sizeDelta = new Vector2(0f, 60f);
             grt.anchoredPosition = new Vector2(0f, -260f);
 
-            // 签到按钮
+            // 签到按钮：主 CTA 语义 = 珊瑚色 + 白字 + 缝线描边
             var checkInBtn = UiBuilder.CreateButton("CheckInNow", card, "立即签到",
-                new Color(1f, 0.84f, 0.32f, 1f), new Color(0.08f, 0.05f, 0.01f, 1f), 28, rounded: true);
+                UiTheme.CoralAction, Color.white, 28, rounded: true);
             var cbrt = (RectTransform)checkInBtn.transform;
             cbrt.anchorMin = new Vector2(0.5f, 0f);
             cbrt.anchorMax = new Vector2(0.5f, 0f);
             cbrt.pivot = new Vector2(0.5f, 0f);
             cbrt.sizeDelta = new Vector2(320f, 68f);
             cbrt.anchoredPosition = new Vector2(0f, 48f);
-            UiBuilder.AddOutline(checkInBtn.gameObject, new Color(0.5f, 0.35f, 0.08f, 0.7f), new Vector2(2f, -2f));
-            UiBuilder.AddShadow(checkInBtn.gameObject, new Color(0f, 0f, 0f, 0.4f), new Vector2(0f, -4f));
+            UiBuilder.AddOutline(checkInBtn.gameObject, UiTheme.StitchBorder, new Vector2(2f, -2f));
+            UiBuilder.AddShadow(checkInBtn.gameObject, UiTheme.ShadowWarm, new Vector2(0f, -4f));
             checkInBtn.onClick.AddListener(() =>
             {
                 DismissLobbyModal(overlay);
                 OnCheckInClicked();
             });
 
-            // 跳过按钮
+            // 跳过按钮：次级按钮语义 = 雾蓝底 + 墨色字（旧深蓝底上的墨色字不可读）
             var skipBtn = UiBuilder.CreateButton("Skip", card, "稍后再说",
-                new Color(0.12f, 0.22f, 0.36f, 0.9f), UiBuilder.TextSecondary, 22, rounded: true);
+                UiTheme.MistBlue, UiBuilder.TextPrimary, 22, rounded: true);
             var srtt = (RectTransform)skipBtn.transform;
             srtt.anchorMin = new Vector2(0.5f, 0f);
             srtt.anchorMax = new Vector2(0.5f, 0f);
@@ -1016,11 +1016,11 @@ namespace PenguinRun.Game.UI
             UiBuilder.AddOutline(card.gameObject, UiBuilder.BorderDefault, new Vector2(1.5f, -1.5f));
             UiBuilder.AddShadow(card.gameObject, new Color(0f, 0f, 0f, 0.55f), new Vector2(0f, -12f));
 
-            // 顶部青色高光线
+            // 顶部松绿装饰条
             var topLine = UiBuilder.CreateRect("TopLine", card,
                 new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(0f, 3.5f), new Vector2(0f, -2f),
-                new Color(0f, 0.85f, 0.95f, 0.65f), rounded: true);
+                new Color(UiTheme.PineGreen.r, UiTheme.PineGreen.g, UiTheme.PineGreen.b, 0.65f), rounded: true);
             topLine.GetComponent<Image>().raycastTarget = false;
 
             var overlayTitle = mode switch
@@ -1031,16 +1031,15 @@ namespace PenguinRun.Game.UI
                 _ => "选择难度",
             };
 
-            // 标题
+            // 标题（米黄卡面上用墨色）
             var titleText = UiBuilder.CreateText("Title", card, overlayTitle, 44, FontStyle.Bold,
-                TextAnchor.MiddleCenter, Color.white);
+                TextAnchor.MiddleCenter, UiBuilder.TextPrimary);
             var trt = (RectTransform)titleText.transform;
             trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(1f, 1f);
             trt.sizeDelta = new Vector2(0f, 80f);
             trt.anchoredPosition = new Vector2(0f, -52f);
             trt.pivot = new Vector2(0.5f, 1f);
-            UiBuilder.AddShadow(titleText.gameObject, new Color(0f, 0.05f, 0.15f, 0.6f), new Vector2(0f, -4f));
 
             var subText = UiBuilder.CreateText("Sub", card, "难度影响速度、加速度和 Boss 出现时机", 22, FontStyle.Normal,
                 TextAnchor.MiddleCenter, UiBuilder.TextSecondary);
@@ -1138,6 +1137,7 @@ namespace PenguinRun.Game.UI
                 var idx = i;
                 var btn = rowBg.gameObject.AddComponent<Button>();
                 btn.targetGraphic = rowBg.GetComponent<Image>();
+                UiBuilder.WireClickFeedback(btn);
                 var btnColors = btn.colors;
                 btnColors.normalColor = UiBuilder.Surface2;
                 btnColors.highlightedColor = Color.Lerp(UiBuilder.Surface2, accentColor, 0.12f);

@@ -81,7 +81,8 @@ namespace PenguinRun
             var p = _activeProfile;
 
             // 开局地面尽量平直，随距离递增再逐步放大地形起伏。
-            var terrain01 = Progress01(d, 55f, 520f);
+            // 渐入提前收满（520→360）：让海洋的"糙"、天空的"高"在第一分钟内就读得出来。
+            var terrain01 = Progress01(d, 45f, 360f);
             var w1 = Mathf.Sin(d * 0.0038f * p.WaveFrequency + z * 0.013f) * Mathf.Lerp(0.06f, 0.34f * p.HeightAmplitude, terrain01);
             var w2 = Mathf.Sin(d * 0.0072f * p.WaveFrequency - z * 0.009f) * Mathf.Lerp(0.04f, 0.2f * p.HeightAmplitude, terrain01);
             var w3 = Mathf.Sin(z * 0.022f + d * 0.0046f) * Mathf.Lerp(0.03f, 0.14f * p.HeightAmplitude, terrain01);
@@ -97,7 +98,7 @@ namespace PenguinRun
         /// <summary>摄像机绕 Y 的额外偏角（度），幅度加大以呈现转弯感。</summary>
         public static float CurveYawDegrees(float runDistanceMeters)
         {
-            var strength = Progress01(runDistanceMeters, 120f, 780f);
+            var strength = Progress01(runDistanceMeters, 90f, 520f);
             var s = _activeProfile.CurveStrength;
             return (Mathf.Sin(runDistanceMeters * 0.0034f) * 7.5f * s
                  + Mathf.Sin(runDistanceMeters * 0.0018f) * 4.2f * s) * strength;
@@ -105,7 +106,7 @@ namespace PenguinRun
 
         public static float CurveCameraX(float runDistanceMeters)
         {
-            var strength = Progress01(runDistanceMeters, 120f, 780f);
+            var strength = Progress01(runDistanceMeters, 90f, 520f);
             var s = _activeProfile.CurveStrength;
             return Mathf.Sin(runDistanceMeters * 0.0031f + 0.7f) * 3.2f * s * strength;
         }
@@ -114,7 +115,7 @@ namespace PenguinRun
         public static float BankAngleDegrees(float runDistanceMeters)
         {
             var d = runDistanceMeters;
-            var strength = Progress01(d, 130f, 760f);
+            var strength = Progress01(d, 100f, 500f);
             var s = _activeProfile.CurveStrength;
             return -(Mathf.Cos(d * 0.0034f) * 3.1f * s + Mathf.Cos(d * 0.0018f) * 0.88f * s) * strength;
         }
@@ -130,7 +131,7 @@ namespace PenguinRun
         public static float WorldCurveX(float worldZ, float runDistanceMeters)
         {
             const float k = Mathf.PI * 2f / RoadLoopLength;
-            var strength = Progress01(runDistanceMeters, 140f, 860f);
+            var strength = Progress01(runDistanceMeters, 110f, 560f);
             var s = _activeProfile.CurveStrength;
             // 单谐波 S 形，worldZ=0 及其整数倍处均为 0，保证瓦片循环时X无跳变
             return Mathf.Sin(worldZ * k) * 1.3f * s * strength;
@@ -140,7 +141,7 @@ namespace PenguinRun
         public static float WorldCurveTangentYaw(float worldZ, float runDistanceMeters)
         {
             const float k = Mathf.PI * 2f / RoadLoopLength;
-            var strength = Progress01(runDistanceMeters, 140f, 860f);
+            var strength = Progress01(runDistanceMeters, 110f, 560f);
             var s = _activeProfile.CurveStrength;
             var dxdz = Mathf.Cos(worldZ * k) * 1.3f * s * k * strength;
             return Mathf.Atan2(dxdz, 1f) * Mathf.Rad2Deg;

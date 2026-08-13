@@ -19,24 +19,30 @@ namespace PenguinRun
         {
             var basis = Mathf.Max(1f, Mathf.Min(width, height));
             return new RunnerGestureThresholds(
-                Mathf.Clamp(basis * 0.054f, 40f, 88f),
+                Mathf.Clamp(basis * 0.048f, 36f, 80f),
                 Mathf.Clamp(basis * 0.020f, 16f, 32f),
-                Mathf.Clamp(basis * 0.048f, 36f, 78f));
+                Mathf.Clamp(basis * 0.052f, 40f, 84f));
         }
     }
 
     internal static class RunnerGestureClassifier
     {
-        private const float DominantAxisRatio = 1.12f;
-        private const float DoubleTapMaxGapSeconds = 0.3f;
+        private const float DominantAxisRatio = 1.06f;
+        private const float DoubleTapMaxGapSeconds = 0.34f;
 
         public static RunnerAction ClassifySwipe(Vector2 delta, RunnerGestureThresholds thresholds)
         {
             var absX = Mathf.Abs(delta.x);
             var absY = Mathf.Abs(delta.y);
-            if (absX >= thresholds.SwipePixels && absX > absY * DominantAxisRatio)
+            var swipe = thresholds.SwipePixels;
+            // 两轴都过阈值时取主轴，避免斜滑被整段吞掉。
+            if (absX >= swipe && absY >= swipe)
+                return absX >= absY
+                    ? (delta.x > 0f ? RunnerAction.Right : RunnerAction.Left)
+                    : (delta.y > 0f ? RunnerAction.Jump : RunnerAction.Slide);
+            if (absX >= swipe && absX > absY * DominantAxisRatio)
                 return delta.x > 0f ? RunnerAction.Right : RunnerAction.Left;
-            if (absY >= thresholds.SwipePixels && absY > absX * DominantAxisRatio)
+            if (absY >= swipe && absY > absX * DominantAxisRatio)
                 return delta.y > 0f ? RunnerAction.Jump : RunnerAction.Slide;
             return RunnerAction.None;
         }

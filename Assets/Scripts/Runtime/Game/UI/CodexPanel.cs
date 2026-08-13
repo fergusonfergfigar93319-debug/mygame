@@ -90,9 +90,10 @@ namespace PenguinRun.Game.UI
                 var total = CodexUnlocks.StoryEntryTotal;
                 var bu = CodexUnlocks.BossesDefeatedCount();
                 var bt = CodexUnlocks.BossEntryTotal;
-                progressText.text = $"<color=#00DAF0><b>{u}</b></color>/{total}<size=18><color=#A8B6C8> 故事</color></size>"
-                    + $"  ·  <color=#FFB84D><b>{bu}</b></color>/{bt}<size=18><color=#A8B6C8> Boss</color></size>"
-                    + $"  <size=18><color=#A8B6C8>· 无尽 / 今日挑战</color></size>";
+                // #3C7873 = UiTheme.PineGreen、#466366 = 墨色次级；米黄横幅上禁用旧霓虹 #00DAF0 / 灰蓝 #A8B6C8
+                progressText.text = $"<color=#3C7873><b>{u}</b></color>/{total}<size=18><color=#466366> 故事</color></size>"
+                    + $"  ·  <color=#EC6341><b>{bu}</b></color>/{bt}<size=18><color=#466366> Boss</color></size>"
+                    + $"  <size=18><color=#466366>· 无尽 / 今日挑战</color></size>";
                 progressText.richText = true;
 
                 if (progressFill != null)
@@ -119,7 +120,7 @@ namespace PenguinRun.Game.UI
                 PlayerSave.TakamatsuDefeated, new Color(1f, 0.45f, 0.45f, 1f));
             BuildEntry("\u2302", "icon_camp", "营地之旅", "首次进入营地，开启局外强化。",
                 PlayerSave.VisitedCamp, new Color(0.4f, 0.95f, 0.7f, 1f));
-            BuildEntry("\u2756", "icon_tutorial", "3D 跑酷新手教程", "完成至少一局完整结算。",
+            BuildEntry("\u2605", "icon_tutorial", "3D 跑酷新手教程", "完成至少一局完整结算。",
                 PlayerSave.Runner3DTutorialDone, new Color(1f, 0.85f, 0.4f, 1f));
 
             BuildSectionHeader($"Boss 战绩 · {CodexUnlocks.BossesDefeatedCount()} / {CodexUnlocks.BossEntryTotal}");
@@ -158,7 +159,8 @@ namespace PenguinRun.Game.UI
         private void BuildEntry(string fallbackIcon, string iconSpriteName, string title, string desc,
             bool unlocked, Color themeColor, string lockedDescription = null)
         {
-            var rowBg = unlocked ? UiBuilder.Surface1 : new Color(0.05f, 0.09f, 0.14f, 0.85f);
+            // 未解锁行也留在纸面色系：旧深色底会让墨色标题（TextSecondary）不可读
+            var rowBg = unlocked ? UiBuilder.Surface1 : Color.Lerp(UiTheme.PaperBase, UiTheme.MistBlue, 0.35f);
             var row = UiBuilder.CreateScrollListRow("Entry_" + title, contentRoot, 160f, rowBg);
             UiBuilder.AddOutline(row.gameObject,
                 unlocked ? new Color(themeColor.r, themeColor.g, themeColor.b, 0.35f) : UiBuilder.BorderSubtle,
@@ -177,7 +179,7 @@ namespace PenguinRun.Game.UI
                 new Vector2(72f, 72f), new Vector2(54f, 0f),
                 unlocked
                     ? new Color(themeColor.r, themeColor.g, themeColor.b, 0.2f)
-                    : new Color(0.1f, 0.15f, 0.22f, 0.85f),
+                    : new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.55f),
                 circle: true);
             UiBuilder.AddOutline(iconBadge.gameObject,
                 unlocked
@@ -194,19 +196,19 @@ namespace PenguinRun.Game.UI
                 iconImage.sprite = iconSprite;
                 iconImage.type = Image.Type.Simple;
                 iconImage.preserveAspect = true;
-                iconImage.color = unlocked ? themeColor : new Color(0.4f, 0.5f, 0.62f, 0.7f);
+                iconImage.color = unlocked ? themeColor : UiBuilder.TextSecondary;
             }
             else
             {
                 UiBuilder.CreateText("Icon", iconBadge.transform, unlocked ? fallbackIcon : "?",
                     36, FontStyle.Bold, TextAnchor.MiddleCenter,
-                    unlocked ? themeColor : new Color(0.4f, 0.5f, 0.62f, 0.7f));
+                    unlocked ? themeColor : UiBuilder.TextSecondary);
             }
 
             // 标题
             var titleText = UiBuilder.CreateText("Title", row, title,
                 28, FontStyle.Bold, TextAnchor.UpperLeft,
-                unlocked ? Color.white : UiBuilder.TextSecondary);
+                unlocked ? UiBuilder.TextPrimary : UiBuilder.TextSecondary);
             var trt = (RectTransform)titleText.transform;
             trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(0.7f, 1f);
@@ -232,23 +234,24 @@ namespace PenguinRun.Game.UI
                 new Vector2(120f, 38f), new Vector2(-24f, 0f),
                 unlocked
                     ? new Color(themeColor.r, themeColor.g, themeColor.b, 0.22f)
-                    : new Color(0.18f, 0.22f, 0.3f, 0.85f),
+                    : new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.5f),
                 rounded: true);
             UiBuilder.AddOutline(statusChip.gameObject,
                 unlocked
                     ? new Color(themeColor.r, themeColor.g, themeColor.b, 0.55f)
                     : UiBuilder.BorderSubtle,
                 new Vector2(1f, -1f));
+            // \u26AC 在 CJK 字体里是豆腐块，未解锁态直接用文字
             UiBuilder.CreateText("StatusText", statusChip.transform,
-                unlocked ? "\u2713 已解锁" : "\u26AC 未解锁",
+                unlocked ? "\u2713 已解锁" : "未解锁",
                 18, FontStyle.Bold, TextAnchor.MiddleCenter,
-                unlocked ? themeColor : UiBuilder.TextTertiary);
+                unlocked ? themeColor : UiBuilder.TextSecondary);
         }
 
         private void BuildSectionHeader(string label)
         {
             var row = UiBuilder.CreateScrollListRow("BossSectionHeader", contentRoot, 52f,
-                new Color(0.06f, 0.12f, 0.2f, 0.75f));
+                UiBuilder.Surface2);
             var rowBgImage = row.GetComponentInChildren<Image>(true);
             if (rowBgImage != null)
                 rowBgImage.raycastTarget = false;

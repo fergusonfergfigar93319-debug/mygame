@@ -54,10 +54,12 @@ namespace PenguinRun
         {
             if (world.ShieldTimer > 0f)
             {
+                // 护盾为消耗制并附碎裂无敌（与 Boss 路径同一条款），否则挡下障碍后下一帧可立刻再受伤。
                 return new HitOutcome(
                     HitOutcomeKind.BlockedByDefense,
                     "护盾抵消",
                     0.8f,
+                    combat.invulnAfterShieldBreak,
                     removeObstacle: true,
                     consumeShield: true);
             }
@@ -228,8 +230,10 @@ namespace PenguinRun
                     break;
 
                 case BossPattern.DiveHigh:
+                    // 用开战时锁定的俯冲车道判定：Boss 根节点 x 每帧向中线回插，
+                    // 读 WorldX 会让命中带漂到中道、与预警圈车道相反。
                     if (playerAirborne) return false;
-                    if (Mathf.Abs(playerX - boss.WorldX) > offLane) return false;
+                    if (Mathf.Abs(playerX - boss.DiveLaneX) > offLane) return false;
                     break;
 
                 case BossPattern.ChargeAcross:
@@ -238,8 +242,10 @@ namespace PenguinRun
                     break;
 
                 case BossPattern.RangedSalvo:
-                    if (playerDashTimer > 0f) return false;
+                    // 齐射：冲刺 / 跳跃可躲；只在弹道落地附近判伤，避免“球还没到就扣血”。
+                    if (playerDashTimer > 0f || playerAirborne) return false;
                     if (!IsInSalvoLane(boss, playerX, laneWidth * combat.bossSalvoLaneFactor)) return false;
+                    if (!boss.IsSalvoImpactActive) return false;
                     break;
 
                 case BossPattern.CenterBeam:

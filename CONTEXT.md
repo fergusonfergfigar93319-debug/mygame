@@ -52,7 +52,8 @@
 ### 蹲姿判定盒（CrouchHitbox）
 
 - **意指：** 玩家判定身高 `PlayerMotor.BodyHeight`：站立 1.56、滑铲立即压至 0.86、滑铲结束后按 1.2/s 起身。`IsLow` 障碍以 `ObstacleColliderSpec.PassUnderMaxHeight`（默认 1.05）判定可否从下方穿过——判定身高低于该值即穿过，替代早期「SlideTimer>0 布尔」判定。
-- **宽容语义：** 起身期间（约 0.16s）仍保持低姿态穿过资格；空中下滑落地帧自动衔接滑铲（`queuedSlideOnLand`）；贴地小幅腾空时按下滑会缓冲到落地帧执行。
+- **宽容语义：** 起身期间（约 0.16s）仍保持低姿态穿过资格；空中下滑 / 贴地预输入经 `slideBufferTimer`（默认 0.16s，急坠可延长）在落地帧衔接滑铲，并优先于过期跳跃缓冲。
+- **统一消费方：** Boss 低空招式（`SweepLow` / `QuakePulse`）与障碍 `IsLow` 共用同一蹲姿盒语义（`PlayerMotor.IsLowPosture`，含起身宽容窗），不得只认 `SlideTimer>0`——否则同一帧姿态会出现「障碍判过、Boss 判死」。
 - **勿混淆：** 跳跃净空判定仍走 `FeetClearanceAboveRoot`，与蹲姿盒相互独立。
 
 ### 完美动作窗口（PerfectActionWindow）
@@ -62,7 +63,8 @@
 
 ### 命中解析（RunnerHitResolver）
 
-- **意指：** 障碍与 Boss 共用的一层防御/扣血判定，统一护盾、鱼弹、冰镜、树人护甲、珊瑚回弹、雷羽击破与无敌时长（`RunnerCombatTuning`）。Boss 招式命中同样按此顺序消耗防御层（护盾为消耗制并附护盾碎裂无敌，不再是 Boss 期间持续免疫）；真实扣血后由 `BossSystem.NotifyBossDamageTaken` 记录死亡复盘。
+- **意指：** 障碍与 Boss 共用的一层防御/扣血判定，统一护盾、鱼弹、冰镜、树人护甲、珊瑚回弹、雷羽击破与无敌时长（`RunnerCombatTuning`）。Boss 招式命中同样按此顺序消耗防御层（护盾为消耗制并附护盾碎裂无敌——**障碍与 Boss 两条路径均附**，不再是 Boss 期间持续免疫）；真实扣血后由 `BossSystem.NotifyBossDamageTaken` 记录死亡复盘。
+- **防御顺序陷阱：** 护盾在防御顺序中优先于珊瑚回弹，因此道具**不得**附赠护盾层（珊瑚回弹曾附赠 3.5s 护盾，导致回弹层永远轮不到消耗、道具名不副实）。
 - **勿混淆：** Boss 招式闪避几何仍由 `RunnerHitResolver.IsBossPatternHit` 与 `BossSystem.CheckPatternHit` 协作；VFX 不改变命中规则。
 
 ### 移动敌人（MovingEnemy）
@@ -74,12 +76,15 @@
 
 - **意指：** 玩家拾取后触发即时效果的场景物件。由 `PowerUpKind` 枚举标识，在 `PickupSystem` 中激活效果，在 `WorldDirector` 中管理持续时间/状态。
 - **分层：** 通用道具适用全主题；主题道具仅在对应调色板片段中以更高概率出现。
+- **雾灯（FogLantern）：** 激活期间除磁吸/慢动作外，雾起点/终点平滑外推（+45m/+70m，`FogLanternFogDriver`），提前照亮前方障碍——这是它区别于磁铁的核心语义，雾堤主题收益最明显。
 - **勿混淆：** 金币（Coin）是另一类收集物，不视为道具。
 
 ### Boss
 
 - **意指：** 在跑酷途中出现的大型对手，有独立生命值（`HitsRemaining`）、攻击模式池（`PatternPool`）和阶段流程（出场 → 学习 → 压迫 → 破绽 → 击败）。
 - **相关：** Boss 前奏片段（`SpawnBossPrelude`）在 Boss 出现前 ~100m 生成预警和补给；Boss 奖励片段（`SpawnBossReward`）在击败后生成奖励。
+- **预告一致性：** `BossSystem.NextBossDefinition` 首次访问时按真实上下文抽取并缓存（含第一场 Boss），`SpawnBoss` 消费同一定义——前奏预告谁、出场就是谁，不允许出场时重抽。
+- **命中车道锁定：** `DiveHigh` 命中判定只读开战锁定的 `DiveLaneX`；Boss 根节点 x 会向中线回插，读 `WorldX` 会让命中带与预警圈车道相反。齐射（`RangedSalvo`）仅在弹道落地时刻附近（约 0.14s 冲击窗）判伤。
 
 ### Boss 出场动画（BossIntro）
 
@@ -134,7 +139,8 @@
 
 ### 主题光照档案（ThemeLightingProfile）
 
-- **意指：** `ThemePresentationProfile` 中的光照字段组（`KeyLightColor` / `KeyLightIntensity` / `KeyLightEuler` / `RimLightColor` / `RimLightIntensity` / `AmbientLight` / `FogColor` / `FogStart` / `FogEnd`），决定每个主题的主光色温与朝向、边光配色与雾带景深。
+- **意指：** `ThemePresentationProfile` 中的光照字段组（`KeyLightColor` / `KeyLightIntensity` / `KeyLightEuler` / `RimLightColor` / `RimLightIntensity` / `AmbientLight` / `FogColor` / `FogStart` / `FogEnd`），决定每个主题的主光色温与朝向、边光配色与雾带景深。另含 `SkyAuroraColor`（天空盒极光带颜色，黑色 = 该主题天上没有极光带）与 `PostTemperature` / `PostSaturation`（`RunnerPostFx.ApplyThemeGrading` 消费的逐主题色调）。
+- **天象归属（ThemeSkyDressing）：** 月亮 / 太阳 / 极光带按主题布置于 `ThemeSkyDressing`：极光图满编五条极光带、冰湖两条余晖、其余主题无极光带；天空主题为日盘（复用 "Moon" 命名继承不贴地/不淡出行为）、雾堤只有漫开的冷光晕。冰晶簇/雪堆只属于寒带主题，远山剪影配色随主题传入。
 - **背景：** 此前六个主题共用同一套方向光与雾距，仅雾色不同，导致每张图的「光」完全一样。光向与色温是主题之间最强的区分手段。
 - **执行点：** `PenguinRunnerGame.ApplyMapThemeVisuals` 消费档案并覆盖 `keyLight` / `rimFillLight`；`BuildScene` 只建默认值。主题切换时重新应用。
 - **勿混淆：** Boss 战氛围（`RunnerPostFx.SetBossEmphasis`）是叠加在主题光照之上的临时后处理，不修改 `RenderSettings`。
@@ -189,7 +195,8 @@
 
 ### 跑道可视走廊（PlayableViewCorridor）
 
-- **意指：** 第三人称镜头与玩家之间的近场带内，程序化布景不得用大体块遮挡三车道与前方障碍预判；侧向装饰应落在护坡外（`|x| ≥ SceneryMinAbsX`，约 **7.4 m**），相机—玩家 Z 带内误入走廊的物体在 `AnimateScenery` 中淡出至低 alpha。
+- **意指：** 第三人称镜头与玩家之间的近场带内，程序化布景不得用大体块遮挡三车道与前方障碍预判；侧向装饰应落在护坡外（`|x| ≥ SceneryMinAbsX` = **8.5 m**，以代码常量为准），相机—玩家 Z 带内误入走廊的物体在 `AnimateScenery` 中淡出至低 alpha。
+- **例外：** 贴在路面上的扁平细节（冰裂等）作为**路面瓦片的子物体**存在，随路滚动、随瓦片销毁，不注册进布景系统，也不受本走廊淡出约束。
 - **执行点：** `PenguinRunnerGame` 常量 `ViewCorridorHalfWidth`（约 **5.2 m**）、`SceneryLateralOffset`（布景随弯道 `WorldCurveX` 偏移）、`ApplyViewCorridorFade`（走廊内隐藏或极低 alpha）；天空浮云/光柱/侧向彩虹条、远山 `Distant Ice Ridge` 为高风险装饰。
 - **勿混淆：** 玩法障碍与宽墙（`SegmentSpawner`）属碰撞实体，不在本走廊规则内。
 

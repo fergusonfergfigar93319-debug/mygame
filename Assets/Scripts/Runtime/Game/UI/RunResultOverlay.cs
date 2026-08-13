@@ -25,10 +25,19 @@ namespace PenguinRun.Game.UI
                 Vector2.zero, Vector2.zero,
                 new Color(0f, 0f, 0f, bgAlpha));
 
-            // 新纪录：背景金色粒子光晕
+            // 新纪录：持续闪烁的装饰（光晕/星点）挂独立嵌套 Canvas（AmbientCanvasIsolation），
+            // 每帧只重建这张小画布，不把整个结算面板一起标脏。
+            RectTransform celebrationLayer = null;
             if (r.NewBest)
             {
-                var celebrationBg = UiBuilder.CreateRect("CelebrationBg", root,
+                celebrationLayer = UiBuilder.CreateRect("CelebrationAmbient", root,
+                    Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+                    Color.clear);
+                var layerImage = celebrationLayer.GetComponent<Image>();
+                if (layerImage != null) layerImage.raycastTarget = false;
+                celebrationLayer.gameObject.AddComponent<Canvas>();
+
+                var celebrationBg = UiBuilder.CreateRect("CelebrationBg", celebrationLayer,
                     new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                     new Vector2(1600f, 1600f), Vector2.zero,
                     new Color(1f, 0.75f, 0.2f, 0.08f), glow: true);
@@ -73,10 +82,10 @@ namespace PenguinRun.Game.UI
                 r.NewBest ? UiTheme.CoralAction : UiTheme.PineGreen, rounded: true);
             topAccent.GetComponent<Image>().raycastTarget = false;
 
-            // 新纪录：顶部闪烁星星装饰
-            if (r.NewBest)
+            // 新纪录：顶部闪烁星星装饰（放装饰层——面板与星点中心均为屏幕中心，坐标语义不变）
+            if (r.NewBest && celebrationLayer != null)
             {
-                CreateCelebrationStars(panel, 8);
+                CreateCelebrationStars(celebrationLayer, 8);
             }
 
             // 标题徽章（圆形）- 新纪录时更大且有脉冲动画
@@ -84,7 +93,7 @@ namespace PenguinRun.Game.UI
             var badgeY = r.NewBest ? -45f : -50f;
             var badgeColor = r.NewBest
                 ? new Color(1f, 0.84f, 0.32f, 0.35f)
-                : new Color(0f, 0.85f, 0.95f, 0.2f);
+                : new Color(UiTheme.PineGreen.r, UiTheme.PineGreen.g, UiTheme.PineGreen.b, 0.2f);
             var headlineBadge = UiBuilder.CreateRect("HeadlineBadge", panel,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(badgeSize, badgeSize), new Vector2(0f, badgeY),
@@ -97,10 +106,10 @@ namespace PenguinRun.Game.UI
                 r.NewBest ? 72 : 56, FontStyle.Bold, TextAnchor.MiddleCenter,
                 r.NewBest ? UiBuilder.WarmGold : UiBuilder.AccentActive);
 
-            // 新纪录时添加脉冲动画
+            // 新纪录时添加脉冲动画（徽章在交互画布内，限时收敛避免整卡每帧重建）
             if (r.NewBest)
             {
-                headlineBadge.gameObject.AddComponent<CelebrationPulse>();
+                headlineBadge.gameObject.AddComponent<CelebrationPulse>().duration = 2.8f;
             }
 
             // 主标题
@@ -117,10 +126,12 @@ namespace PenguinRun.Game.UI
             hrt.anchoredPosition = new Vector2(0f, r.NewBest ? -195f : -180f);
             UiBuilder.AddShadow(headline.gameObject, new Color(0f, 0.05f, 0.15f, 0.65f), new Vector2(0f, -4f));
 
-            // 新纪录时标题也加脉冲
+            // 新纪录时标题也加脉冲（同样限时收敛）
             if (r.NewBest)
             {
-                headline.gameObject.AddComponent<CelebrationPulse>().amplitude = 0.03f;
+                var headlinePulse = headline.gameObject.AddComponent<CelebrationPulse>();
+                headlinePulse.amplitude = 0.03f;
+                headlinePulse.duration = 2.8f;
             }
 
             // 副标题
@@ -153,8 +164,10 @@ namespace PenguinRun.Game.UI
             slrt.anchoredPosition = new Vector2(0f, -20f);
 
             var score = UiBuilder.CreateText("Score", scoreCard.transform,
-                model.Score.ToString("N0"), 110, FontStyle.Bold, TextAnchor.MiddleCenter,
+                "0", 110, FontStyle.Bold, TextAnchor.MiddleCenter,
                 r.NewBest ? UiTheme.CoralAction : UiTheme.InkPrimary);
+            // 分数滚动呈现（0 → 总分）：只在整数变化帧写 text，满足按值门控。
+            TweenExtensions.PlayCountUp(model.Score, 0.85f, v => score.text = v.ToString("N0"));
             var srt = (RectTransform)score.transform;
             srt.anchorMin = Vector2.zero;
             srt.anchorMax = Vector2.one;
@@ -186,12 +199,16 @@ namespace PenguinRun.Game.UI
             var cellWidth = (gridEndX - gridStartX) / 3f;
             var spacing = 0.01f;
 
+            // 三张统计卡错峰入场，与分数滚动一起构成结算节拍。
             BuildStatCell(panel, gridStartX + spacing, gridStartX + cellWidth - spacing, gridY,
-                UiIcons.Distance, "距离", $"{model.DistanceMeters}m", UiTheme.PineGreen);
+                UiIcons.Distance, "距离", $"{model.DistanceMeters}m", UiTheme.PineGreen)
+                .PlayListItemEnter(1);
             BuildStatCell(panel, gridStartX + cellWidth + spacing, gridStartX + 2 * cellWidth - spacing, gridY,
-                UiIcons.Fish, "鱼干", $"{model.Fish}", UiTheme.CoralAction);
+                UiIcons.Fish, "鱼干", $"{model.Fish}", UiTheme.CoralAction)
+                .PlayListItemEnter(2);
             BuildStatCell(panel, gridStartX + 2 * cellWidth + spacing, gridEndX - spacing, gridY,
-                UiIcons.Timer, "存活", $"{Mathf.RoundToInt(r.SurvivalSeconds)}s", UiTheme.MistBlue);
+                UiIcons.Timer, "存活", $"{Mathf.RoundToInt(r.SurvivalSeconds)}s", UiTheme.MistBlue)
+                .PlayListItemEnter(3);
 
             BuildBonusBanner(panel, r, model);
 
@@ -211,7 +228,7 @@ namespace PenguinRun.Game.UI
             });
         }
 
-        private static void BuildStatCell(RectTransform parent,
+        private static RectTransform BuildStatCell(RectTransform parent,
             float anchorXMin, float anchorXMax, float anchoredY,
             string iconName, string label, string value, Color color)
         {
@@ -250,6 +267,7 @@ namespace PenguinRun.Game.UI
             lrt.pivot = new Vector2(0.5f, 0f);
             lrt.sizeDelta = new Vector2(0f, 28f);
             lrt.anchoredPosition = new Vector2(0f, 8f);
+            return cell;
         }
 
         /// <summary>显示本局来自营地强化与消耗券的额外奖励，让玩家直观看到养成的价值。</summary>
@@ -342,11 +360,13 @@ namespace PenguinRun.Game.UI
             }
         }
 
-        /// <summary>庆祝脉冲动画：缩放的正弦波动。</summary>
+        /// <summary>庆祝脉冲动画：缩放的正弦波动。duration &gt; 0 时限时收敛（交互画布内的元素必须限时，否则整卡每帧重建）。</summary>
         private class CelebrationPulse : MonoBehaviour
         {
             public float amplitude = 0.05f;
             public float speed = 3f;
+            /// <summary>0 = 永久循环（仅限装饰层）；&gt;0 = 播放该时长后归位停止。</summary>
+            public float duration;
             private Vector3 baseScale;
             private float startTime;
 
@@ -359,6 +379,12 @@ namespace PenguinRun.Game.UI
             private void Update()
             {
                 var t = Time.time - startTime;
+                if (duration > 0f && t >= duration)
+                {
+                    transform.localScale = baseScale;
+                    enabled = false;
+                    return;
+                }
                 var s = 1f + Mathf.Sin(t * speed) * amplitude;
                 transform.localScale = baseScale * s;
             }

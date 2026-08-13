@@ -62,10 +62,11 @@ namespace PenguinRun.Game.UI.Lobby
         {
             foreach (var item in items)
             {
-                // On the home surface (null panel) leave dock unhighlighted so chapter CTA stays the only Coral action.
+                // Selected tab uses the shared PineGreen active accent; Coral stays reserved for
+                // the single primary CTA. Unselected keeps a faint paper fill for press feedback.
                 var selected = !string.IsNullOrEmpty(panelName) && item.Name == panelName;
-                item.Background.color = selected ? UiTheme.CoralAction :
-                    new Color(UiTheme.PaperWarm.r, UiTheme.PaperWarm.g, UiTheme.PaperWarm.b, 0f);
+                item.Background.color = selected ? UiBuilder.AccentActive :
+                    new Color(UiTheme.PaperWarm.r, UiTheme.PaperWarm.g, UiTheme.PaperWarm.b, 0.35f);
                 item.Label.color = selected ? Color.white : UiTheme.InkPrimary;
             }
         }
@@ -82,10 +83,13 @@ namespace PenguinRun.Game.UI.Lobby
             var width = 1f / 5f;
             var rect = UiBuilder.CreateRect(name, parent, new Vector2(index * width + 0.01f, 0.10f),
                 new Vector2((index + 1) * width - 0.01f, 0.90f), Vector2.zero, Vector2.zero,
-                primary ? UiTheme.CoralAction : new Color(0f, 0f, 0f, 0f), rounded: true);
+                primary ? UiTheme.CoralAction
+                    : new Color(UiTheme.PaperWarm.r, UiTheme.PaperWarm.g, UiTheme.PaperWarm.b, 0.35f),
+                rounded: true);
             var image = rect.GetComponent<Image>();
             var button = rect.gameObject.AddComponent<Button>();
             button.targetGraphic = image;
+            UiBuilder.WireClickFeedback(button);
             if (callback != null) button.onClick.AddListener(() => callback());
 
             var text = UiBuilder.CreateTmpText("Label", rect, label, UiTheme.Caption, FontStyle.Bold,

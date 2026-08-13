@@ -64,15 +64,29 @@ namespace PenguinRun.Game.UI.Lobby
         {
             if (currentPanel == null) return;
 
-            // Destroy is deferred until the end of the frame. Deactivate first so
-            // rapid navigation never renders or receives input on two pages at once.
-            currentPanel.SetActive(false);
-            if (Application.isPlaying)
-                UnityEngine.Object.Destroy(currentPanel);
-            else
-                UnityEngine.Object.DestroyImmediate(currentPanel);
+            var closing = currentPanel;
             currentPanel = null;
             CurrentPanelName = null;
+
+            if (Application.isPlaying && closing.activeInHierarchy
+                && closing.TryGetComponent<RectTransform>(out var rect))
+            {
+                // 短退场（淡出+收缩）后销毁；PlayPanelPopOut 首帧即关闭交互，
+                // 快速导航不会同时点到两页。
+                rect.PlayPanelPopOut(() =>
+                {
+                    if (closing != null) UnityEngine.Object.Destroy(closing);
+                });
+            }
+            else
+            {
+                closing.SetActive(false);
+                if (Application.isPlaying)
+                    UnityEngine.Object.Destroy(closing);
+                else
+                    UnityEngine.Object.DestroyImmediate(closing);
+            }
+
             if (notify) onChanged?.Invoke();
         }
     }

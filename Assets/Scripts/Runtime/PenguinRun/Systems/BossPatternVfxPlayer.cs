@@ -100,6 +100,10 @@ namespace PenguinRun
       if (host == null || pattern != BossPattern.RangedSalvo) return;
       SpawnImpactRing(laneX, BossSystem.PlayerTelegraphZ, 0.55f, new Color(1f, 0.55f, 0.2f, 0.72f));
       SpawnShardBurst(laneX, BossSystem.PlayerTelegraphZ, 5, 0.85f);
+      // 首枚落地：全局击发（震屏/主题 cue）与判定危险窗起点对齐；后续弹只播车道落点。
+      if (strikeFired) return;
+      strikeFired = true;
+      FireStrikeVfx();
       onStrike?.Invoke(BossPattern.RangedSalvo, profile);
     }
 
@@ -247,9 +251,14 @@ namespace PenguinRun
           FireTelegraphVfx();
           break;
         case BossAttackPhase.Strike when !strikeFired:
-          strikeFired = true;
-          FireStrikeVfx();
-          onStrike?.Invoke(pattern, profile);
+          // 齐射的全局击发（震屏/主题 cue/音效）由首枚弹道落地回调触发；
+          // 此处不得预占 strikeFired，否则同帧稍后的落地回调会被短路、齐射永远没有击发反馈。
+          if (pattern != BossPattern.RangedSalvo)
+          {
+            strikeFired = true;
+            FireStrikeVfx();
+            onStrike?.Invoke(pattern, profile);
+          }
           break;
         case BossAttackPhase.Recovery:
           FadePersistentFx();
@@ -713,7 +722,12 @@ namespace PenguinRun
       var life01 = host.PatternDuration > 0.01f
         ? Mathf.Clamp01(host.PatternTimer / host.PatternDuration)
         : 0f;
-      var strike01 = phase == BossAttackPhase.Strike ? host.DangerWindowProgress01 : 0f;
+      // 持续型招式（光束/震波）随危险窗推进；瞬时击发类用 StrikeImpact01 与判定峰值对齐。
+      var strike01 = phase != BossAttackPhase.Strike
+        ? 0f
+        : pattern is BossPattern.CenterBeam or BossPattern.QuakePulse
+          ? host.DangerWindowProgress01
+          : host.StrikeImpact01;
 
       foreach (var fx in persistentFx)
       {

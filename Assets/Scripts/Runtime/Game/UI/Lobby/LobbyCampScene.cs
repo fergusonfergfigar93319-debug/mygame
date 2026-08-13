@@ -69,13 +69,20 @@ namespace PenguinRun.Game.UI.Lobby
             hotspotLayer.GetComponent<Image>().raycastTarget = false;
             scene.hotspotGroup = hotspotLayer.gameObject.AddComponent<CanvasGroup>();
 
+            // 每帧演化的纯装饰（篝火光晕脉动 / 炊烟漂移）挂独立嵌套 Canvas（AmbientCanvasIsolation）：
+            // 重建圈只在装饰层内，不波及建筑与热点按钮的合批。位于 BuildingLayer 之前，层级顺序不变。
+            var effectLayer = UiBuilder.CreateRect("AmbientEffectLayer", scene.Root, Vector2.zero, Vector2.one,
+                Vector2.zero, Vector2.zero, Color.clear);
+            effectLayer.GetComponent<Image>().raycastTarget = false;
+            effectLayer.gameObject.AddComponent<Canvas>();
+            scene.CreateEffect(effectLayer, "BonfireGlow", new Vector2(0.34f, 0.31f),
+                new Vector2(0.17f, 0.28f), CampVisualAssetCatalog.Glow, 0.58f, pulse: true);
+            scene.CreateEffect(effectLayer, "BonfireSmoke", new Vector2(0.34f, 0.43f),
+                new Vector2(0.08f, 0.22f), CampVisualAssetCatalog.Smoke, 0.54f, smokeDrift: true);
+
             var buildingLayer = UiBuilder.CreateRect("BuildingLayer", scene.Root, Vector2.zero, Vector2.one,
                 Vector2.zero, Vector2.zero, Color.clear);
             buildingLayer.GetComponent<Image>().raycastTarget = false;
-            scene.CreateEffect(buildingLayer, "BonfireGlow", new Vector2(0.34f, 0.31f),
-                new Vector2(0.17f, 0.28f), CampVisualAssetCatalog.Glow, 0.58f, pulse: true);
-            scene.CreateEffect(buildingLayer, "BonfireSmoke", new Vector2(0.34f, 0.43f),
-                new Vector2(0.08f, 0.22f), CampVisualAssetCatalog.Smoke, 0.54f, smokeDrift: true);
             scene.CreateBuilding(buildingLayer, hotspotLayer, CampBuildingId.Bonfire, new Vector2(0.34f, 0.27f), new Vector2(0.14f, 0.20f));
             scene.CreateBuilding(buildingLayer, hotspotLayer, CampBuildingId.Workshop, new Vector2(0.18f, 0.40f), new Vector2(0.18f, 0.28f));
             scene.CreateBuilding(buildingLayer, hotspotLayer, CampBuildingId.CompanionHut, new Vector2(0.82f, 0.35f), new Vector2(0.18f, 0.27f));
@@ -85,6 +92,9 @@ namespace PenguinRun.Game.UI.Lobby
             var characterLayer = UiBuilder.CreateRect("CharacterLayer", scene.Root, Vector2.zero, Vector2.one,
                 Vector2.zero, Vector2.zero, Color.clear);
             characterLayer.GetComponent<Image>().raycastTarget = false;
+            // 角色呼吸动画每帧改 scale：给本层配嵌套 Canvas 隔离重建；伙伴可点击，需自带 GraphicRaycaster。
+            characterLayer.gameObject.AddComponent<Canvas>();
+            characterLayer.gameObject.AddComponent<GraphicRaycaster>();
             scene.mascot = scene.CreateCharacter(characterLayer, "Mascot", new Vector2(0.39f, 0.12f),
                 new Vector2(0.58f, 0.69f), CampVisualAssetCatalog.Mascot, null);
             scene.companion = scene.CreateCharacter(characterLayer, "Companion", new Vector2(0.55f, 0.16f),
@@ -162,6 +172,7 @@ namespace PenguinRun.Game.UI.Lobby
                 new Vector2(56f, 56f), Vector2.zero, new Color(0f, 0f, 0f, 0f), circle: true);
             var button = buttonRect.gameObject.AddComponent<Button>();
             button.targetGraphic = buttonRect.GetComponent<Image>();
+            UiBuilder.WireClickFeedback(button);
             if (actions.OpenCamp != null) button.onClick.AddListener(() => actions.OpenCamp());
             sceneButtons.Add(button);
 
@@ -248,6 +259,7 @@ namespace PenguinRun.Game.UI.Lobby
             motion.Amplitude = name == "Mascot" ? 0.018f : 0.012f;
             if (onClick != null)
             {
+                // 不挂 WireClickFeedback：LobbyCharacterBreath 每帧写 localScale，会覆盖按压缩放。
                 var button = rect.gameObject.AddComponent<Button>();
                 button.targetGraphic = image;
                 button.onClick.AddListener(() => onClick());

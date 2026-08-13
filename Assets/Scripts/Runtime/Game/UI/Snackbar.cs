@@ -35,7 +35,8 @@ namespace PenguinRun.Game.UI
             rt.anchoredPosition = new Vector2(0f, 130f);
 
             var img = go.GetComponent<Image>();
-            img.color = new Color(0.04f, 0.09f, 0.16f, 0.96f);
+            // 纸面 Toast：暖纸底 + 墨色文字 + 缝线描边
+            img.color = new Color(UiTheme.PaperWarm.r, UiTheme.PaperWarm.g, UiTheme.PaperWarm.b, 0.96f);
             img.sprite = UiBuilder.RoundedSprite;
             img.type = Image.Type.Sliced;
             // 提示条不需要拦截主界面点击；淡出时 alpha=0 仍会吞射线，必须关 raycast / blocksRaycasts
@@ -45,8 +46,8 @@ namespace PenguinRun.Game.UI
             group.blocksRaycasts = false;
             group.interactable = false;
 
-            UiBuilder.AddOutline(go, UiBuilder.BorderAccent, new Vector2(1.5f, -1.5f));
-            UiBuilder.AddShadow(go, new Color(0f, 0f, 0f, 0.55f), new Vector2(0f, -6f));
+            UiBuilder.AddOutline(go, UiTheme.StitchBorder, new Vector2(1.5f, -1.5f));
+            UiBuilder.AddShadow(go, UiTheme.ShadowWarm, new Vector2(0f, -6f));
 
             // 顶部强调条（青色发光）
             var topAccent = UiBuilder.CreateRect("TopAccent", go.transform,
@@ -73,7 +74,7 @@ namespace PenguinRun.Game.UI
                 26,
                 FontStyle.Bold,
                 TextAnchor.MiddleLeft,
-                Color.white);
+                UiBuilder.TextPrimary);
             var trt = (RectTransform)text.transform;
             trt.anchorMin = Vector2.zero;
             trt.anchorMax = Vector2.one;

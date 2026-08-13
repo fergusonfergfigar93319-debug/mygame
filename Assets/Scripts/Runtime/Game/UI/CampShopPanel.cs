@@ -41,7 +41,8 @@ namespace PenguinRun.Game.UI
         private GameObject confirmOverlay;
         private RectTransform countdownContainer;
         private TextMeshProUGUI countdownText;
-        private float countdownTickAcc;
+        /// <summary>上次写入倒计时文本时的整秒值；秒数不变时跳过 Format 与 .text 写入。</summary>
+        private long lastCountdownSeconds = -1;
 
         public static GameObject Build(Transform parent, System.Action<MainMenuBootstrap.PanelEvent, string> dispatch)
         {
@@ -83,11 +84,11 @@ namespace PenguinRun.Game.UI
             UiBuilder.AddOutline(tabsContainer.gameObject, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
             UiBuilder.AddShadow(tabsContainer.gameObject, new Color(0f, 0f, 0f, 0.35f), new Vector2(0f, -4f));
 
-            // 顶部青色光条
+            // 顶部松绿装饰条
             var topLine = UiBuilder.CreateRect("TopLine", tabsContainer,
                 new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(0f, 3f), new Vector2(0f, -2f),
-                new Color(0f, 0.85f, 0.95f, 0.45f), rounded: true);
+                new Color(UiTheme.PineGreen.r, UiTheme.PineGreen.g, UiTheme.PineGreen.b, 0.45f), rounded: true);
             topLine.GetComponent<Image>().raycastTarget = false;
 
             var hlg = tabsContainer.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -100,8 +101,9 @@ namespace PenguinRun.Game.UI
             hlg.childControlHeight = true;
 
             tabButtons.Clear();
-            AddMainTab(tabsContainer, "营地强化", MainTab.Camp, "\u2726");
-            AddMainTab(tabsContainer, "极光商店", MainTab.Shop, "\u2615");
+            // 装饰符仅用已核实可渲染的 ★（\u2726/\u2615 在 CJK 字体里会渲染成豆腐块）
+            AddMainTab(tabsContainer, "营地强化", MainTab.Camp, "\u2605");
+            AddMainTab(tabsContainer, "极光商店", MainTab.Shop, "\u2605");
             AddMainTab(tabsContainer, "跑酷记录", MainTab.Records, "\u2605");
             ApplyMainTabStyle();
         }
@@ -117,7 +119,7 @@ namespace PenguinRun.Game.UI
             var img = btnGo.GetComponent<Image>();
             img.sprite = UiBuilder.RoundedSprite;
             img.type = Image.Type.Sliced;
-            img.color = new Color(0.08f, 0.16f, 0.28f, 0.85f);
+            img.color = UiTheme.MistBlue;
 
             var btn = btnGo.GetComponent<Button>();
             tabButtons.Add((btn, img, null, tab));
@@ -145,7 +147,7 @@ namespace PenguinRun.Game.UI
 
             // 文字
             var text = UiBuilder.CreateText("Label", stack.transform, label, 22, FontStyle.Bold,
-                TextAnchor.MiddleCenter, Color.white);
+                TextAnchor.MiddleCenter, UiBuilder.TextPrimary);
             var trt = (RectTransform)text.transform;
             trt.sizeDelta = new Vector2(0f, 28f);
             trt.SetAsLastSibling();
@@ -174,19 +176,23 @@ namespace PenguinRun.Game.UI
             {
                 if (btn == null) continue;
                 var sel = tab == activeTab;
-                img.color = sel ? UiBuilder.AccentActive : new Color(0.08f, 0.16f, 0.28f, 0.85f);
+                img.color = sel ? UiBuilder.AccentActive : UiTheme.MistBlue;
                 if (text != null)
                 {
-                    text.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
+                    text.color = sel ? Color.white : UiBuilder.TextPrimary;
                     text.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
+                // 选中底是 PineGreen，图标必须翻白，否则同色不可见
+                var iconLabel = btn.transform.Find("Stack/Icon")?.GetComponent<TextMeshProUGUI>();
+                if (iconLabel != null)
+                    iconLabel.color = sel ? Color.white : UiBuilder.AccentActive;
                 var outline = btn.gameObject.GetComponent<Outline>();
                 if (sel)
                 {
                     if (outline == null)
-                        UiBuilder.AddOutline(btn.gameObject, new Color(0.3f, 1f, 1f, 0.55f), new Vector2(1.5f, -1.5f));
+                        UiBuilder.AddOutline(btn.gameObject, UiTheme.StitchBorder, new Vector2(1.5f, -1.5f));
                     else
-                        outline.effectColor = new Color(0.3f, 1f, 1f, 0.55f);
+                        outline.effectColor = UiTheme.StitchBorder;
                 }
                 else
                 {
@@ -343,7 +349,7 @@ namespace PenguinRun.Game.UI
             var tabsBg = UiBuilder.CreateRect("TabsBg", tabsRow,
                 new Vector2(0f, 0.5f), new Vector2(1f, 0.5f),
                 new Vector2(0f, 56f), Vector2.zero,
-                new Color(0.05f, 0.11f, 0.2f, 0.85f), rounded: true);
+                Color.Lerp(UiTheme.PaperWarm, UiTheme.MistBlue, 0.22f), rounded: true);
             tabsBg.pivot = new Vector2(0.5f, 0.5f);
             tabsBg.offsetMin = new Vector2(0f, -28f);
             tabsBg.offsetMax = new Vector2(0f, 28f);
@@ -360,7 +366,7 @@ namespace PenguinRun.Game.UI
             System.Action<RectTransform, string, CampCategoryFilter> addTab = (parent, lbl, f) =>
             {
                 var btn = UiBuilder.CreateButton("SubTab_" + f, parent.transform, lbl,
-                    Color.clear, UiBuilder.TextSecondary, 20, rounded: true);
+                    UiTheme.MistBlue, UiBuilder.TextPrimary, 20, rounded: true);
                 var img = btn.GetComponent<Image>();
                 var txt = btn.GetComponentInChildren<TextMeshProUGUI>();
                 campTabs.Add((btn, img, txt, f));
@@ -371,16 +377,16 @@ namespace PenguinRun.Game.UI
                     foreach (var t in campTabs)
                     {
                         var sel = t.filter == activeCampFilter;
-                        t.bg.color = sel ? UiBuilder.AccentActive : new Color(0.08f, 0.16f, 0.28f, 0.7f);
+                        t.bg.color = sel ? UiBuilder.AccentActive : UiTheme.MistBlue;
                         if (t.text != null)
                         {
-                            t.text.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
+                            t.text.color = sel ? Color.white : UiBuilder.TextPrimary;
                             t.text.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                         }
                         var ol = t.btn.gameObject.GetComponent<Outline>();
                         if (sel)
                         {
-                            if (ol == null) UiBuilder.AddOutline(t.btn.gameObject, new Color(0.3f, 1f, 1f, 0.5f), new Vector2(1f, -1f));
+                            if (ol == null) UiBuilder.AddOutline(t.btn.gameObject, UiTheme.StitchBorder, new Vector2(1f, -1f));
                         }
                         else
                         {
@@ -400,13 +406,13 @@ namespace PenguinRun.Game.UI
             foreach (var t in campTabs)
             {
                 var sel = t.filter == activeCampFilter;
-                t.bg.color = sel ? UiBuilder.AccentActive : new Color(0.08f, 0.16f, 0.28f, 0.7f);
+                t.bg.color = sel ? UiBuilder.AccentActive : UiTheme.MistBlue;
                 if (t.text != null)
                 {
-                    t.text.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
+                    t.text.color = sel ? Color.white : UiBuilder.TextPrimary;
                     t.text.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
-                if (sel) UiBuilder.AddOutline(t.btn.gameObject, new Color(0.3f, 1f, 1f, 0.5f), new Vector2(1f, -1f));
+                if (sel) UiBuilder.AddOutline(t.btn.gameObject, UiTheme.StitchBorder, new Vector2(1f, -1f));
             }
         }
 
@@ -440,7 +446,7 @@ namespace PenguinRun.Game.UI
 
             // 标题
             var title = UiBuilder.CreateText("Title", row, "强化总览",
-                24, FontStyle.Bold, TextAnchor.UpperLeft, Color.white);
+                24, FontStyle.Bold, TextAnchor.UpperLeft, UiBuilder.TextPrimary);
             var trt = (RectTransform)title.transform;
             trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(1f, 1f);
@@ -554,7 +560,7 @@ namespace PenguinRun.Game.UI
 
             // 标题
             var title = UiBuilder.CreateText("Title", row, CampUpgrades.GetTitle(kind),
-                28, FontStyle.Bold, TextAnchor.UpperLeft, Color.white);
+                28, FontStyle.Bold, TextAnchor.UpperLeft, UiBuilder.TextPrimary);
             var trt = (RectTransform)title.transform;
             trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(0.6f, 1f);
@@ -721,14 +727,11 @@ namespace PenguinRun.Game.UI
             _ => UiBuilder.AccentActive,
         };
 
+        // 徽章符号只保留已核实可渲染的 ★（\u279E/\u2745/\u269B/\u2615 在 CJK 字体里是豆腐块），
+        // 各类目靠徽章配色（GetKindColor）区分。
         private string GetKindIcon(CampUpgradeKind kind) => kind switch
         {
-            CampUpgradeKind.Dash => "\u279E",
             CampUpgradeKind.Tuan => "\u2665",
-            CampUpgradeKind.Polar => "\u2745",
-            CampUpgradeKind.Magnet => "\u269B",
-            CampUpgradeKind.FishGain => "\u2615",
-            CampUpgradeKind.ScoreBonus => "\u2605",
             _ => "\u2605",
         };
 
@@ -767,7 +770,7 @@ namespace PenguinRun.Game.UI
             var tabsBg = UiBuilder.CreateRect("TabsBg", tabsRow,
                 new Vector2(0f, 0.5f), new Vector2(1f, 0.5f),
                 new Vector2(0f, 56f), Vector2.zero,
-                new Color(0.05f, 0.11f, 0.2f, 0.85f), rounded: true);
+                Color.Lerp(UiTheme.PaperWarm, UiTheme.MistBlue, 0.22f), rounded: true);
             tabsBg.pivot = new Vector2(0.5f, 0.5f);
             tabsBg.offsetMin = new Vector2(0f, -28f);
             tabsBg.offsetMax = new Vector2(0f, 28f);
@@ -784,7 +787,7 @@ namespace PenguinRun.Game.UI
             System.Action<string, ShopCategory> addTab = (lbl, cat) =>
             {
                 var btn = UiBuilder.CreateButton("ShopTab_" + cat, tabsBg.transform, lbl,
-                    Color.clear, UiBuilder.TextSecondary, 20, rounded: true);
+                    UiTheme.MistBlue, UiBuilder.TextPrimary, 20, rounded: true);
                 var img = btn.GetComponent<Image>();
                 var txt = btn.GetComponentInChildren<TextMeshProUGUI>();
                 shopTabs.Add((btn, img, txt, cat));
@@ -794,14 +797,14 @@ namespace PenguinRun.Game.UI
                     foreach (var t in shopTabs)
                     {
                         var sel = t.cat == activeShopCategory;
-                        t.bg.color = sel ? UiBuilder.AccentActive : new Color(0.08f, 0.16f, 0.28f, 0.7f);
+                        t.bg.color = sel ? UiBuilder.AccentActive : UiTheme.MistBlue;
                         if (t.text != null)
                         {
-                            t.text.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
+                            t.text.color = sel ? Color.white : UiBuilder.TextPrimary;
                             t.text.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                         }
                         var ol = t.btn.gameObject.GetComponent<Outline>();
-                        if (sel) { if (ol == null) UiBuilder.AddOutline(t.btn.gameObject, new Color(0.3f, 1f, 1f, 0.5f), new Vector2(1f, -1f)); }
+                        if (sel) { if (ol == null) UiBuilder.AddOutline(t.btn.gameObject, UiTheme.StitchBorder, new Vector2(1f, -1f)); }
                         else { if (ol != null) Destroy(ol); }
                     }
                     Refresh();
@@ -816,13 +819,13 @@ namespace PenguinRun.Game.UI
             foreach (var t in shopTabs)
             {
                 var sel = t.cat == activeShopCategory;
-                t.bg.color = sel ? UiBuilder.AccentActive : new Color(0.08f, 0.16f, 0.28f, 0.7f);
+                t.bg.color = sel ? UiBuilder.AccentActive : UiTheme.MistBlue;
                 if (t.text != null)
                 {
-                    t.text.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
+                    t.text.color = sel ? Color.white : UiBuilder.TextPrimary;
                     t.text.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
-                if (sel) UiBuilder.AddOutline(t.btn.gameObject, new Color(0.3f, 1f, 1f, 0.5f), new Vector2(1f, -1f));
+                if (sel) UiBuilder.AddOutline(t.btn.gameObject, UiTheme.StitchBorder, new Vector2(1f, -1f));
             }
         }
 
@@ -835,8 +838,8 @@ namespace PenguinRun.Game.UI
             var invIcon = UiBuilder.CreateRect("InvIcon", row,
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
                 new Vector2(36f, 36f), new Vector2(24f, 0f),
-                new Color(0f, 0.85f, 0.95f, 0.22f), circle: true);
-            UiBuilder.AddOutline(invIcon.gameObject, new Color(0f, 0.85f, 0.95f, 0.55f), new Vector2(1f, -1f));
+                new Color(UiTheme.PineGreen.r, UiTheme.PineGreen.g, UiTheme.PineGreen.b, 0.22f), circle: true);
+            UiBuilder.AddOutline(invIcon.gameObject, UiTheme.StitchBorder, new Vector2(1f, -1f));
             UiBuilder.CreateText("InvIconText", invIcon.transform, "\u25EB", 20, FontStyle.Bold,
                 TextAnchor.MiddleCenter, UiBuilder.AccentActive);
 
@@ -846,7 +849,7 @@ namespace PenguinRun.Game.UI
             var invText = df + sb + ls == 0 ? "持有道具：暂无消耗券" : $"双倍 ×{df} · 加分 ×{sb} · 幸运 ×{ls}";
 
             var invLabel = UiBuilder.CreateText("InvText", row, invText,
-                21, FontStyle.Bold, TextAnchor.MiddleLeft, Color.white);
+                21, FontStyle.Bold, TextAnchor.MiddleLeft, UiBuilder.TextPrimary);
             var irt = (RectTransform)invLabel.transform;
             irt.anchorMin = new Vector2(0f, 0f);
             irt.anchorMax = new Vector2(0.6f, 1f);
@@ -953,7 +956,9 @@ namespace PenguinRun.Game.UI
                 crt.anchorMax = new Vector2(1f, 1f);
                 crt.offsetMin = new Vector2(6f, 0f);
                 crt.offsetMax = new Vector2(-12f, 0f);
-                countdownText.text = FormatCountdown(ShopStore.MillisUntilNextRefresh());
+                var initialMs = ShopStore.MillisUntilNextRefresh();
+                lastCountdownSeconds = initialMs <= 0 ? 0L : initialMs / 1000L;
+                countdownText.text = FormatCountdown(initialMs);
             }
         }
 
@@ -974,7 +979,7 @@ namespace PenguinRun.Game.UI
 
             BuildShopIconBadge(row, def.IconGlyph, theme, new Vector2(50f, -50f));
 
-            var title = UiBuilder.CreateText("Title", row, def.Title, 26, FontStyle.Bold, TextAnchor.UpperLeft, Color.white);
+            var title = UiBuilder.CreateText("Title", row, def.Title, 26, FontStyle.Bold, TextAnchor.UpperLeft, UiBuilder.TextPrimary);
             var trt = (RectTransform)title.transform;
             trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(0.65f, 1f);
@@ -1042,7 +1047,7 @@ namespace PenguinRun.Game.UI
 
             BuildShopIconBadge(row, def.IconGlyph, theme, new Vector2(50f, -50f));
 
-            var title = UiBuilder.CreateText("Title", row, def.Title, 25, FontStyle.Bold, TextAnchor.UpperLeft, Color.white);
+            var title = UiBuilder.CreateText("Title", row, def.Title, 25, FontStyle.Bold, TextAnchor.UpperLeft, UiBuilder.TextPrimary);
             var trt = (RectTransform)title.transform;
             trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(0.65f, 1f);
@@ -1056,8 +1061,8 @@ namespace PenguinRun.Game.UI
             var stockChip = UiBuilder.CreateRect("StockChip", row,
                 new Vector2(0f, 1f), new Vector2(0f, 1f),
                 new Vector2(76f, 28f), new Vector2(190f, -52f),
-                new Color(0f, 0.85f, 0.95f, 0.18f), rounded: true);
-            UiBuilder.AddOutline(stockChip.gameObject, new Color(0f, 0.85f, 0.95f, 0.45f), new Vector2(1f, -1f));
+                new Color(UiTheme.PineGreen.r, UiTheme.PineGreen.g, UiTheme.PineGreen.b, 0.18f), rounded: true);
+            UiBuilder.AddOutline(stockChip.gameObject, UiTheme.StitchBorder, new Vector2(1f, -1f));
             UiBuilder.CreateText("StockText", stockChip.transform, $"持有 ×{stock}",
                 16, FontStyle.Bold, TextAnchor.MiddleCenter, UiBuilder.AccentActive);
 
@@ -1089,10 +1094,11 @@ namespace PenguinRun.Game.UI
             var owned = ShopStore.IsOwned(def);
             var equipped = ShopStore.IsEquipped(def);
 
+            // 已装备行：淡雾蓝纸面 + 松绿描边（旧的深青底会让墨色文字不可读）
             var row = UiBuilder.CreateScrollListRow("Cos_" + def.Id, contentRoot, 140f,
-                equipped ? new Color(0.07f, 0.22f, 0.32f, 1f) : UiBuilder.Surface1);
+                equipped ? Color.Lerp(UiTheme.PaperWarm, UiTheme.MistBlue, 0.45f) : UiBuilder.Surface1);
             UiBuilder.AddOutline(row.gameObject,
-                equipped ? UiBuilder.BorderAccent : new Color(rColor.r, rColor.g, rColor.b, 0.4f),
+                equipped ? UiBuilder.AccentActive : new Color(rColor.r, rColor.g, rColor.b, 0.4f),
                 new Vector2(1f, -1f));
 
             var accent = UiBuilder.CreateRect("Accent", row,
@@ -1108,7 +1114,7 @@ namespace PenguinRun.Game.UI
                 theme, circle: true);
             UiBuilder.AddOutline(swatch.gameObject, Color.white, new Vector2(2f, -2f));
 
-            var title = UiBuilder.CreateText("Title", row, def.Title, 25, FontStyle.Bold, TextAnchor.UpperLeft, Color.white);
+            var title = UiBuilder.CreateText("Title", row, def.Title, 25, FontStyle.Bold, TextAnchor.UpperLeft, UiBuilder.TextPrimary);
             var trt = (RectTransform)title.transform;
             trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(0.6f, 1f);
@@ -1123,8 +1129,8 @@ namespace PenguinRun.Game.UI
                 var eqChip = UiBuilder.CreateRect("EqChip", row,
                     new Vector2(0f, 1f), new Vector2(0f, 1f),
                     new Vector2(76f, 28f), new Vector2(190f, -54f),
-                    new Color(0f, 0.85f, 0.95f, 0.22f), rounded: true);
-                UiBuilder.AddOutline(eqChip.gameObject, new Color(0f, 0.85f, 0.95f, 0.6f), new Vector2(1f, -1f));
+                    new Color(UiTheme.PineGreen.r, UiTheme.PineGreen.g, UiTheme.PineGreen.b, 0.22f), rounded: true);
+                UiBuilder.AddOutline(eqChip.gameObject, UiTheme.StitchBorder, new Vector2(1f, -1f));
                 UiBuilder.CreateText("EqText", eqChip.transform, "已装备", 16, FontStyle.Bold,
                     TextAnchor.MiddleCenter, UiBuilder.AccentActive);
             }
@@ -1200,8 +1206,9 @@ namespace PenguinRun.Game.UI
             var theme = def.ThemeColor;
             var claimed = PlayerSave.IsBundleClaimed(def.Id);
 
+            // 已购买行降为偏灰的纸面色（旧的深海军蓝会让墨色副标题不可读）
             var row = UiBuilder.CreateScrollListRow("Bnd_" + def.Id, contentRoot, 180f,
-                claimed ? new Color(0.06f, 0.14f, 0.22f, 0.95f) : UiBuilder.Surface1);
+                claimed ? Color.Lerp(UiTheme.PaperBase, UiTheme.MistBlue, 0.35f) : UiBuilder.Surface1);
             UiBuilder.AddOutline(row.gameObject,
                 claimed ? UiBuilder.BorderSubtle : new Color(rColor.r, rColor.g, rColor.b, 0.6f),
                 new Vector2(1.5f, -1.5f));
@@ -1216,7 +1223,7 @@ namespace PenguinRun.Game.UI
             BuildShopIconBadge(row, def.IconGlyph, theme, new Vector2(50f, -50f));
 
             var title = UiBuilder.CreateText("Title", row, def.Title, 27, FontStyle.Bold, TextAnchor.UpperLeft,
-                claimed ? UiBuilder.TextSecondary : Color.white);
+                claimed ? UiBuilder.TextSecondary : UiBuilder.TextPrimary);
             var trt = (RectTransform)title.transform;
             trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(0.65f, 1f);
@@ -1442,8 +1449,9 @@ namespace PenguinRun.Game.UI
             UiBuilder.AddOutline(cancelBtn.gameObject, UiBuilder.BorderDefault, new Vector2(1f, -1f));
             cancelBtn.onClick.AddListener(DismissShopConfirm);
 
+            // 主 CTA：与大厅一致的珊瑚色 + 白字 + 缝线描边
             var confirmBtn = UiBuilder.CreateButton("Confirm", dialog, "确认购买",
-                UiBuilder.AccentActive, UiBuilder.TextOnAccent, 22, rounded: true);
+                UiTheme.CoralAction, UiBuilder.TextOnAccent, 22, rounded: true);
             var conrt = (RectTransform)confirmBtn.transform;
             conrt.anchorMin = new Vector2(0.5f, 0f);
             conrt.anchorMax = new Vector2(1f, 0f);
@@ -1451,8 +1459,8 @@ namespace PenguinRun.Game.UI
             conrt.sizeDelta = Vector2.zero;
             conrt.offsetMin = new Vector2(10f, 24f);
             conrt.offsetMax = new Vector2(-24f, 90f);
-            UiBuilder.AddOutline(confirmBtn.gameObject, new Color(0.3f, 1f, 1f, 0.55f), new Vector2(2f, -2f));
-            UiBuilder.AddShadow(confirmBtn.gameObject, new Color(0f, 0.5f, 0.6f, 0.45f), new Vector2(0f, -4f));
+            UiBuilder.AddOutline(confirmBtn.gameObject, UiTheme.StitchBorder, new Vector2(2f, -2f));
+            UiBuilder.AddShadow(confirmBtn.gameObject, UiTheme.ShadowWarm, new Vector2(0f, -4f));
             confirmBtn.onClick.AddListener(() =>
             {
                 if (ShopStore.TryPurchase(def, price, out var reason))
@@ -1568,7 +1576,7 @@ namespace PenguinRun.Game.UI
             accent.GetComponent<Image>().raycastTarget = false;
 
             // 标题
-            var title = UiBuilder.CreateText("Title", row, "战绩统计", 26, FontStyle.Bold, TextAnchor.UpperLeft, Color.white);
+            var title = UiBuilder.CreateText("Title", row, "战绩统计", 26, FontStyle.Bold, TextAnchor.UpperLeft, UiBuilder.TextPrimary);
             var trt = (RectTransform)title.transform;
             trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(1f, 1f);
@@ -1576,11 +1584,11 @@ namespace PenguinRun.Game.UI
             trt.sizeDelta = new Vector2(0f, 34f);
             trt.anchoredPosition = new Vector2(20f, -14f);
 
-            // 六格统计（3 × 2行）
+            // 六格统计（3 × 2行）；图标统一用可渲染的 ★（\u279E/\u2726/\u2615 是豆腐块），靠配色区分
             BuildRecordStatCell(row, 0.02f, 0.65f, "总场次", $"{stats.TotalRuns}", "\u2605", new Color(0.55f, 0.85f, 1f, 1f));
-            BuildRecordStatCell(row, 0.34f, 0.65f, "最高得分", $"{stats.BestScore:N0}", "\u279E", UiBuilder.WarmGold);
-            BuildRecordStatCell(row, 0.66f, 0.65f, "最远距离", $"{stats.BestDistance}m", "\u2726", new Color(1f, 0.55f, 0.35f, 1f));
-            BuildRecordStatCell(row, 0.02f, 0.18f, "平均得分", $"{stats.AverageScore:N0}", "\u2615", new Color(0.4f, 0.95f, 0.7f, 1f));
+            BuildRecordStatCell(row, 0.34f, 0.65f, "最高得分", $"{stats.BestScore:N0}", "\u2605", UiBuilder.WarmGold);
+            BuildRecordStatCell(row, 0.66f, 0.65f, "最远距离", $"{stats.BestDistance}m", "\u2605", new Color(1f, 0.55f, 0.35f, 1f));
+            BuildRecordStatCell(row, 0.02f, 0.18f, "平均得分", $"{stats.AverageScore:N0}", "\u2605", new Color(0.4f, 0.95f, 0.7f, 1f));
 
             // 个人巅峰
             if (best != null)
@@ -1597,7 +1605,7 @@ namespace PenguinRun.Game.UI
                     new Vector2(44f, 44f), new Vector2(16f, 0f),
                     new Color(1f, 0.84f, 0.32f, 0.25f), circle: true);
                 UiBuilder.AddOutline(crown.gameObject, UiBuilder.WarmGold, new Vector2(1.5f, -1.5f));
-                UiBuilder.CreateText("CrownText", crown.transform, "\u2655", 24, FontStyle.Bold,
+                UiBuilder.CreateText("CrownText", crown.transform, "\u2605", 24, FontStyle.Bold,
                     TextAnchor.MiddleCenter, UiBuilder.WarmGold);
 
                 var bestTitle = UiBuilder.CreateText("BestTitle", bestBg, "个人巅峰",
@@ -1726,7 +1734,7 @@ namespace PenguinRun.Game.UI
             }
 
             // 三列数据：得分 / 距离 / 鱼干
-            BuildRecordValueCell(row, 0.38f, "得分", $"{r.score:N0}", isBest ? UiBuilder.WarmGold : Color.white);
+            BuildRecordValueCell(row, 0.38f, "得分", $"{r.score:N0}", isBest ? UiBuilder.WarmGold : UiBuilder.TextPrimary);
             BuildRecordValueCell(row, 0.58f, "距离", $"{r.distanceMeters}m", UiBuilder.TextSecondary);
             BuildRecordValueCell(row, 0.78f, "鱼干", $"{r.fishSnacks}", UiBuilder.WarmGold);
         }
@@ -1762,10 +1770,11 @@ namespace PenguinRun.Game.UI
         {
             if (activeTab != MainTab.Shop || activeShopCategory != ShopCategory.DailyDeals) return;
             if (countdownText == null) return;
-            countdownTickAcc += Time.unscaledDeltaTime;
-            if (countdownTickAcc < 1f) return;
-            countdownTickAcc = 0f;
-            countdownText.text = FormatCountdown(ShopStore.MillisUntilNextRefresh());
+            var ms = ShopStore.MillisUntilNextRefresh();
+            var sec = ms <= 0 ? 0L : ms / 1000L;
+            if (sec == lastCountdownSeconds) return;
+            lastCountdownSeconds = sec;
+            countdownText.text = FormatCountdown(ms);
         }
     }
 }

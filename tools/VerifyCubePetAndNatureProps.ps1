@@ -28,6 +28,9 @@ $avatarCs = Require-File 'Assets/Scripts/Runtime/PenguinRun/Avatar/CubePetPengui
 Require-Match $avatarCs 'class\s+CubePetPenguinCharacter' 'CubePetPenguinCharacter type'
 Require-Match $avatarCs 'IPlayerCharacterPresentation' 'CubePet implements presentation interface'
 Require-Match $avatarCs 'TryCreate' 'CubePet TryCreate entry'
+Require-Match $avatarCs 'stridePhase' 'CubePet has stride-driven run motion'
+Require-Match $avatarCs 'ApplyWarmPaletteBoost' 'CubePet warms near-white materials'
+Require-Match $avatarCs 'landSquashTimer' 'CubePet has landing squash'
 
 $gameCs = Require-File 'Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs'
 Require-Match $gameCs 'CubePetPenguinCharacter\.TryCreate' 'runner prefers CubePet protagonist'

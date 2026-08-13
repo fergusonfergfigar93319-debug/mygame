@@ -16,6 +16,8 @@ namespace PenguinRun
         public float HitFlashTimer { get; set; }
         public float RetreatTimer { get; set; }
         public float SafeLaneX { get; private set; }
+        /// <summary>DiveHigh 开战时锁定的俯冲车道 X；命中判定只读此值，不读会向中线回插的 WorldX。</summary>
+        public float DiveLaneX { get; private set; }
         public List<float> SalvoLaneX { get; } = new();
         public bool IsInAttackInterval => Phase == BossPhase.Active && Pattern == BossPattern.None && patternIntervalTimer > 0f;
         public float AttackIntervalTimeLeft => Mathf.Max(0f, patternIntervalTimer);
@@ -84,7 +86,7 @@ namespace PenguinRun
             }
         }
 
-        /// <summary>危险窗口内进度 0→1。</summary>
+        /// <summary>危险窗口内进度 0→1（持续型招式如光束/震波用）。</summary>
         public float DangerWindowProgress01
         {
             get
@@ -94,6 +96,28 @@ namespace PenguinRun
                 return Mathf.Clamp01((elapsed - patternDangerDelay) / patternActiveWindow);
             }
         }
+
+        /// <summary>
+        /// 击发视觉强度：危险窗起点（判定生效瞬间）为峰值并衰减。
+        /// 与 Strike 特效、骨骼收势、齐射落地共用 <see cref="PatternStrikeImpactTime"/>。
+        /// </summary>
+        public float StrikeImpact01
+        {
+            get
+            {
+                if (Pattern == BossPattern.None || Pattern == BossPattern.Vulnerable) return 0f;
+                if (patternActiveWindow <= 0.01f) return 0f;
+                var after = GetPatternElapsed() - PatternStrikeImpactTime;
+                if (after < 0f) return 0f;
+                var decay = Mathf.Clamp01(after / Mathf.Max(0.12f, patternActiveWindow));
+                return Mathf.Clamp01(Mathf.Exp(-2.6f * decay));
+            }
+        }
+
+        /// <summary>齐射弹道落地瞬间判伤：危险窗起点 = 落地时刻，向后只留 0.14s 冲击窗（而非整段危险窗）。</summary>
+        public bool IsSalvoImpactActive =>
+            Pattern == BossPattern.RangedSalvo && patternTimer > 0f
+            && GetPatternElapsed() - PatternStrikeImpactTime is >= 0f and <= 0.14f;
 
         /// <summary>当前招式视觉阶段（前摇/预警/击发/收招）。</summary>
         public BossAttackPhase AttackPhase => patternVfxPlayer.Phase;
@@ -167,6 +191,8 @@ namespace PenguinRun
             TrackTerrain.SurfaceY(worldZ, lastRunDistance, baseGroundY);
 
         internal float PatternDangerDelay => patternDangerDelay;
+        /// <summary>击发时刻（秒，相对招式开始）= 危险窗起点；判定 / Strike VFX / 骨骼收势 / 齐射落地共用。</summary>
+        internal float PatternStrikeImpactTime => patternDangerDelay;
         internal float PatternDuration => patternDuration;
         internal float PatternTimer => patternTimer;
         internal float LaneWidthInternal => laneWidth;
@@ -311,7 +337,9 @@ namespace PenguinRun
             else
             {
                 var targetZ = Mathf.Lerp(pos.z, holdZ, Mathf.Clamp01(dt * 3.2f));
-                pos.x = Mathf.Lerp(pos.x, 0f, Mathf.Clamp01(dt * 4f));
+                // 俯冲进行中停在锁定车道上方（视觉与预警圈/命中带一致），其余时间回中线。
+                var holdX = Pattern == BossPattern.DiveHigh && patternTimer > 0f ? DiveLaneX : 0f;
+                pos.x = Mathf.Lerp(pos.x, holdX, Mathf.Clamp01(dt * 4f));
                 pos.z = targetZ;
                 pos.y = TrackTerrain.SurfaceY(pos.z, runDistance, surfaceBaseY);
                 Root.transform.rotation = Quaternion.Slerp(
@@ -321,10 +349,19 @@ namespace PenguinRun
             }
             Root.transform.position = pos;
 
+            // 招式时钟先推进：本帧 Strike VFX / 弹道落地 / 身体击发 / 外部命中判定共用同一 elapsed。
+            var patternClockAdvanced = false;
+            if (Phase == BossPhase.Active && Pattern != BossPattern.None && Pattern != BossPattern.Vulnerable && patternTimer > 0f)
+            {
+                patternTimer -= dt;
+                patternClockAdvanced = true;
+            }
+
             patternVfxPlayer.Tick(dt);
 
             var vfxProfile = BossPatternVfxProfile.Get(Pattern);
-            var strike01 = IsPatternDangerous ? DangerWindowProgress01 : 0f;
+            // 身体击发前冲对齐判定生效瞬间，不用危险窗线性进度（否则收势落在窗末、视觉晚于扣血）。
+            var strike01 = StrikeImpact01;
             var recovery01 = Pattern != BossPattern.None && !IsPatternDangerous && patternTimer > 0f
                 ? Mathf.Clamp01((GetPatternElapsed() - patternDangerDelay - patternActiveWindow) / Mathf.Max(0.2f, patternDuration - patternDangerDelay - patternActiveWindow))
                 : 0f;
@@ -384,8 +421,8 @@ namespace PenguinRun
                         break;
                     }
 
-                    patternTimer -= dt;
-                    if (patternTimer <= 0f)
+                    // patternTimer 已在本帧视觉更新前推进；此处只处理招式结束。
+                    if (patternClockAdvanced && patternTimer <= 0f)
                     {
                         EndPattern();
                         // 阶段化节奏：连续攻击后强制破绽，或概率进入破绽
@@ -672,10 +709,11 @@ namespace PenguinRun
                 {
                     var laneIdx = Random.Range(-1, 2);
                     patternDiveLaneIdx = laneIdx;
+                    DiveLaneX = laneIdx * laneWidth;
                     var bp = Root.transform.position;
-                    bp.x = laneIdx * laneWidth;
+                    bp.x = DiveLaneX;
                     Root.transform.position = bp;
-                    CreateTelegraph(laneIdx * laneWidth, PatternTelegraphLifetime(), 1.6f, new Color(1f, 0.55f, 0.3f, 0.8f));
+                    CreateTelegraph(DiveLaneX, PatternTelegraphLifetime(), 1.6f, new Color(1f, 0.55f, 0.3f, 0.8f));
                     break;
                 }
                 case BossPattern.ChargeAcross:
@@ -692,15 +730,16 @@ namespace PenguinRun
                 case BossPattern.RangedSalvo:
                 {
                     SalvoLaneX.Clear();
-                    var n = Random.Range(2, 4);
+                    // 最多两道，始终保留一条安全道（三道齐射等于无法换道躲避）。
+                    var n = Random.Range(1, 3);
                     var lanes = new[] { -1, 0, 1 };
                     Shuffle(lanes);
                     for (var k = 0; k < n; k++)
                     {
                         var lx = lanes[k] * laneWidth;
                         SalvoLaneX.Add(lx);
-                        var impactTime = patternDangerDelay + patternActiveWindow * 0.5f;
-                        SpawnProjectile(lx, impactTime);
+                        // 落地 = 击发时刻 = 危险窗起点，与判定 / Strike 特效同一帧语义。
+                        SpawnProjectile(lx, PatternStrikeImpactTime);
                         CreateTelegraph(lx, PatternTelegraphLifetime(0.04f), 1.1f, new Color(1f, 0.7f, 0.3f, 0.88f));
                     }
                     break;
@@ -720,8 +759,8 @@ namespace PenguinRun
             SpawnDeceptiveDecoyTelegraphsIfNeeded();
             ApplySignatureWindup();
 
-            // 骨骼攻击动画：片段收势对齐危险窗结束（速度缩放，判定不读动画）
-            rigAnimator.PlayAttack(Pattern, patternDangerDelay + patternActiveWindow);
+            // 骨骼攻击动画：片段收势对齐击发时刻（危险窗起点），与判定 / Strike VFX 同步。
+            rigAnimator.PlayAttack(Pattern, PatternStrikeImpactTime);
         }
 
         private void OnPatternStrikeMoment(BossPattern p, BossPatternVfxProfile prof)
@@ -764,7 +803,7 @@ namespace PenguinRun
                 ? Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / patternDangerDelay))
                 : 0f;
             if (IsPatternDangerous)
-                return Definition.AttackStrikePunch * (0.55f + 0.45f * DangerWindowProgress01);
+                return Definition.AttackStrikePunch * (0.55f + 0.45f * StrikeImpact01);
             if (elapsed < patternDangerDelay)
                 return Definition.AttackStrikePunch * windup01 * 0.85f;
             return Definition.AttackStrikePunch * 0.2f;
@@ -819,7 +858,7 @@ namespace PenguinRun
 
         private float PatternTelegraphLifetime(float bonus = 0f)
         {
-            var minTelegraphTime = 0.6f;
+            var minTelegraphTime = 0.85f;
             var byRatio = patternDuration * Mathf.Clamp01(telegraphLifetimeRatio + bonus);
             var throughDanger = patternDangerDelay + patternActiveWindow + 0.25f;
             return Mathf.Max(minTelegraphTime, throughDanger, byRatio * 0.95f);
@@ -827,51 +866,47 @@ namespace PenguinRun
 
         private float ComputePatternDangerDelay(float duration)
         {
-            // 改进：根据 Boss 定位调整预警时间
-            // 新手友好型 Boss 给更多预警，高难度 Boss 预警更短
+            // 新手友好型 Boss 给更多预警；Aerial 也不再压到难反应。
             var archetypeDelayMul = Definition.Archetype switch
             {
-                BossArchetype.Balanced => 1.15f,    // 冰霜雪王：更长的预警时间
-                BossArchetype.Grounded => 1.0f,     // 雪松哨兵：标准
-                BossArchetype.Evasive => 0.88f,     // 极光长蛇：稍短（配合颜色轨迹）
-                BossArchetype.Deceptive => 1.0f,    // 雾堤守卫：标准（依靠真假预警机制）
-                BossArchetype.Defensive => 1.0f,    // 珊瑚海怪：标准
-                BossArchetype.Aerial => 0.82f,      // 雷云苍鹰：较短（高速 Boss）
+                BossArchetype.Balanced => 1.18f,
+                BossArchetype.Grounded => 1.05f,
+                BossArchetype.Evasive => 0.95f,
+                BossArchetype.Deceptive => 1.05f,
+                BossArchetype.Defensive => 1.05f,
+                BossArchetype.Aerial => 0.92f,
                 _ => 1.0f,
             };
 
-            // 基础延迟：危险窗口开始前的时间
-            // 使用更小的 dangerWindowRatio 意味着更长的准备时间
-            var adjustedRatio = Mathf.Clamp(dangerWindowRatio * 0.85f, 0.28f, 0.72f);
+            // 更小的 dangerWindowRatio → 更长准备时间
+            var adjustedRatio = Mathf.Clamp(dangerWindowRatio * 0.72f, 0.22f, 0.55f);
             var baseDelay = duration * (1f - adjustedRatio) * archetypeDelayMul;
 
-            return Mathf.Clamp(baseDelay, minPatternDangerDelay, duration * 0.75f);
+            return Mathf.Clamp(baseDelay, minPatternDangerDelay, duration * 0.82f);
         }
 
         private float ComputePatternActiveWindow(float duration)
         {
-            // 改进：更短的实际伤害窗口，让躲避判定更清晰
-            // 不同招式有不同的危险窗口（单位：秒）
+            // 伤害窗口短而明确，给够预警后的可躲窗口。
             var baseWindow = Pattern switch
             {
-                BossPattern.SweepLow => 0.35f,      // 横扫：短窗口，需要快速反应
-                BossPattern.DiveHigh => 0.42f,       // 俯冲：稍长，因为需要跳跃时机
-                BossPattern.ChargeAcross => 0.38f,     // 冲锋：中等
-                BossPattern.RangedSalvo => 0.32f,     // 齐射：分散投射物，短窗口
-                BossPattern.CenterBeam => 0.45f,      // 光束：持续型，稍长
-                BossPattern.QuakePulse => 0.35f,      // 震波：短窗口
-                _ => 0.38f,
+                BossPattern.SweepLow => 0.22f,
+                BossPattern.DiveHigh => 0.28f,
+                BossPattern.ChargeAcross => 0.24f,
+                BossPattern.RangedSalvo => 0.22f,
+                BossPattern.CenterBeam => 0.28f,
+                BossPattern.QuakePulse => 0.22f,
+                _ => 0.24f,
             };
 
-            // 根据 Boss 强度调整
             var intensityMul = Definition.PhaseIntensity switch
             {
-                <= 0.85f => 1.1f,  // 低强度：更宽容
-                <= 1.0f => 1.0f,   // 中等：标准
-                _ => 0.92f,        // 高强度：更严格
+                <= 0.85f => 1.12f,
+                <= 1.0f => 1.0f,
+                _ => 0.95f,
             };
 
-            return Mathf.Clamp(baseWindow * intensityMul, 0.28f, 0.65f);
+            return Mathf.Clamp(baseWindow * intensityMul, 0.18f, 0.42f);
         }
 
         private void ConfigurePatternIntervalByStyle()
@@ -1010,7 +1045,7 @@ namespace PenguinRun
             var windupSpan = Mathf.Max(0.12f, patternDangerDelay);
             var windup = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / windupSpan));
             var strike = AttackPhase == BossAttackPhase.Strike
-                ? 0.55f + DangerWindowProgress01 * 0.45f
+                ? StrikeImpact01
                 : AttackPhase == BossAttackPhase.Recovery ? 0.25f : 0f;
             var dangerSnap = strike * (0.5f + Mathf.Sin(Time.time * 26f * styleTempo) * 0.5f);
 
@@ -1697,12 +1732,20 @@ namespace PenguinRun
 
         private void UpdateProjectiles(float dt)
         {
+            // 用招式统一时钟推进弹道，避免独立 Update 与 patternTimer 漂移导致落地早/晚于判定。
+            var elapsed = GetPatternElapsed();
             for (var i = projectileObjects.Count - 1; i >= 0; i--)
             {
-                if (projectileObjects[i] == null)
+                var go = projectileObjects[i];
+                if (go == null)
                 {
                     projectileObjects.RemoveAt(i);
+                    continue;
                 }
+
+                var anim = go.GetComponent<BossProjectileAnim>();
+                if (anim == null || anim.Sync(elapsed))
+                    projectileObjects.RemoveAt(i);
             }
         }
 
@@ -1833,7 +1876,7 @@ namespace PenguinRun
     }
 
     /// <summary>
-    /// 投射物的简单抛物线动画：自身向 X 平移并向地面下落，到达地面后销毁。
+    /// 投射物抛物线：由 BossEncounter 用招式 elapsed 驱动，落地帧与判定击发时刻一致。
     /// </summary>
     internal sealed class BossProjectileAnim : MonoBehaviour
     {
@@ -1842,7 +1885,6 @@ namespace PenguinRun
         private float groundY;
         private float groundZ;
         private float flightTime;
-        private float elapsed;
         private Vector3 startPos;
         private Renderer rend;
         private System.Action<float> onImpact;
@@ -1854,8 +1896,8 @@ namespace PenguinRun
             targetX = worldX;
             groundZ = trackZ;
             groundY = trackSurfaceY;
-            flightTime = Mathf.Max(0.35f, impactAfterSeconds);
-            elapsed = 0f;
+            // 不抬高下限：必须与 PatternStrikeImpactTime 精确相等，否则落地会晚于判定。
+            flightTime = Mathf.Max(0.2f, impactAfterSeconds);
             startPos = tr.position;
             rend = tr.GetComponent<Renderer>();
             impactFired = false;
@@ -1863,20 +1905,22 @@ namespace PenguinRun
 
         public void SetImpactCallback(System.Action<float> callback) => onImpact = callback;
 
-        private void Update()
+        /// <summary>按招式已进行时间采样；返回 true 表示已销毁、应从列表移除。</summary>
+        public bool Sync(float patternElapsed)
         {
-            if (tr == null) return;
-            elapsed += Time.deltaTime;
-            var t = Mathf.Clamp01(elapsed / flightTime);
+            if (tr == null) return true;
+
+            var t = Mathf.Clamp01(patternElapsed / flightTime);
             var end = new Vector3(targetX, groundY + 0.35f, groundZ);
             var midY = Mathf.Max(startPos.y, end.y) + 2.2f;
-            var a = Vector3.Lerp(startPos, new Vector3(targetX, midY, (startPos.z + groundZ) * 0.5f), t);
-            var b = Vector3.Lerp(new Vector3(targetX, midY, (startPos.z + groundZ) * 0.5f), end, t);
+            var mid = new Vector3(targetX, midY, (startPos.z + groundZ) * 0.5f);
+            var a = Vector3.Lerp(startPos, mid, t);
+            var b = Vector3.Lerp(mid, end, t);
             tr.position = t < 0.5f ? a : b;
             tr.Rotate(Vector3.up, 240f * Time.deltaTime);
             tr.Rotate(Vector3.right, 180f * Time.deltaTime);
 
-            if (t >= 0.98f)
+            if (patternElapsed + 0.0001f >= flightTime)
             {
                 if (!impactFired)
                 {
@@ -1891,8 +1935,13 @@ namespace PenguinRun
                 }
             }
 
-            if (elapsed >= flightTime + 0.15f)
+            if (patternElapsed >= flightTime + 0.12f)
+            {
                 Destroy(gameObject);
+                return true;
+            }
+
+            return false;
         }
     }
 }

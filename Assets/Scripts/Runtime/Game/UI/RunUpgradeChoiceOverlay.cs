@@ -94,6 +94,7 @@ namespace PenguinRun.Game.UI
 
             var button = card.gameObject.AddComponent<Button>();
             button.targetGraphic = card.GetComponent<Image>();
+            UiBuilder.WireClickFeedback(button);
             var selectedId = definition.Id;
             button.onClick.AddListener(() => Resolve(selectedId));
 

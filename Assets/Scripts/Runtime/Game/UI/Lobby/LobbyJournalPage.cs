@@ -56,13 +56,14 @@ namespace PenguinRun.Game.UI.Lobby
                 FontStyle.Bold, TextAnchor.MiddleCenter, UiTheme.InkPrimary);
             Stretch(page.reward.rectTransform, 12f);
 
+            // 手记主操作是本页主 CTA：珊瑚色 + 白字（PineGreen 留给选中/激活态）
             page.action = UiBuilder.CreateButton("JournalAction", page.Root, string.Empty,
-                WithAlpha(UiTheme.PineGreen, 0.92f), Color.white, UiTheme.Caption, rounded: true);
+                UiTheme.CoralAction, UiBuilder.TextOnAccent, UiTheme.Caption, rounded: true);
             Place((RectTransform)page.action.transform, new Vector2(0.08f, 0.06f), new Vector2(0.92f, 0.18f));
             var legacy = page.action.GetComponentInChildren<TextMeshProUGUI>();
             if (legacy != null) StorybookUi.DestroyGeneratedObject(legacy.gameObject);
             page.actionLabel = UiBuilder.CreateTmpText("Label", page.action.transform, string.Empty,
-                UiTheme.Caption, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+                UiTheme.Caption, FontStyle.Bold, TextAnchor.MiddleCenter, UiBuilder.TextOnAccent);
             Stretch(page.actionLabel.rectTransform, 4f);
             return page;
         }

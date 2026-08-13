@@ -30,7 +30,9 @@ namespace PenguinRun
             index % 2 == 0 ? "vendor_un_PineTree_Snow_1" : "vendor_un_BirchTree_Snow_1";
 
         public static string IceLakeAccent(int index) =>
-            index % 2 == 0 ? "vendor_un_Rock_Snow_1" : "CubePets/cubepet_polar";
+            index % 3 == 0 ? "CubePets/cubepet_polar"
+            : index % 3 == 1 ? "vendor_un_Rock_Snow_1"
+            : "vendor_un_Bush_Snow_1";
 
         public static string CedarTree() => "vendor_sn/Pine_1";
 

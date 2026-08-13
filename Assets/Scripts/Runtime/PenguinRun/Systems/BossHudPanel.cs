@@ -36,6 +36,8 @@ namespace PenguinRun
 
         private int cachedHits = int.MinValue;
         private int cachedPatternsLeft = int.MinValue;
+        /// <summary>速杀进度条按 1% 粒度门控的缓存值（RefreshSpeedRun）。</summary>
+        private int cachedSpeedRunCents = int.MinValue;
         private string cachedName;
         private string cachedPattern;
         private string cachedHint;
@@ -187,7 +189,11 @@ namespace PenguinRun
             var visible = window > 0.01f && left > 0f;
             if (speedRunRoot.activeSelf != visible) speedRunRoot.SetActive(visible);
             if (!visible) return;
-            UiBuilder.SetProgress01(speedRunFill, left / window);
+            // 进度条按 1% 粒度门控：值不变时跳过 sizeDelta 写入，避免逐帧标脏。
+            var cents = Mathf.RoundToInt(Mathf.Clamp01(left / window) * 100f);
+            if (cents == cachedSpeedRunCents) return;
+            cachedSpeedRunCents = cents;
+            UiBuilder.SetProgress01(speedRunFill, cents / 100f);
         }
 
         public void Hide()
@@ -198,6 +204,7 @@ namespace PenguinRun
             cachedName = null;
             cachedPattern = null;
             cachedHint = null;
+            cachedSpeedRunCents = int.MinValue;
         }
 
         public void Show()

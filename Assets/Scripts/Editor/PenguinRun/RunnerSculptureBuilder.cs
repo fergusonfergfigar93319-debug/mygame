@@ -1,4 +1,5 @@
 ﻿#if UNITY_EDITOR
+using UnityEditor;
 using UnityEngine;
 
 namespace PenguinRun.Editor
@@ -50,18 +51,19 @@ namespace PenguinRun.Editor
             switch (id)
             {
                 case PickupVisualId.FishSnack:
-                    // 金币/鱼干：加大体量与剪影，避免远看只剩贴地光晕。
-                    Part(root, "FishBody", PrimitiveType.Sphere, new Vector3(0f, 0.04f, 0f),
-                        new Vector3(.62f, .38f, .92f), palette.Accent);
-                    Part(root, "FishTail", PrimitiveType.Cube, new Vector3(0f, 0f, .78f),
-                        new Vector3(.52f, .40f, .12f), palette.Primary, new Vector3(0f, 0f, 45f));
-                    Part(root, "Binding", PrimitiveType.Cylinder, new Vector3(0f, .04f, .22f),
-                        new Vector3(.40f, .07f, .40f), palette.Dark, new Vector3(90f, 0f, 0f));
-                    Part(root, "Eye", PrimitiveType.Sphere, new Vector3(.18f, .10f, -.28f),
-                        Vector3.one * .12f, palette.Snow);
-                    Part(root, "Pupil", PrimitiveType.Sphere, new Vector3(.18f, .10f, -.34f),
-                        Vector3.one * .055f, palette.Dark);
-                    if (!lowDetail) AddFishScales(root, palette);
+                    // Kenney coin-gold 本身已直立（面朝 ±Z）；勿再 Rx90，否则贴地只剩薄边看不见。
+                    if (!AttachVendorCoin(root, "coin_gold", new Vector3(0f, 0.08f, 0f), Vector3.one * 2.6f, palette.Accent))
+                    {
+                        Part(root, "CoinDisk", PrimitiveType.Cylinder, Vector3.zero,
+                            new Vector3(.72f, .08f, .72f), palette.Accent, new Vector3(90f, 0f, 0f));
+                        Part(root, "CoinRim", PrimitiveType.Cylinder, Vector3.zero,
+                            new Vector3(.78f, .05f, .78f), palette.Glow, new Vector3(90f, 0f, 0f));
+                    }
+                    if (!lowDetail)
+                    {
+                        Part(root, "CoinHalo", PrimitiveType.Cylinder, new Vector3(0f, -.02f, 0f),
+                            new Vector3(1.15f, .02f, 1.15f), palette.Glow, new Vector3(90f, 0f, 0f));
+                    }
                     break;
                 case PickupVisualId.Dash:
                     Part(root, "SledHull", PrimitiveType.Capsule, Vector3.zero,
@@ -112,12 +114,18 @@ namespace PenguinRun.Editor
                     break;
                 case PickupVisualId.DoubleFishSnack:
                 {
-                    BuildMiniFish(root, "FishA", new Vector3(0f, .17f, 0f), new Vector3(0f, 0f, 14f), palette);
-                    BuildMiniFish(root, "FishB", new Vector3(0f, -.17f, .04f), new Vector3(0f, 180f, -10f), palette);
-                    Part(root, "RopeKnot", PrimitiveType.Cylinder, new Vector3(0f, 0f, .12f),
-                        new Vector3(.16f, .06f, .16f), palette.Dark, new Vector3(90f, 0f, 0f));
-                    Part(root, "GoldTag", PrimitiveType.Cube, new Vector3(.2f, 0f, -.12f),
-                        new Vector3(.12f, .16f, .03f), palette.Accent, new Vector3(0f, 0f, 18f));
+                    // 双倍鱼干：金/银叠币 + ×2 标牌，缺模型时回退小鱼剪影。
+                    var a = AttachVendorCoin(root, "coin_gold", new Vector3(0f, .22f, 0f), Vector3.one * 2.1f,
+                        palette.Accent);
+                    var b = AttachVendorCoin(root, "coin_silver", new Vector3(0f, -.18f, .04f), Vector3.one * 2.1f,
+                        palette.Secondary);
+                    if (!a && !b)
+                    {
+                        BuildMiniFish(root, "FishA", new Vector3(0f, .17f, 0f), new Vector3(0f, 0f, 14f), palette);
+                        BuildMiniFish(root, "FishB", new Vector3(0f, -.17f, .04f), new Vector3(0f, 180f, -10f), palette);
+                    }
+                    Part(root, "GoldTag", PrimitiveType.Cube, new Vector3(.28f, 0f, -.1f),
+                        new Vector3(.14f, .2f, .04f), palette.Accent, new Vector3(0f, 0f, 18f));
                     break;
                 }
                 case PickupVisualId.TimeHourglass:
@@ -536,6 +544,36 @@ namespace PenguinRun.Editor
                 Beam(root,$"CageBar_{i}",new Vector3(Mathf.Cos(a)*.31f,.12f,Mathf.Sin(a)*.31f),
                     new Vector3(Mathf.Cos(a)*.31f,.82f,Mathf.Sin(a)*.31f),.025f,material);
             }
+        }
+
+        /// <summary>挂载 Kenney Platformer Kit 金币 FBX；成功返回 true。</summary>
+        private static bool AttachVendorCoin(Transform root, string modelName, Vector3 localPos, Vector3 localScale,
+            Material tint)
+        {
+            var path = $"Assets/Resources/PenguinRun/Models/{modelName}.fbx";
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (prefab == null) return false;
+
+            var instance = Object.Instantiate(prefab, root, false);
+            instance.name = modelName;
+            instance.transform.localPosition = localPos;
+            // Kenney Platformer coin 已直立于 XY（面朝 ±Z）；运行时 wobble 绕 Y 旋转即可。
+            instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = localScale;
+
+            foreach (var collider in instance.GetComponentsInChildren<Collider>(true))
+                Object.DestroyImmediate(collider);
+
+            if (tint != null)
+            {
+                foreach (var renderer in instance.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (renderer == null) continue;
+                    renderer.sharedMaterial = tint;
+                }
+            }
+
+            return true;
         }
 
         internal static GameObject Part(Transform parent, string name, PrimitiveType type, Vector3 position,

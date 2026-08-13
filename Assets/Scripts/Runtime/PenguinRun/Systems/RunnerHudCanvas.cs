@@ -65,6 +65,11 @@ namespace PenguinRun
         private string cachedRouteTitle;
         private string cachedRouteSafe;
         private string cachedRouteRisk;
+        private string cachedMechanicTitle;
+        private string cachedMechanicHint;
+        private int cachedResonanceCents = -1;
+        private bool lastSkillHighlight;
+        private string cachedFeedback;
 
         private RunnerHudCanvas(GameObject canvasObject, GameObject normalStatsRoot, BossHudPanel bossPanel,
             GameObject pauseRoot, GameObject pauseActionRoot, GameObject feedbackRoot,
@@ -261,12 +266,22 @@ namespace PenguinRun
             if (distance != cachedDistance) { cachedDistance = distance; distanceText.text = $"{distance:N0} m"; }
             if (world.CoinCombo != cachedCombo)
             {
+                // 离散事件才跳动：连击推进时给一次 punch（分数每帧变，不做跳动）。
+                var comboAdvanced = cachedCombo != int.MinValue && world.CoinCombo > cachedCombo && world.CoinCombo > 1;
                 cachedCombo = world.CoinCombo;
                 comboText.text = cachedCombo > 1 ? $"连续收集 ×{cachedCombo}" : string.Empty;
+                if (comboAdvanced) comboText.transform.PlayClickBounce();
             }
-            if (world.Coins != cachedFish) { cachedFish = world.Coins; fishText.text = $"鱼干 {cachedFish:N0}"; }
+            if (world.Coins != cachedFish)
+            {
+                var fishGained = cachedFish != int.MinValue && world.Coins > cachedFish;
+                cachedFish = world.Coins;
+                fishText.text = $"鱼干 {cachedFish:N0}";
+                if (fishGained) fishText.transform.PlayClickBounce();
+            }
             if (world.Lives != cachedLives || world.MaxLives != cachedMaxLives)
             {
+                var previousLives = cachedLives;
                 cachedLives = world.Lives;
                 cachedMaxLives = world.MaxLives;
                 for (var i = 0; i < heartIcons.Length; i++)
@@ -279,6 +294,13 @@ namespace PenguinRun
                     heartIcons[i].color = full
                         ? UiTheme.Danger
                         : new Color(UiTheme.Danger.r, UiTheme.Danger.g, UiTheme.Danger.b, 0.42f);
+                }
+                // 掉血/回血的那颗心 punch 一次，让余光也能捕捉到生命变化。
+                if (previousLives != int.MinValue)
+                {
+                    var changedIndex = Mathf.Clamp(Mathf.Min(previousLives, world.Lives), 0, heartIcons.Length - 1);
+                    if (heartIcons[changedIndex].gameObject.activeSelf)
+                        heartIcons[changedIndex].transform.PlayClickBounce();
                 }
             }
 
@@ -302,7 +324,13 @@ namespace PenguinRun
             if (Time.unscaledTime >= overrideFeedbackUntil)
             {
                 feedbackRoot.SetActive(feedbackTimer > 0f && !string.IsNullOrWhiteSpace(feedback));
-                if (feedbackRoot.activeSelf) feedbackText.text = feedback;
+                // 提示显示期间每帧进入：同一条消息不重复写 .text；换新消息时弹一次。
+                if (feedbackRoot.activeSelf && !ReferenceEquals(feedback, cachedFeedback) && feedback != cachedFeedback)
+                {
+                    cachedFeedback = feedback;
+                    feedbackText.text = feedback;
+                    feedbackRoot.transform.PlayClickBounce();
+                }
             }
         }
 
@@ -402,8 +430,13 @@ namespace PenguinRun
 
             var expiring = snapshot.Chain > 0 && snapshot.RemainingSeconds < 0.6f;
             var highlight = expiring || Time.unscaledTime < skillTierFlashUntil;
-            skillText.color = highlight ? UiTheme.WarmGold : UiTheme.TextSecondary;
-            skillText.fontSize = highlight ? UiTheme.Body : UiTheme.Caption;
+            // 颜色/字号只在高亮状态翻转的那一帧写入。
+            if (highlight != lastSkillHighlight)
+            {
+                lastSkillHighlight = highlight;
+                skillText.color = highlight ? UiTheme.WarmGold : UiTheme.TextSecondary;
+                skillText.fontSize = highlight ? UiTheme.Body : UiTheme.Caption;
+            }
         }
 
         public void SetThemeMechanic(ThemeMechanicSnapshot snapshot)
@@ -414,13 +447,28 @@ namespace PenguinRun
                     || snapshot.Phase == ThemeMechanicPhase.Reward);
             mechanicRoot.SetActive(visible);
             if (!visible) return;
-            mechanicTitleText.text = snapshot.Title;
-            mechanicHintText.text = snapshot.Hint;
+            // 机关可见期间每帧进入：文本按值变更门控，避免逐帧写脏 Canvas。
+            if (cachedMechanicTitle != snapshot.Title)
+            {
+                cachedMechanicTitle = snapshot.Title;
+                mechanicTitleText.text = snapshot.Title;
+            }
+            if (cachedMechanicHint != snapshot.Hint)
+            {
+                cachedMechanicHint = snapshot.Hint;
+                mechanicHintText.text = snapshot.Hint;
+            }
         }
 
         public void SetThemeMastery(ThemeMasteryHudSnapshot snapshot)
         {
-            UiBuilder.SetProgress01(resonanceFill, snapshot.Resonance01);
+            // 共鸣条按 1% 粒度门控：SetProgress01 改 sizeDelta 即使值相同也会标脏。
+            var resonanceCents = Mathf.RoundToInt(Mathf.Clamp01(snapshot.Resonance01) * 100f);
+            if (resonanceCents != cachedResonanceCents)
+            {
+                cachedResonanceCents = resonanceCents;
+                UiBuilder.SetProgress01(resonanceFill, resonanceCents / 100f);
+            }
             var progress = snapshot.Contract.Progress;
             if (progress == cachedContractProgress) return;
             cachedContractProgress = progress;
@@ -445,8 +493,12 @@ namespace PenguinRun
 
         public void SetPaused(bool paused)
         {
+            var wasActive = pauseRoot.activeSelf;
             pauseRoot.SetActive(paused);
             pauseActionRoot.SetActive(!paused);
+            // 暂停面板从瞬切改为弹出（SetUpdate(true)，timeScale=0 时照常播放）。
+            if (paused && !wasActive)
+                ((RectTransform)pauseRoot.transform).PlayPanelPopIn(0.22f);
         }
 
         public void SetFeedback(string message, Color color, float seconds)

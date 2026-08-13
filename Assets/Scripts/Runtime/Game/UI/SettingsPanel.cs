@@ -94,10 +94,10 @@ namespace PenguinRun.Game.UI
             rt.offsetMin = new Vector2(0f, 0f);
             rt.offsetMax = new Vector2(-24f, 0f);
             var fieldImg = fieldGo.GetComponent<Image>();
-            fieldImg.color = new Color(0.04f, 0.09f, 0.16f, 1f);
+            fieldImg.color = UiBuilder.Surface2;
             fieldImg.sprite = UiBuilder.RoundedSprite;
             fieldImg.type = Image.Type.Sliced;
-            UiBuilder.AddOutline(fieldGo, UiBuilder.BorderDefault, new Vector2(1f, -1f));
+            UiBuilder.AddOutline(fieldGo, UiTheme.StitchBorder, new Vector2(1f, -1f));
 
             // TMP_InputField 需要 viewport + 文本组件的层级
             var viewportGo = new GameObject("Text Area", typeof(RectTransform), typeof(RectMask2D));
@@ -117,7 +117,7 @@ namespace PenguinRun.Game.UI
             trt.sizeDelta = Vector2.zero;
             var t = textGo.GetComponent<TextMeshProUGUI>();
             t.alignment = TextAlignmentOptions.Left;
-            t.color = Color.white;
+            t.color = UiBuilder.TextPrimary;
             t.fontSize = 26;
             t.fontStyle = FontStyles.Bold;
             t.font = UiTheme.TmpFont;
@@ -166,7 +166,7 @@ namespace PenguinRun.Game.UI
             var containerBg = stripGo.AddComponent<Image>();
             containerBg.sprite = UiBuilder.RoundedSprite;
             containerBg.type = Image.Type.Sliced;
-            containerBg.color = new Color(0.04f, 0.09f, 0.16f, 1f);
+            containerBg.color = new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.45f);
             UiBuilder.AddOutline(stripGo, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
             hlg.padding = new RectOffset(6, 6, 6, 6);
 
@@ -205,7 +205,7 @@ namespace PenguinRun.Game.UI
                 img.color = sel ? UiBuilder.AccentActive : new Color(0f, 0f, 0f, 0f);
                 if (label != null)
                 {
-                    label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
+                    label.color = sel ? Color.white : UiBuilder.TextPrimary;
                     label.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
             }
@@ -234,7 +234,7 @@ namespace PenguinRun.Game.UI
             var containerBg = stripGo.AddComponent<Image>();
             containerBg.sprite = UiBuilder.RoundedSprite;
             containerBg.type = Image.Type.Sliced;
-            containerBg.color = new Color(0.04f, 0.09f, 0.16f, 1f);
+            containerBg.color = new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.45f);
             UiBuilder.AddOutline(stripGo, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
 
             AddRunPick(stripGo.transform, "无尽", PlayerSave.RunBgmEndless);
@@ -271,7 +271,7 @@ namespace PenguinRun.Game.UI
                 img.color = sel ? UiBuilder.AccentActive : new Color(0f, 0f, 0f, 0f);
                 if (label != null)
                 {
-                    label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
+                    label.color = sel ? Color.white : UiBuilder.TextPrimary;
                     label.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
             }
@@ -300,7 +300,7 @@ namespace PenguinRun.Game.UI
             var containerBg = stripGo.AddComponent<Image>();
             containerBg.sprite = UiBuilder.RoundedSprite;
             containerBg.type = Image.Type.Sliced;
-            containerBg.color = new Color(0.04f, 0.09f, 0.16f, 1f);
+            containerBg.color = new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.45f);
             UiBuilder.AddOutline(stripGo, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
 
             AddAmbiencePick(stripGo.transform, "随图", PlayerSave.AmbienceThemed);
@@ -335,7 +335,7 @@ namespace PenguinRun.Game.UI
                 img.color = sel ? UiBuilder.AccentActive : new Color(0f, 0f, 0f, 0f);
                 if (label != null)
                 {
-                    label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
+                    label.color = sel ? Color.white : UiBuilder.TextPrimary;
                     label.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
             }
@@ -364,7 +364,7 @@ namespace PenguinRun.Game.UI
             var containerBg = stripGo.AddComponent<Image>();
             containerBg.sprite = UiBuilder.RoundedSprite;
             containerBg.type = Image.Type.Sliced;
-            containerBg.color = new Color(0.04f, 0.09f, 0.16f, 1f);
+            containerBg.color = new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.45f);
             UiBuilder.AddOutline(stripGo, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
 
             AddSfxStylePick(stripGo.transform, "经典", PlayerSave.SfxStyleClassic);
@@ -397,7 +397,7 @@ namespace PenguinRun.Game.UI
                 img.color = sel ? UiBuilder.AccentActive : new Color(0f, 0f, 0f, 0f);
                 if (label != null)
                 {
-                    label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f) : UiBuilder.TextSecondary;
+                    label.color = sel ? Color.white : UiBuilder.TextPrimary;
                     label.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
             }
@@ -446,7 +446,7 @@ namespace PenguinRun.Game.UI
             bgrt.anchorMax = new Vector2(1f, 0.5f);
             bgrt.sizeDelta = new Vector2(0f, 8f);
             var bgImg = bg.GetComponent<Image>();
-            bgImg.color = new Color(0.04f, 0.09f, 0.16f, 1f);
+            bgImg.color = new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.6f);
             bgImg.sprite = UiBuilder.RoundedSprite;
             bgImg.type = Image.Type.Sliced;
             UiBuilder.AddOutline(bg, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
@@ -513,7 +513,7 @@ namespace PenguinRun.Game.UI
             UiBuilder.AddOutline(row.gameObject, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
 
             var t = UiBuilder.CreateText("Title", row, title,
-                26, FontStyle.Bold, TextAnchor.UpperLeft, Color.white);
+                26, FontStyle.Bold, TextAnchor.UpperLeft, UiBuilder.TextPrimary);
             var trt = (RectTransform)t.transform;
             trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(0.5f, 1f);
@@ -553,11 +553,11 @@ namespace PenguinRun.Game.UI
             bgrt.anchorMax = Vector2.one;
             bgrt.sizeDelta = Vector2.zero;
             var bgImg = bg.GetComponent<Image>();
-            bgImg.color = initial ? UiBuilder.AccentActive : new Color(0.18f, 0.25f, 0.34f, 1f);
+            bgImg.color = initial ? UiBuilder.AccentActive : UiTheme.MistBlue;
             bgImg.sprite = UiBuilder.RoundedSprite;
             bgImg.type = Image.Type.Sliced;
             UiBuilder.AddOutline(bg,
-                initial ? new Color(0.3f, 1f, 1f, 0.55f) : UiBuilder.BorderSubtle,
+                initial ? UiTheme.StitchBorder : UiBuilder.BorderSubtle,
                 new Vector2(1f, -1f));
 
             var knob = new GameObject("Knob", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -580,11 +580,11 @@ namespace PenguinRun.Game.UI
 
             t.onValueChanged.AddListener(on =>
             {
-                bgImg.color = on ? UiBuilder.AccentActive : new Color(0.18f, 0.25f, 0.34f, 1f);
+                bgImg.color = on ? UiBuilder.AccentActive : UiTheme.MistBlue;
                 krt.anchoredPosition = new Vector2(on ? 72f : 24f, 0f);
                 var outline = bg.GetComponent<Outline>();
                 if (outline != null)
-                    outline.effectColor = on ? new Color(0.3f, 1f, 1f, 0.55f) : UiBuilder.BorderSubtle;
+                    outline.effectColor = on ? UiTheme.StitchBorder : UiBuilder.BorderSubtle;
             });
 
             return t;

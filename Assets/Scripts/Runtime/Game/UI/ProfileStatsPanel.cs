@@ -35,13 +35,14 @@ namespace PenguinRun.Game.UI
             UiBuilder.AddOutline(card.gameObject, UiBuilder.BorderDefault, new Vector2(1.5f, -1.5f));
             UiBuilder.AddShadow(card.gameObject, new Color(0f, 0f, 0f, 0.55f), new Vector2(0f, -12f));
 
-            var closeBtn = UiBuilder.CreateButton("Close", card, "\u2715",
-                UiBuilder.Surface2, UiBuilder.TextSecondary, 28, rounded: true);
+            // \u2715 不在可渲染符号名单里，稳妥起见直接用文字「关闭」
+            var closeBtn = UiBuilder.CreateButton("Close", card, "关闭",
+                UiBuilder.Surface2, UiBuilder.TextSecondary, 20, rounded: true);
             var cbrt = (RectTransform)closeBtn.transform;
             cbrt.anchorMin = new Vector2(1f, 1f);
             cbrt.anchorMax = new Vector2(1f, 1f);
             cbrt.pivot = new Vector2(1f, 1f);
-            cbrt.sizeDelta = new Vector2(56f, 56f);
+            cbrt.sizeDelta = new Vector2(96f, 56f);
             cbrt.anchoredPosition = new Vector2(-16f, -16f);
             closeBtn.onClick.AddListener(() =>
             {
@@ -50,7 +51,7 @@ namespace PenguinRun.Game.UI
             });
 
             var titleText = UiBuilder.CreateText("Title", card, "我的战绩", 36, FontStyle.Bold,
-                TextAnchor.UpperLeft, Color.white);
+                TextAnchor.UpperLeft, UiBuilder.TextPrimary);
             var trt = (RectTransform)titleText.transform;
             trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(1f, 1f);
@@ -161,10 +162,11 @@ namespace PenguinRun.Game.UI
                 for (var i = 0; i < recent.Count; i++)
                 {
                     var rec = recent[i];
+                    // 行底走雾蓝纸面：旧深蓝底会让下面的墨色（TextPrimary）行文字不可读
                     var row = UiBuilder.CreateRect("Run" + i, listArea,
                         new Vector2(0f, 1f), new Vector2(1f, 1f),
                         new Vector2(0f, rowH), new Vector2(0f, -y),
-                        new Color(0.08f, 0.16f, 0.28f, 0.85f), rounded: true);
+                        new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.45f), rounded: true);
                     row.pivot = new Vector2(0.5f, 1f);
 
                     var modeLabel = rec.mode == "daily" ? "今日挑战" : "极夜快跑";
@@ -233,10 +235,11 @@ namespace PenguinRun.Game.UI
 
         private static void BuildStatCell(Transform parent, float anchorX, string label, string value, Color accent)
         {
+            // 统计格底走雾蓝纸面：旧深蓝底会让墨色标签不可读
             var cell = UiBuilder.CreateRect("Stat_" + label, parent,
                 new Vector2(anchorX, 0f), new Vector2(anchorX + 0.32f, 1f),
                 Vector2.zero, Vector2.zero,
-                new Color(0.08f, 0.16f, 0.28f, 0.9f), rounded: true);
+                new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.5f), rounded: true);
             UiBuilder.CreateText("Label", cell, label, 14, FontStyle.Normal,
                 TextAnchor.UpperCenter, UiBuilder.TextSecondary);
             var lbl = (RectTransform)cell.Find("Label");

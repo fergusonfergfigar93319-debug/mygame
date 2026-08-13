@@ -37,6 +37,7 @@ namespace PenguinRun
         private RunnerPostFx postFx;
         private Light keyLight;
         private Light rimFillLight;
+        private readonly FogLanternFogDriver fogLantern = new();
         private Material gradientSkyboxMaterial;
         private GameObject deathOverlay;
         private Vector3 cameraVelocity;
@@ -262,6 +263,7 @@ namespace PenguinRun
                 var idleDt = Mathf.Min(Time.deltaTime, 0.05f);
                 UpdateCamera(idleDt);
                 UpdateLaneGuides(idleDt);
+                fogLantern.Tick(idleDt, game.World.FogLanternTimer > 0f);
                 particlePool.Tick(idleDt, game.World.Distance);
                 return;
             }
@@ -280,6 +282,7 @@ namespace PenguinRun
             var effectiveSpeed = game.TickRunningSimulation(Time.deltaTime);
             UpdateCamera(dt);
             UpdateLaneGuides(dt);
+            fogLantern.Tick(dt, game.World.FogLanternTimer > 0f);
             if (!game.IsSimulationFrozen)
             {
                 AnimateScenery(dt, effectiveSpeed);
@@ -791,8 +794,7 @@ namespace PenguinRun
 
             RenderSettings.fogColor = profile.FogColor;
             RenderSettings.ambientLight = profile.AmbientLight;
-            RenderSettings.fogStartDistance = profile.FogStart;
-            RenderSettings.fogEndDistance = profile.FogEnd;
+            fogLantern.SetThemeBaseline(profile.FogStart, profile.FogEnd);
             if (runnerCamera != null) runnerCamera.backgroundColor = profile.HorizonColor;
 
             // 主光/边光随主题走：光向、色温与强度是各主题之间最强的区分手段。
@@ -808,6 +810,7 @@ namespace PenguinRun
                 rimFillLight.intensity = profile.RimLightIntensity;
             }
 
+            postFx?.ApplyThemeGrading(profile.PostTemperature, profile.PostSaturation);
             ApplyThemeSkybox(theme);
         }
 
@@ -832,7 +835,8 @@ namespace PenguinRun
             var profile = ThemePresentationProfile.For(theme);
             gradientSkyboxMaterial.SetColor("_HorizonColor", profile.HorizonColor);
             gradientSkyboxMaterial.SetColor("_ZenithColor", profile.ZenithColor);
-            gradientSkyboxMaterial.SetColor("_AuroraColor", profile.AccentColor);
+            // 黑色 = 该主题天上没有极光带（雪松/雾堤/海洋/天空）。
+            gradientSkyboxMaterial.SetColor("_AuroraColor", profile.SkyAuroraColor);
             gradientSkyboxMaterial.SetFloat("_StarIntensity", theme == RunnerMapTheme.SkyFlight ? 0.04f : 0.38f);
             DynamicGI.UpdateEnvironment();
         }
@@ -900,8 +904,7 @@ namespace PenguinRun
             RenderSettings.fog = true;
             RenderSettings.fogColor = new Color(0.66f, 0.82f, 0.9f);
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogStartDistance = 55f;   // 雾气起始距离后移
-            RenderSettings.fogEndDistance = 180f;  // 雾气结束距离增加，后方跑道可见更远
+            fogLantern.SetThemeBaseline(55f, 180f); // 起点后移 + 终点增加，后方跑道可见更远
 
             // 主光与边光的颜色/强度/朝向由 ApplyMapThemeVisuals 按主题覆盖；此处只建常态默认值。
             keyLight = new GameObject("Key Light").AddComponent<Light>();
@@ -965,7 +968,7 @@ namespace PenguinRun
                 RunnerMapTheme.MistDike => new Color(0.22f, 0.34f, 0.42f),
                 RunnerMapTheme.OceanReef => new Color(0.1f, 0.35f, 0.55f),  // 海洋：深蓝跑道
                 RunnerMapTheme.SkyFlight => new Color(0.55f, 0.75f, 0.95f), // 天空：天蓝跑道
-                _ => new Color(0.08f, 0.43f, 0.72f),
+                _ => new Color(0.06f, 0.36f, 0.68f),                              // 冰湖：更深的极夜蓝跑道
             };
             var roadGloss = theme switch
             {
@@ -974,7 +977,7 @@ namespace PenguinRun
                 RunnerMapTheme.MistDike => new Color(0.78f, 0.9f, 0.96f, 0.16f),
                 RunnerMapTheme.OceanReef => new Color(0.25f, 0.65f, 0.8f, 0.35f), // 海洋：青蓝色光泽
                 RunnerMapTheme.SkyFlight => new Color(0.75f, 0.88f, 1f, 0.3f),    // 天空：白云光泽
-                _ => new Color(0.36f, 0.82f, 0.98f, 0.22f),
+                _ => new Color(0.45f, 0.78f, 1f, 0.28f),
             };
             var snowColor = theme switch
             {
@@ -983,7 +986,7 @@ namespace PenguinRun
                 RunnerMapTheme.MistDike => new Color(0.68f, 0.76f, 0.8f),
                 RunnerMapTheme.OceanReef => new Color(0.8f, 0.92f, 0.95f),   // 海洋：浅蓝白色
                 RunnerMapTheme.SkyFlight => new Color(0.98f, 0.98f, 1f),      // 天空：纯白
-                _ => new Color(0.78f, 0.93f, 0.98f),
+                _ => new Color(0.52f, 0.68f, 0.86f),                          // 冰湖：灰蓝雪，避免一片死白
             };
             var edgeGlow = theme switch
             {
@@ -992,7 +995,7 @@ namespace PenguinRun
                 RunnerMapTheme.MistDike => new Color(0.8f, 0.94f, 1f, 0.42f),
                 RunnerMapTheme.OceanReef => new Color(0.3f, 0.9f, 0.95f, 0.75f), // 海洋：亮青色
                 RunnerMapTheme.SkyFlight => new Color(1f, 1f, 0.6f, 0.6f),        // 天空：阳光黄
-                _ => new Color(0.66f, 0.95f, 1f, 0.82f),
+                _ => new Color(1f, 0.62f, 0.32f, 0.88f),                         // 冰湖：琥珀描边暖点
             };
 
             // 用可循环的弯道瓦片替换静态直线路面
@@ -1019,25 +1022,12 @@ namespace PenguinRun
                 trackMarkers.Add(marker);
             }
 
-            // 月亮：辉光贴图 Billboard（替代双 Sphere），柔边光晕
-            AddSceneryProp(SceneryBillboards.CreateGlowQuad("Moon", new Vector3(8.6f, 13f, 58f),
-                new Vector2(6.4f, 6.4f), new Color(0.95f, 0.97f, 1f, 0.98f), SceneryBillboards.MoonTexture()));
-            AddSceneryProp(SceneryBillboards.CreateGlowQuad("Moon Glow", new Vector3(8.6f, 13f, 58.2f),
-                new Vector2(11f, 11f), new Color(0.74f, 0.92f, 1f, 0.3f), SceneryBillboards.HaloTexture()));
-            for (var i = 0; i < 5; i++)
-            {
-                // 极光：柔边长条贴图（保留原脉动缩放逻辑，Cube→柔光带）
-                var aurora = SceneryBillboards.CreateGlowQuad(
-                    $"Aurora Ribbon {i}",
-                    new Vector3(-7f + i * 3.6f, 9.2f + i * 0.42f, 50f + i * 7f),
-                    new Vector2(0.9f, 8.5f),
-                    i % 2 == 0 ? new Color(0.25f, 1f, 0.78f, 0.4f) : new Color(0.58f, 0.46f, 1f, 0.36f),
-                    SceneryBillboards.AuroraBandTexture(),
-                    billboard: false);
-                aurora.transform.rotation = Quaternion.Euler(0f, 0f, -18f + i * 13f);
-                AddSceneryProp(aurora);
-            }
+            // 天象（月亮/太阳/极光带）按主题布置：天空白昼不再挂月亮、海洋不再飘极光。
+            ThemeSkyDressing.Build(theme, prop => AddSceneryProp(prop));
 
+            // 冰晶簇与雪堆只属于寒带主题；海洋/天空的侧景交给各自的主题细节与套件。
+            var wantCrystals = theme is RunnerMapTheme.IceLakeEcho or RunnerMapTheme.AuroraField or RunnerMapTheme.MistDike;
+            var wantSnowBanks = theme is RunnerMapTheme.IceLakeEcho or RunnerMapTheme.CedarRuins or RunnerMapTheme.MistDike;
             for (var i = 0; i < 8; i++)
             {
                 var z = 10f + i * 15f;
@@ -1048,19 +1038,36 @@ namespace PenguinRun
                     AddCheckpointGate(z + 4f);
                 }
 
-                AddBannerFlag(-5.65f, z + 3.2f, i % 2 == 0);
-                AddBannerFlag(5.65f, z + 10.2f, i % 2 != 0);
-                AddCrystalCluster(-6.8f - Random.Range(0f, 1.1f), z + Random.Range(1f, 7f));
-                AddCrystalCluster(6.8f + Random.Range(0f, 1.1f), z + Random.Range(1f, 7f));
-                AddSnowBankGroup(-9.6f - Random.Range(0f, 2f), z + Random.Range(-3f, 3f));
-                AddSnowBankGroup(9.6f + Random.Range(0f, 2f), z + Random.Range(-3f, 3f));
+                // 旗帜放护坡外（SceneryMinAbsX=8.5），不再侵入可视走廊被淡出。
+                AddBannerFlag(-8.6f, z + 3.2f, true);
+                AddBannerFlag(8.6f, z + 10.2f, false);
+                if (wantCrystals)
+                {
+                    AddCrystalCluster(-8.6f - Random.Range(0f, 1.1f), z + Random.Range(1f, 7f));
+                    AddCrystalCluster(8.6f + Random.Range(0f, 1.1f), z + Random.Range(1f, 7f));
+                }
+                if (wantSnowBanks)
+                {
+                    AddSnowBankGroup(-9.6f - Random.Range(0f, 2f), z + Random.Range(-3f, 3f));
+                    AddSnowBankGroup(9.6f + Random.Range(0f, 2f), z + Random.Range(-3f, 3f));
+                }
                 AddThemeSetPiece(theme, z, i);
             }
 
+            // 远山剪影配色随主题走：雪松暮紫、海洋礁蓝、天空云白，不再六图共用冰蓝。
+            var (ridgeBody, ridgeCap) = theme switch
+            {
+                RunnerMapTheme.CedarRuins => (new Color(0.24f, 0.18f, 0.26f), new Color(0.68f, 0.48f, 0.52f)),
+                RunnerMapTheme.AuroraField => (new Color(0.08f, 0.24f, 0.38f), new Color(0.36f, 0.82f, 0.76f)),
+                RunnerMapTheme.MistDike => (new Color(0.24f, 0.3f, 0.38f), new Color(0.52f, 0.6f, 0.68f)),
+                RunnerMapTheme.OceanReef => (new Color(0.04f, 0.26f, 0.38f), new Color(0.18f, 0.58f, 0.6f)),
+                RunnerMapTheme.SkyFlight => (new Color(0.75f, 0.86f, 0.98f), new Color(1f, 1f, 1f)),
+                _ => (new Color(0.16f, 0.36f, 0.62f), new Color(0.78f, 0.93f, 1f)),
+            };
             for (var i = 0; i < 7; i++)
             {
-                AddMountainGroup(-18f - Random.Range(0f, 4f), 36f + i * 20f, Random.Range(1.5f, 2.6f));
-                AddMountainGroup(18f + Random.Range(0f, 4f), 44f + i * 20f, Random.Range(1.5f, 2.6f));
+                AddMountainGroup(-18f - Random.Range(0f, 4f), 36f + i * 20f, Random.Range(1.5f, 2.6f), ridgeBody, ridgeCap);
+                AddMountainGroup(18f + Random.Range(0f, 4f), 44f + i * 20f, Random.Range(1.5f, 2.6f), ridgeBody, ridgeCap);
             }
         }
 
@@ -1129,34 +1136,36 @@ namespace PenguinRun
 
         private void BuildIceDetails(Color edgeGlow)
         {
-            for (var i = 0; i < 10; i++)
+            // 冰裂作为路面瓦片的子物体：随路滚动、随瓦片销毁。
+            // 此前是无主静态物体——不随路动（视觉滑移），切主题也不清理，会跨主题残留叠加。
+            for (var i = 0; i < roadTiles.Count; i += 3)
             {
-                var z = i * 12.4f - 4f;
-                AddIceCrack(-2.2f + Random.Range(-0.7f, 0.7f), z + Random.Range(-1.6f, 1.6f), 0.55f + Random.value * 0.7f);
-                AddIceCrack(2.2f + Random.Range(-0.7f, 0.7f), z + Random.Range(-1.6f, 1.6f), 0.55f + Random.value * 0.7f);
+                var tile = roadTiles[i].transform;
+                AddIceCrack(tile, -2.2f + Random.Range(-0.7f, 0.7f), Random.Range(-1.6f, 1.6f), 0.55f + Random.value * 0.7f);
+                AddIceCrack(tile, 2.2f + Random.Range(-0.7f, 0.7f), Random.Range(-1.6f, 1.6f), 0.55f + Random.value * 0.7f);
             }
         }
 
         private void BuildOceanDetails(Color edgeGlow)
         {
-            // 海洋主题：添加海草、贝壳、气泡等细节
+            // 海洋主题：添加海草、贝壳、气泡等细节。
+            // 全部落在护坡外（SceneryMinAbsX=8.5）：此前海草长在三车道上，既违反可视走廊
+            // 约束，又会被玩家误读成障碍。
             for (var i = 0; i < 12; i++)
             {
                 var z = i * 10f - 5f;
-                // 海草群（远离三车道中心）
-                AddSeaweedCluster(-3.2f + Random.Range(-0.9f, 0.9f), z + Random.Range(-2f, 2f));
-                AddSeaweedCluster(3.2f + Random.Range(-0.9f, 0.9f), z + Random.Range(-2f, 2f));
-                // 贝壳点缀
+                AddSeaweedCluster(-(8.6f + Random.Range(0f, 1.6f)), z + Random.Range(-2f, 2f));
+                AddSeaweedCluster(8.6f + Random.Range(0f, 1.6f), z + Random.Range(-2f, 2f));
                 if (Random.value < 0.4f)
-                    AddSeashell(-3.5f + Random.Range(-0.6f, 0.6f), z + Random.Range(-1f, 1f));
+                    AddSeashell(-(8.7f + Random.Range(0f, 1.2f)), z + Random.Range(-1f, 1f));
                 if (Random.value < 0.4f)
-                    AddSeashell(3.5f + Random.Range(-0.6f, 0.6f), z + Random.Range(-1f, 1f));
+                    AddSeashell(8.7f + Random.Range(0f, 1.2f), z + Random.Range(-1f, 1f));
             }
-            // 上升的气泡群
+            // 上升的气泡群（护坡外侧，不进可视走廊）
             for (var i = 0; i < 8; i++)
             {
                 var z = i * 15f + 10f;
-                AddBubbleStream(Random.Range(-2f, 2f), z);
+                AddBubbleStream(RandomScenerySideX(), z);
             }
         }
 
@@ -1182,10 +1191,24 @@ namespace PenguinRun
             }
         }
 
-        private void AddIceCrack(float x, float z, float length)
+        /// <summary>冰拱地标：两根冰柱 + 横梁。此前回退成一条 2.8m 冰裂，作为路边地标完全不可读。</summary>
+        private void AddIceArchLandmark(float x, float z)
+        {
+            var group = new GameObject("Ice Arch Landmark");
+            group.transform.position = new Vector3(x, 0f, z);
+            var ice = new Color(0.55f, 0.85f, 1f, 0.8f);
+            AddChildPrimitive(group.transform, "Arch Pillar L", PrimitiveType.Cube, new Vector3(-1.1f, 1.1f, 0f), new Vector3(0.42f, 2.2f, 0.42f), ice, true);
+            AddChildPrimitive(group.transform, "Arch Pillar R", PrimitiveType.Cube, new Vector3(1.1f, 1.1f, 0f), new Vector3(0.42f, 2.2f, 0.42f), ice, true);
+            var lintel = AddChildPrimitive(group.transform, "Arch Lintel", PrimitiveType.Cube, new Vector3(0f, 2.35f, 0f), new Vector3(2.9f, 0.4f, 0.5f), new Color(0.7f, 0.94f, 1f, 0.85f), true);
+            lintel.transform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-4f, 4f));
+            RegisterSceneryProp(group, x, z);
+        }
+
+        private void AddIceCrack(Transform tile, float x, float z, float length)
         {
             var group = new GameObject("Hairline Ice Crack");
-            group.transform.position = new Vector3(x, 0.055f, z);
+            group.transform.SetParent(tile, false);
+            group.transform.localPosition = new Vector3(x, 0.055f, z);
             var main = AddChildPrimitive(group.transform, "Crack Main", PrimitiveType.Cube, Vector3.zero, new Vector3(0.035f, 0.02f, length), new Color(0.78f, 0.98f, 1f, 0.45f), true);
             main.transform.localRotation = Quaternion.Euler(0f, Random.Range(-28f, 28f), 0f);
             var branch = AddChildPrimitive(group.transform, "Crack Branch", PrimitiveType.Cube, new Vector3(0.13f, 0f, length * 0.12f), new Vector3(0.025f, 0.02f, length * 0.46f), new Color(0.78f, 0.98f, 1f, 0.32f), true);
@@ -1313,10 +1336,11 @@ namespace PenguinRun
                 case RunnerMapTheme.IceLakeEcho:
                     AddOpenNatureProp(NaturePropCatalog.IceLakeTree(index),
                         index % 2 == 0 ? -10.4f : 10.4f, z + 5.2f,
-                        new Vector3(1.2f, 1.2f, 1.2f), new Color(0.78f, 0.9f, 1f));
+                        new Vector3(1.2f, 1.2f, 1.2f), new Color(0.35f, 0.72f, 0.92f));
                     AddOpenNatureProp(NaturePropCatalog.IceLakeAccent(index),
                         index % 2 == 0 ? 9.8f : -9.8f, z + 11f,
-                        new Vector3(1.1f, 1.1f, 1.1f), new Color(0.85f, 0.93f, 1f));
+                        new Vector3(1.1f, 1.1f, 1.1f),
+                        index % 2 == 0 ? new Color(0.55f, 0.78f, 1f) : new Color(1f, 0.62f, 0.38f));
                     break;
                 case RunnerMapTheme.CedarRuins:
                     AddCedarRuin(-7.1f, z + 2.2f, index);
@@ -1437,7 +1461,7 @@ namespace PenguinRun
                     AddFloatingCloud(x, z, 1.5f);
                     break;
                 case ThemeLandmarkKind.IceArch:
-                    AddIceCrack(x, z, 2.8f);
+                    AddIceArchLandmark(x, z);
                     break;
             }
         }
@@ -1646,12 +1670,12 @@ namespace PenguinRun
                 if (mat.HasProperty("_BaseColor"))
                 {
                     var c = mat.GetColor("_BaseColor");
-                    mat.SetColor("_BaseColor", Color.Lerp(c, tint, 0.35f));
+                    mat.SetColor("_BaseColor", Color.Lerp(c, tint, 0.55f));
                 }
                 if (mat.HasProperty("_Color"))
                 {
                     var c = mat.GetColor("_Color");
-                    mat.SetColor("_Color", Color.Lerp(c, tint, 0.35f));
+                    mat.SetColor("_Color", Color.Lerp(c, tint, 0.55f));
                 }
             }
 
@@ -1710,38 +1734,9 @@ namespace PenguinRun
             AddSceneryProp(group);
         }
 
-        private void AddMountainGroup(float x, float z, float height)
+        private void AddMountainGroup(float x, float z, float height, Color bodyColor, Color capColor)
         {
-            var group = new GameObject("Distant Ice Ridge");
-            group.transform.position = new Vector3(x, 0f, z);
-            var ridge = new GameObject("Low Poly Ridge", typeof(MeshFilter), typeof(MeshRenderer));
-            ridge.transform.SetParent(group.transform, false);
-            ridge.GetComponent<MeshFilter>().sharedMesh = CreateRidgeSilhouetteMesh(height, x < 0f);
-            ridge.GetComponent<MeshRenderer>().sharedMaterial = RunnerVisuals.CreateMaterial(new Color(0.16f, 0.36f, 0.62f));
-            var cap = new GameObject("Ridge Snow Cap", typeof(MeshFilter), typeof(MeshRenderer));
-            cap.transform.SetParent(group.transform, false);
-            cap.transform.localPosition = new Vector3(0f, height * 0.06f, -0.04f);
-            cap.GetComponent<MeshFilter>().sharedMesh = CreateRidgeSilhouetteMesh(height * 0.62f, x < 0f);
-            cap.GetComponent<MeshRenderer>().sharedMaterial = RunnerVisuals.CreateMaterial(new Color(0.78f, 0.93f, 1f));
-            RegisterSceneryProp(group, x, z);
-        }
-
-        private static Mesh CreateRidgeSilhouetteMesh(float height, bool facesRight)
-        {
-            var width = height * 1.15f;
-            var peakX = facesRight ? width * 0.16f : -width * 0.16f;
-            var mesh = new Mesh { name = "Distant Ridge Silhouette" };
-            mesh.vertices = new[]
-            {
-                new Vector3(-width, 0f, 0f), new Vector3(-width * 0.45f, height * 0.52f, 0f),
-                new Vector3(peakX, height, 0f), new Vector3(width * 0.5f, height * 0.34f, 0f), new Vector3(width, 0f, 0f),
-                new Vector3(-width, 0f, 0.35f), new Vector3(-width * 0.45f, height * 0.52f, 0.35f),
-                new Vector3(peakX, height, 0.35f), new Vector3(width * 0.5f, height * 0.34f, 0.35f), new Vector3(width, 0f, 0.35f),
-            };
-            mesh.triangles = new[] { 0, 1, 6, 0, 6, 5, 1, 2, 7, 1, 7, 6, 2, 3, 8, 2, 8, 7, 3, 4, 9, 3, 9, 8 };
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            return mesh;
+            RegisterSceneryProp(ThemeRidgeScenery.CreateRidgeGroup(x, z, height, bodyColor, capColor), x, z);
         }
 
         private void AnimateScenery(float dt, float effectiveSpeed)

@@ -8,7 +8,7 @@ namespace PenguinRun
     internal sealed partial class SegmentSpawner
     {
         // 所有物体的显示高度都基于 TrackTerrain.SurfaceY (地面表面) 计算
-        private const float CoinHoverHeight = 0.45f;      // 金币悬浮在表面上方
+        private const float CoinHoverHeight = 0.58f;      // 金币悬浮：略高于路面，避免贴雪又不过高
         private const float PowerUpHoverHeight = 0.55f;   // 道具悬浮高度
         private const float OpenObstacleVisualScaleBoost = 1.42f;
         private const float OpenWideWallVisualScaleBoost = 1.32f;
@@ -75,7 +75,7 @@ namespace PenguinRun
             this.baseGroundY = baseGroundY;
             nextSpawnZ = worldTuning.initialSpawnZ;
 
-            coinPool = new GameObjectPool(BuildFishSnackVisual, null, 60, 200, recycleOnFull: true);
+            coinPool = new GameObjectPool(() => CoinPickupVisual.Build(visualFactory), null, 60, 200, recycleOnFull: true);
             powerUpPool = new GameObjectPool(BuildPooledPowerUpRoot, null, 24, 80, recycleOnFull: true);
         }
 
@@ -119,6 +119,50 @@ namespace PenguinRun
             for (var i = 0; i < count; i++)
             {
                 SpawnStandardObstacle(26f + i * 18f, (RunnerLane)Random.Range(-1, 2), Random.value > 0.72f, palette, runDistance);
+            }
+
+            // 开局金币放在首批障碍（约 26m 起）之前的净空带，避免叠在障碍上。
+            SpawnCoinLine(10f, RunnerLane.Center, 6, runDistance);
+            SpawnCoinLine(14f, RunnerLane.Left, 4, runDistance);
+            SpawnCoinLine(18f, RunnerLane.Right, 4, runDistance);
+        }
+
+        /// <summary>
+        /// 清掉 [zMin,zMax] 内的障碍（及叠在障碍上的金币），给 Boss 前奏/登场留净空跑道。
+        /// </summary>
+        public void ClearTrackHazardsBetween(float zMin, float zMax)
+        {
+            // 必须先回收叠在障碍上的金币再销毁障碍：反过来时障碍已不在，
+            // 重叠检测恒为 false，这些金币会残留在 Boss 净空带里。
+            for (var i = coins.Count - 1; i >= 0; i--)
+            {
+                var c = coins[i];
+                if (c == null)
+                {
+                    coins.RemoveAt(i);
+                    continue;
+                }
+
+                var z = c.transform.position.z;
+                if (z < zMin || z > zMax) continue;
+                if (!IsCoinOverlappingObstacle(c.transform.position)) continue;
+                coinYDelta.Remove(c);
+                coinPool.Return(c);
+                coins.RemoveAt(i);
+            }
+
+            for (var i = obstacles.Count - 1; i >= 0; i--)
+            {
+                var o = obstacles[i];
+                if (o == null)
+                {
+                    DestroyObstacle(o, i);
+                    continue;
+                }
+
+                var z = o.transform.position.z;
+                if (z >= zMin && z <= zMax)
+                    DestroyObstacle(o, i);
             }
         }
 
@@ -244,6 +288,12 @@ namespace PenguinRun
                     new Vector3(laneX + sideOffset, height, i * 2.4f),
                     new Vector3(0.34f, 0.08f, 0.52f), color, true);
             }
+
+            // 「散鱼」等奖励段：除引导条外真正刷出可拾取金币。
+            if (outcome.SegmentPattern == RouteSegmentPattern.FishRibbon)
+                SpawnCoinLine(spawnZ + 1.2f, lane, 12, runDistance);
+            else if (outcome.SegmentPattern is RouteSegmentPattern.CalmLane or RouteSegmentPattern.JumpArc)
+                SpawnCoinLine(spawnZ + 2f, lane, 6, runDistance);
 
             routeOutcomeRoots.Add(root);
         }
@@ -1855,6 +1905,9 @@ namespace PenguinRun
 
         private void SpawnCoin(float z, RunnerLane coinLane, float runDistance, float bonusY = 0f)
         {
+            if (!TryPickClearCoinLane(z, ref coinLane))
+                return;
+
             var coin = coinPool.Rent();
             if (coin == null) return;
             var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
@@ -1870,105 +1923,73 @@ namespace PenguinRun
             }
         }
 
-        private GameObject BuildFishSnackVisual()
+        /// <summary>优先原车道；被障碍占用则改旁道；三道都被挡则跳过该枚金币。</summary>
+        private bool TryPickClearCoinLane(float z, ref RunnerLane lane)
         {
-            var root = new GameObject("Fish Coin");
-            var hasCustom = visualFactory.TryAttachPickup(root.transform, PickupVisualId.FishSnack);
-            if (!hasCustom)
+            if (!IsLaneBlockedByObstacle(z, lane)) return true;
+
+            var order = new[]
             {
-                var meshRoot = new GameObject("FishMesh");
-                meshRoot.transform.SetParent(root.transform, false);
-                var mf = meshRoot.AddComponent<MeshFilter>();
-                mf.sharedMesh = ObstacleMeshBuilder.BuildFishSnack();
-                var mr = meshRoot.AddComponent<MeshRenderer>();
-                mr.sharedMaterial = CreateFishSnackMaterial(new Color(1f, 0.82f, 0.28f));
-                AttachFishSnackFace(meshRoot.transform);
+                lane,
+                lane == RunnerLane.Center ? RunnerLane.Left : RunnerLane.Center,
+                lane == RunnerLane.Right ? RunnerLane.Left : RunnerLane.Right,
+            };
+            for (var i = 0; i < order.Length; i++)
+            {
+                if (IsLaneBlockedByObstacle(z, order[i])) continue;
+                lane = order[i];
+                return true;
             }
 
-            // 贴地光环：缩小透明度，避免盖过鱼干剪影。
-            var glow = RunnerVisuals.CreatePrimitive("PickupGlow", PrimitiveType.Cylinder,
-                new Vector3(0f, -0.42f, 0f), new Vector3(0.48f, 0.01f, 0.48f),
-                new Color(1f, 0.88f, 0.4f, 0.16f), true);
-            glow.transform.SetParent(root.transform, false);
-
-            root.AddComponent<FishSnackWobble>();
-            return root;
+            return false;
         }
 
-        private static Material CreateFishSnackMaterial(Color color)
+        private bool IsLaneBlockedByObstacle(float z, RunnerLane lane)
         {
-            var mat = RunnerVisuals.CreateMaterial(color);
-            if (mat.HasProperty("_Smoothness"))
-                mat.SetFloat("_Smoothness", 0.58f);
-            if (mat.HasProperty("_Metallic"))
-                mat.SetFloat("_Metallic", 0.12f);
-            if (mat.HasProperty("_EmissionColor"))
+            var x = lane.ToX(laneWidth);
+            const float coinHalf = 0.4f;
+            const float zPad = 0.55f;
+            for (var i = 0; i < obstacles.Count; i++)
             {
-                mat.EnableKeyword("_EMISSION");
-                mat.SetColor("_EmissionColor", new Color(color.r, color.g, color.b) * 0.18f);
+                var o = obstacles[i];
+                if (o == null || !o.activeSelf) continue;
+                if (!obstacleSpecs.TryGetValue(o, out var spec)) continue;
+                var op = o.transform.position;
+                if (Mathf.Abs(op.z - z) > spec.HalfDz + zPad) continue;
+                // 宽墙/宽滑铲门横跨多道，整段 Z 都视为占用。
+                if (spec.HalfDx >= 0.95f) return true;
+                if (Mathf.Abs(op.x - x) <= spec.HalfDx + coinHalf) return true;
             }
-            return mat;
+
+            return false;
         }
 
-        private static void AttachFishSnackFace(Transform meshRoot, float scale = 1f)
+        private bool IsCoinOverlappingObstacle(Vector3 coinPos)
         {
-            var eyePos = new Vector3(0.17f * scale, 0.07f * scale, -0.21f * scale);
-            var eye = RunnerVisuals.CreatePrimitive("FishEye", PrimitiveType.Sphere, eyePos,
-                Vector3.one * (0.12f * scale), Color.white);
-            eye.transform.SetParent(meshRoot, false);
+            const float coinHalf = 0.4f;
+            const float zPad = 0.55f;
+            for (var i = 0; i < obstacles.Count; i++)
+            {
+                var o = obstacles[i];
+                if (o == null || !o.activeSelf) continue;
+                if (!obstacleSpecs.TryGetValue(o, out var spec)) continue;
+                var op = o.transform.position;
+                if (Mathf.Abs(op.z - coinPos.z) > spec.HalfDz + zPad) continue;
+                if (spec.HalfDx >= 0.95f) return true;
+                if (Mathf.Abs(op.x - coinPos.x) <= spec.HalfDx + coinHalf) return true;
+            }
 
-            var pupil = RunnerVisuals.CreatePrimitive("FishPupil", PrimitiveType.Sphere,
-                eyePos + new Vector3(0f, 0f, -0.04f * scale), Vector3.one * (0.055f * scale),
-                new Color(0.12f, 0.08f, 0.04f));
-            pupil.transform.SetParent(meshRoot, false);
-
-            var cheek = RunnerVisuals.CreatePrimitive("FishCheek", PrimitiveType.Sphere,
-                new Vector3(0.2f * scale, -0.02f * scale, -0.14f * scale), Vector3.one * (0.07f * scale),
-                new Color(1f, 0.55f, 0.35f, 0.45f), true);
-            cheek.transform.SetParent(meshRoot, false);
+            return false;
         }
 
-        private static GameObject BuildFishSnackProp(Transform parent, Vector3 localPos, float scale, float spinOffset = 0f)
+        private static GameObject BuildFishSnackProp(Transform parent, Vector3 localPos, float scale, float _)
         {
-            var prop = new GameObject("FishSnackProp");
+            var prop = CoinPickupVisual.Build(null);
+            prop.name = "FishSnackProp";
             prop.transform.SetParent(parent, false);
             prop.transform.localPosition = localPos;
             prop.transform.localScale = Vector3.one * scale;
-
-            var mf = prop.AddComponent<MeshFilter>();
-            mf.sharedMesh = ObstacleMeshBuilder.BuildFishSnack();
-            var mr = prop.AddComponent<MeshRenderer>();
-            mr.sharedMaterial = CreateFishSnackMaterial(new Color(1f, 0.82f, 0.28f));
-            AttachFishSnackFace(prop.transform);
-
-            var wobble = prop.AddComponent<FishSnackWobble>();
-            wobble.PhaseOffset = spinOffset;
             return prop;
-        }
-
-        private sealed class FishSnackWobble : MonoBehaviour
-        {
-            public float PhaseOffset;
-            private Vector3 basePos;
-            private float phase;
-
-            private void Start()
-            {
-                basePos = transform.localPosition;
-                phase = PhaseOffset + Random.Range(0f, Mathf.PI * 2f);
-            }
-
-            private void Update()
-            {
-                var t = Time.time * 3.1f + phase;
-                var bob = Mathf.Sin(t) * 0.09f;
-                transform.localPosition = basePos + new Vector3(0f, bob, 0f);
-                var spin = (t * 58f) % 360f;
-                transform.localRotation = Quaternion.Euler(
-                    Mathf.Sin(t * 0.65f) * 7f,
-                    spin,
-                    Mathf.Cos(t * 0.5f) * 5f);
-            }
         }
 
         private void SpawnPowerUp(float z, float runDistance, SegmentObstaclePalette? paletteHint = null)

@@ -43,15 +43,88 @@ namespace PenguinRun.Game.UI
 #endif
         }
 
-        /// <summary>UI 面板弹性弹出。</summary>
-        public static void PlayPanelPopIn(this RectTransform rt, float duration = 0.35f)
+        /// <summary>UI 面板弹性弹出：缩放 + 淡入，暂停时也照常播放。</summary>
+        public static void PlayPanelPopIn(this RectTransform rt, float duration = 0.3f)
         {
 #if DOTWEEN
-            // Full-page panels must remain readable even if gameplay is paused.
-            // A subtle scale also avoids exposing most of the previous surface.
-            rt.localScale = Vector3.one * 0.96f;
-            rt.DOScale(1f, duration).SetEase(Ease.OutCubic).SetUpdate(true);
+            rt.localScale = Vector3.one * 0.92f;
+            rt.DOScale(1f, duration).SetEase(Ease.OutBack, 1.2f).SetUpdate(true);
+            var group = EnsureCanvasGroup(rt);
+            group.alpha = 0f;
+            group.DOFade(1f, duration * 0.7f).SetUpdate(true);
 #endif
+        }
+
+        /// <summary>
+        /// UI 面板退场：淡出 + 轻微收缩后回调（通常用于 Destroy/SetActive(false)）。
+        /// 播放期间关闭交互，避免退场半途还能点到按钮。DOTween 不可用时立即回调。
+        /// </summary>
+        public static void PlayPanelPopOut(this RectTransform rt, System.Action onComplete, float duration = 0.16f)
+        {
+#if DOTWEEN
+            if (rt == null)
+            {
+                onComplete?.Invoke();
+                return;
+            }
+            var group = EnsureCanvasGroup(rt);
+            group.interactable = false;
+            group.blocksRaycasts = false;
+            rt.DOScale(0.95f, duration).SetEase(Ease.InCubic).SetUpdate(true);
+            group.DOFade(0f, duration).SetUpdate(true)
+                .OnComplete(() => onComplete?.Invoke());
+#else
+            onComplete?.Invoke();
+#endif
+        }
+
+        /// <summary>
+        /// 列表行入场：前若干行按序号错峰淡入 + 轻缩放（一次性）。
+        /// 只做 scale/alpha，不动位置——行位置归 LayoutGroup 管。
+        /// </summary>
+        public static void PlayListItemEnter(this RectTransform rt, int index, int maxStaggered = 10)
+        {
+#if DOTWEEN
+            if (rt == null || index >= maxStaggered) return;
+            var group = EnsureCanvasGroup(rt);
+            group.alpha = 0f;
+            rt.localScale = Vector3.one * 0.97f;
+            var delay = index * 0.045f;
+            group.DOFade(1f, 0.22f).SetDelay(delay).SetUpdate(true);
+            rt.DOScale(1f, 0.26f).SetDelay(delay).SetEase(Ease.OutCubic).SetUpdate(true);
+#endif
+        }
+
+        /// <summary>
+        /// 数字滚动（count-up）：从 0 滚到 target，只在整数值变化帧回调（调用方直接写 text 即满足门控）。
+        /// DOTween 不可用时立即回调最终值。
+        /// </summary>
+        public static void PlayCountUp(int target, float duration, System.Action<int> onValue)
+        {
+#if DOTWEEN
+            if (onValue == null) return;
+            var last = int.MinValue;
+            var current = 0f;
+            DOTween.To(() => current, v =>
+                {
+                    current = v;
+                    var rounded = Mathf.RoundToInt(v);
+                    if (rounded == last) return;
+                    last = rounded;
+                    onValue(rounded);
+                }, target, duration)
+                .SetEase(Ease.OutCubic)
+                .SetUpdate(true);
+#else
+            onValue?.Invoke(target);
+#endif
+        }
+
+        private static CanvasGroup EnsureCanvasGroup(Component c)
+        {
+            if (!c.TryGetComponent<CanvasGroup>(out var group))
+                group = c.gameObject.AddComponent<CanvasGroup>();
+            return group;
         }
 
         /// <summary>文字淡入弹出。</summary>
@@ -70,6 +143,36 @@ namespace PenguinRun.Game.UI
             t.DOLocalMoveY(t.localPosition.y + amplitude, period * 0.5f)
                 .SetLoops(-1, LoopType.Yoyo)
                 .SetEase(Ease.InOutSine);
+#endif
+        }
+    }
+
+    /// <summary>
+    /// 按压即时反馈：PointerDown 压到 0.96、PointerUp 回弹。点击弹跳发生在 onClick 之后，
+    /// 手指按下的第一帧没有任何反馈——这个组件补上那 100ms 的"手感"。
+    /// </summary>
+    internal sealed class PressScaleFeedback : MonoBehaviour,
+        UnityEngine.EventSystems.IPointerDownHandler, UnityEngine.EventSystems.IPointerUpHandler
+    {
+        private const float PressedScale = 0.96f;
+
+        public void OnPointerDown(UnityEngine.EventSystems.PointerEventData eventData)
+        {
+#if DOTWEEN
+            transform.DOKill();
+            transform.DOScale(PressedScale, 0.06f).SetUpdate(true);
+#else
+            transform.localScale = Vector3.one * PressedScale;
+#endif
+        }
+
+        public void OnPointerUp(UnityEngine.EventSystems.PointerEventData eventData)
+        {
+#if DOTWEEN
+            transform.DOKill();
+            transform.DOScale(1f, 0.14f).SetEase(Ease.OutBack).SetUpdate(true);
+#else
+            transform.localScale = Vector3.one;
 #endif
         }
     }

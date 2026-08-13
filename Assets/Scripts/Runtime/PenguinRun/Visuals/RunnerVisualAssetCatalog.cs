@@ -94,9 +94,12 @@ namespace PenguinRun
                 position, Vector3.zero, Vector3.one);
         }
 
-        /// <summary>道具视觉放大：跑酷镜头下 1× 雕塑过小，易被读成光点；1.85× 保持可读且不挡道。</summary>
-        public static RunnerVisualDescriptor ForPickup(PickupVisualId id) =>
-            new($"PenguinRun/Prefabs/Pickups/{PickupSlug(id)}", Vector3.zero, Vector3.zero, Vector3.one * 1.85f);
+        /// <summary>道具视觉放大：跑酷镜头下 1× 雕塑过小，易被读成光点；1.85× 保持可读且不挡道。金币单独收敛，避免叠缩放糊成光团。</summary>
+        public static RunnerVisualDescriptor ForPickup(PickupVisualId id)
+        {
+            var scale = id is PickupVisualId.FishSnack or PickupVisualId.DoubleFishSnack ? 1.05f : 1.85f;
+            return new($"PenguinRun/Prefabs/Pickups/{PickupSlug(id)}", Vector3.zero, Vector3.zero, Vector3.one * scale);
+        }
 
         public static RunnerVisualDescriptor ForEnvironment(RunnerMapTheme theme, EnvironmentPropId id) =>
             new($"PenguinRun/Prefabs/Environment/{ThemeSlug(theme)}/{EnvironmentSlug(id)}",

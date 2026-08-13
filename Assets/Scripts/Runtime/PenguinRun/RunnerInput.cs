@@ -52,6 +52,10 @@ namespace PenguinRun
 
         private static RunnerAction PollKeyboard()
         {
+            // 冲刺优先：Boss 破绽反击需要可靠键盘入口（触屏仍为双击）。
+            if (Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift)
+                || Input.GetKeyDown(KeyCode.F))
+                return RunnerAction.Dash;
             if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
                 return RunnerAction.Jump;
             if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow))
@@ -60,7 +64,7 @@ namespace PenguinRun
                 return RunnerAction.Left;
             if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D))
                 return RunnerAction.Right;
-            if (Input.GetKeyDown(KeyCode.P))
+            if (Input.GetKeyDown(KeyCode.P) || Input.GetKeyDown(KeyCode.Escape))
                 return RunnerAction.Pause;
             return RunnerAction.None;
         }

@@ -193,8 +193,8 @@ namespace PenguinRun
                     feedbackText = $"树人护甲×{world.TreantArmorHits}";
                     break;
                 case PowerUpKind.CoralBounce:
+                    // 不附赠护盾：防御顺序里护盾优先于珊瑚，附赠护盾会让回弹层轮不到消耗、道具名不副实。
                     world.SetCoralBounce();
-                    world.ShieldTimer = Mathf.Max(world.ShieldTimer, 3.5f);
                     feedbackText = "珊瑚回弹";
                     break;
                 case PowerUpKind.ThunderFeather:

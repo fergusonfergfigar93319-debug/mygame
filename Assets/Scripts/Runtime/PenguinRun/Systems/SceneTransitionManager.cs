@@ -30,6 +30,26 @@ namespace PenguinRun
         private TextMeshProUGUI loadingHint;
         private RectTransform mascot;
         private float lastProgress = -1f;
+        private float displayedProgress;
+        private string[] activeHints = Array.Empty<string>();
+        private int hintIndex;
+        private float hintTimer;
+        private const float HintRotateSeconds = 2.2f;
+
+        private static readonly string[] ToLobbyHints =
+        {
+            "正在把这段旅程写回营地手记",
+            "篝火已经添了柴，营地在等你",
+            "图鉴里也许多了一页新发现",
+        };
+
+        private static readonly string[] ToRunHints =
+        {
+            "收好围巾，前方的风雪正在发亮",
+            "小提示：下滑可以铲过低矮的横梁",
+            "小提示：完美闪避与连续换道都能积累技巧分",
+            "小提示：Boss 出招前，先看地面预警圈的颜色",
+        };
 
         private void Awake()
         {
@@ -53,9 +73,11 @@ namespace PenguinRun
             state = State.FadeOut;
             timer = 0f;
             lastProgress = -1f;
-            loadingHint.text = sceneName == "MainMenu"
-                ? "正在把这段旅程写回营地手记"
-                : "收好围巾，前方的风雪正在发亮";
+            displayedProgress = 0f;
+            activeHints = sceneName == "MainMenu" ? ToLobbyHints : ToRunHints;
+            hintIndex = 0;
+            hintTimer = 0f;
+            loadingHint.text = activeHints[0];
             overlayCanvas.SetActive(true);
             overlayGroup.blocksRaycasts = true;
             overlayGroup.interactable = true;
@@ -80,6 +102,7 @@ namespace PenguinRun
                     SetOverlayAlpha(1f);
                     SetLoadingVisible(true);
                     RefreshProgress();
+                    RotateHint();
                     break;
 
                 case State.FadeIn:
@@ -157,10 +180,22 @@ namespace PenguinRun
 
         private void RefreshProgress()
         {
-            var progress = asyncLoad == null ? 0f : Mathf.Clamp01(asyncLoad.progress / 0.9f);
-            if (Mathf.Abs(progress - lastProgress) < 0.002f) return;
-            lastProgress = progress;
-            UiBuilder.SetProgress01(progressFill, progress);
+            // 真实进度是跳变的；显示值向目标平滑推进，条子看起来在"走"而不是"蹦"。
+            var target = asyncLoad == null ? 0f : Mathf.Clamp01(asyncLoad.progress / 0.9f);
+            displayedProgress = Mathf.MoveTowards(displayedProgress, target, Time.unscaledDeltaTime * 1.4f);
+            if (Mathf.Abs(displayedProgress - lastProgress) < 0.002f) return;
+            lastProgress = displayedProgress;
+            UiBuilder.SetProgress01(progressFill, displayedProgress);
+        }
+
+        private void RotateHint()
+        {
+            if (activeHints.Length <= 1) return;
+            hintTimer += Time.unscaledDeltaTime;
+            if (hintTimer < HintRotateSeconds) return;
+            hintTimer = 0f;
+            hintIndex = (hintIndex + 1) % activeHints.Length;
+            loadingHint.text = activeHints[hintIndex];
         }
 
         private void SetOverlayAlpha(float alpha)

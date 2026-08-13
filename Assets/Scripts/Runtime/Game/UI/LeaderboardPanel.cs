@@ -33,7 +33,7 @@ namespace PenguinRun.Game.UI
                 "LeaderboardPanel", parent,
                 Vector2.zero, Vector2.one,
                 Vector2.zero, Vector2.zero,
-                UiBuilder.MenuPanelSolidBg);
+                UiTheme.PaperBase);
             var script = rootRt.gameObject.AddComponent<LeaderboardPanel>();
             script.dispatch = dispatch;
             script.BuildLayout(rootRt);
@@ -65,9 +65,10 @@ namespace PenguinRun.Game.UI
             hlg.childForceExpandWidth = true;
             hlg.childForceExpandHeight = true;
 
+            // \u279E / \u231B 是已知豆腐块字符，直接用文字
             CreateSortBtn(sortRow, "\u2605 总分", LeaderboardSort.ByTotalScore);
-            CreateSortBtn(sortRow, "\u279E 距离", LeaderboardSort.ByDistance);
-            CreateSortBtn(sortRow, "\u231B 存活", LeaderboardSort.BySurvivalTime);
+            CreateSortBtn(sortRow, "距离", LeaderboardSort.ByDistance);
+            CreateSortBtn(sortRow, "存活", LeaderboardSort.BySurvivalTime);
             ApplySortBarStyle();
 
             const float bucketRowHeight = 76f;
@@ -95,8 +96,10 @@ namespace PenguinRun.Game.UI
 
         private void CreateSortBtn(RectTransform parent, string label, LeaderboardSort s)
         {
+            // 未选中态：雾蓝半透明底 + 墨色字（全透明幽灵底在纸面上没有按压反馈）
             var btn = UiBuilder.CreateButton("Sort_" + s, parent, label,
-                Color.clear, Color.white, 24, rounded: true);
+                new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.5f),
+                UiBuilder.TextPrimary, 24, rounded: true);
             var img = btn.GetComponent<Image>();
             var labelText = btn.GetComponentInChildren<TextMeshProUGUI>();
             sortMarkers.Add((img, labelText, s));
@@ -111,7 +114,8 @@ namespace PenguinRun.Game.UI
         private void CreateBucketBtn(RectTransform parent, string label, bool today)
         {
             var btn = UiBuilder.CreateButton("Bucket_" + label, parent, label,
-                Color.clear, Color.white, 22, rounded: true);
+                new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.5f),
+                UiBuilder.TextPrimary, 22, rounded: true);
             var img = btn.GetComponent<Image>();
             var labelText = btn.GetComponentInChildren<TextMeshProUGUI>();
             bucketMarkers.Add((img, labelText, today));
@@ -129,11 +133,11 @@ namespace PenguinRun.Game.UI
             {
                 if (img == null) continue;
                 var sel = todayOnly == today;
-                img.color = sel ? UiBuilder.WarmGold * new Color(1f, 1f, 1f, 0.42f)
-                    : new Color(0f, 0f, 0f, 0f);
+                img.color = sel ? UiBuilder.AccentActive
+                    : new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.5f);
                 if (label != null)
                 {
-                    label.color = sel ? new Color(0.12f, 0.07f, 0.02f, 1f) : UiBuilder.TextSecondary;
+                    label.color = sel ? Color.white : UiBuilder.TextPrimary;
                     label.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
             }
@@ -145,11 +149,11 @@ namespace PenguinRun.Game.UI
             {
                 if (img == null) continue;
                 var sel = sort == s;
-                img.color = sel ? UiBuilder.AccentActive : new Color(0f, 0f, 0f, 0f);
+                img.color = sel ? UiBuilder.AccentActive
+                    : new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.5f);
                 if (label != null)
                 {
-                    label.color = sel ? new Color(0.04f, 0.08f, 0.14f, 1f)
-                        : UiBuilder.TextSecondary;
+                    label.color = sel ? Color.white : UiBuilder.TextPrimary;
                     label.fontStyle = sel ? FontStyles.Bold : FontStyles.Normal;
                 }
             }
@@ -201,7 +205,7 @@ namespace PenguinRun.Game.UI
 
             var t = UiBuilder.CreateText("Title", empty,
                 todayBucket ? "今日还没有本地纪录" : "还没有本地纪录",
-                30, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+                30, FontStyle.Bold, TextAnchor.MiddleCenter, UiBuilder.TextPrimary);
             var trt = (RectTransform)t.transform;
             trt.anchorMin = new Vector2(0f, 0.5f);
             trt.anchorMax = new Vector2(1f, 0.5f);
@@ -242,21 +246,22 @@ namespace PenguinRun.Game.UI
             Color medalColor;
             string medalSymbol;
 
+            // 前三名底色 = 纸面向奖牌色轻染（旧深色底会让墨色昵称不可读）
             if (index == 1)
             {
-                rowBg = new Color(0.18f, 0.14f, 0.06f, 0.92f);
+                rowBg = Color.Lerp(UiTheme.PaperWarm, GoldMedal, 0.30f);
                 medalColor = GoldMedal;
                 medalSymbol = "1";
             }
             else if (index == 2)
             {
-                rowBg = new Color(0.13f, 0.16f, 0.22f, 0.92f);
+                rowBg = Color.Lerp(UiTheme.PaperWarm, SilverMedal, 0.42f);
                 medalColor = SilverMedal;
                 medalSymbol = "2";
             }
             else if (index == 3)
             {
-                rowBg = new Color(0.16f, 0.1f, 0.06f, 0.92f);
+                rowBg = Color.Lerp(UiTheme.PaperWarm, BronzeMedal, 0.26f);
                 medalColor = BronzeMedal;
                 medalSymbol = "3";
             }
@@ -288,7 +293,7 @@ namespace PenguinRun.Game.UI
             var medalBadge = UiBuilder.CreateRect("Medal", row,
                 new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
                 new Vector2(72f, 72f), new Vector2(50f, 0f),
-                isMedal ? medalColor : new Color(0.12f, 0.22f, 0.34f, 0.9f),
+                isMedal ? medalColor : UiTheme.MistBlue,
                 circle: true);
             if (isMedal)
             {
@@ -306,9 +311,9 @@ namespace PenguinRun.Game.UI
                 isMedal ? 32 : 26, FontStyle.Bold, TextAnchor.MiddleCenter,
                 isMedal ? new Color(0.15f, 0.08f, 0.02f, 1f) : UiBuilder.AccentActive);
 
-            // 玩家昵称
+            // 玩家昵称（纸面行上用墨色）
             var name = UiBuilder.CreateText("Name", row, e.nickname ?? "玩家",
-                28, FontStyle.Bold, TextAnchor.UpperLeft, Color.white);
+                28, FontStyle.Bold, TextAnchor.UpperLeft, UiBuilder.TextPrimary);
             var nrt = (RectTransform)name.transform;
             nrt.anchorMin = new Vector2(0f, 0.5f);
             nrt.anchorMax = new Vector2(0.7f, 1f);
@@ -316,9 +321,9 @@ namespace PenguinRun.Game.UI
             nrt.offsetMin = new Vector2(140f, 0f);
             nrt.offsetMax = new Vector2(-10f, -8f);
 
-            // 元信息
+            // 元信息（\u279E/\u231B 是豆腐块字符，改用分隔点）
             var meta = UiBuilder.CreateText("Meta", row,
-                $"\u279E {Mathf.RoundToInt(e.distanceScoreUnits)}m   \u231B {Mathf.RoundToInt(e.survivalSeconds)}s   {FormatDate(e.timestampMillis)}",
+                $"{Mathf.RoundToInt(e.distanceScoreUnits)}m · {Mathf.RoundToInt(e.survivalSeconds)}s · {FormatDate(e.timestampMillis)}",
                 19, FontStyle.Normal, TextAnchor.LowerLeft, UiBuilder.TextSecondary);
             var mrt = (RectTransform)meta.transform;
             mrt.anchorMin = new Vector2(0f, 0f);
@@ -327,10 +332,10 @@ namespace PenguinRun.Game.UI
             mrt.offsetMin = new Vector2(140f, 8f);
             mrt.offsetMax = new Vector2(-10f, -2f);
 
-            // 总分（右对齐，金色高亮）
+            // 总分（右对齐；奖牌行底已染奖牌色，分数用墨色保证可读）
             var score = UiBuilder.CreateText("Score", row, e.totalScore.ToString("N0"),
                 isMedal ? 40 : 36, FontStyle.Bold, TextAnchor.MiddleRight,
-                isMedal ? medalColor : UiBuilder.WarmGold);
+                isMedal ? UiTheme.InkPrimary : UiBuilder.WarmGold);
             var srt = (RectTransform)score.transform;
             srt.anchorMin = new Vector2(0.7f, 0f);
             srt.anchorMax = new Vector2(1f, 1f);
