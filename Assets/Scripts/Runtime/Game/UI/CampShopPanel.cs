@@ -316,7 +316,7 @@ namespace PenguinRun.Game.UI
                 ? $"先将{CampBuildingCatalog.For(node.Definition.Prerequisite.Value).Title}修复到 Lv {node.Definition.PrerequisiteLevel}"
                 : $"{node.Definition.Story}  ·  {node.Definition.UnlockEffect}";
             var body = UiBuilder.CreateText("Description", row, description, 18, FontStyle.Normal,
-                TextAnchor.UpperLeft, locked ? UiTheme.TextTertiary : UiTheme.InkSecondary);
+                TextAnchor.UpperLeft, locked ? UiBuilder.TextTertiary : UiTheme.InkSecondary);
             var bodyRt = (RectTransform)body.transform;
             bodyRt.anchorMin = new Vector2(0f, 0f);
             bodyRt.anchorMax = new Vector2(0.72f, 1f);
@@ -327,7 +327,7 @@ namespace PenguinRun.Game.UI
                 locked ? "前置未完成" : $"还差 {Mathf.Max(0, node.NextCost - PlayerSave.TotalFishSnacks)} 鱼干";
             var button = UiBuilder.CreateButton("Rebuild", row, label,
                 affordable ? color : Color.Lerp(UiTheme.PaperBase, UiTheme.MistBlue, 0.45f),
-                affordable ? UiTheme.InkPrimary : UiTheme.TextTertiary, 19, rounded: true);
+                affordable ? UiTheme.InkPrimary : UiBuilder.TextTertiary, 19, rounded: true);
             var buttonRt = (RectTransform)button.transform;
             buttonRt.anchorMin = new Vector2(1f, 0.5f);
             buttonRt.anchorMax = new Vector2(1f, 0.5f);
@@ -907,6 +907,8 @@ namespace PenguinRun.Game.UI
             var banner = UiBuilder.CreateScrollListRow("ShopBanner", contentRoot, 100f, UiBuilder.Surface1);
             UiBuilder.AddOutline(banner.gameObject, new Color(color.r, color.g, color.b, 0.45f), new Vector2(1f, -1f));
 
+            UiBuilder.AttachArtVignette("SupplyBoardArt", banner, Image2ArtCatalog.ShopSupply, 0.13f);
+
             var accent = UiBuilder.CreateRect("Accent", banner,
                 new Vector2(0f, 0f), new Vector2(0f, 1f),
                 new Vector2(5f, 0f), Vector2.zero,
@@ -1381,30 +1383,30 @@ namespace PenguinRun.Game.UI
             var dialog = UiBuilder.CreateRect("Dialog", confirmOverlay.transform,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(680f, 520f), Vector2.zero,
-                UiBuilder.MenuPanelInnerBg, rounded: true);
-            UiBuilder.AddOutline(dialog.gameObject, UiBuilder.BorderAccent, new Vector2(1.5f, -1.5f));
+                UiBuilder.Surface1, rounded: true);
+            UiBuilder.AddOutline(dialog.gameObject, UiTheme.StitchBorder, new Vector2(1.5f, -1.5f));
             UiBuilder.AddShadow(dialog.gameObject, new Color(0f, 0f, 0f, 0.6f), new Vector2(0f, -8f));
 
             // 顶部
             var topBar = UiBuilder.CreateRect("Top", dialog,
                 new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(0f, 70f), new Vector2(0f, 0f),
-                new Color(0.06f, 0.14f, 0.24f, 1f), rounded: true);
+                Color.Lerp(UiTheme.PaperWarm, UiTheme.MistBlue, 0.22f), rounded: true);
             topBar.pivot = new Vector2(0.5f, 1f);
-            UiBuilder.CreateText("Title", topBar, "确认购买", 30, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+            UiBuilder.CreateText("Title", topBar, "确认购买", 30, FontStyle.Bold, TextAnchor.MiddleCenter, UiTheme.InkPrimary);
 
             // 商品信息
             var infoRow = UiBuilder.CreateRect("Info", dialog,
                 new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(0f, 120f), new Vector2(0f, -80f),
-                new Color(0.05f, 0.1f, 0.18f, 0.8f), rounded: true);
+                new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.34f), rounded: true);
             infoRow.pivot = new Vector2(0.5f, 1f);
             infoRow.offsetMin = new Vector2(24f, infoRow.offsetMin.y);
             infoRow.offsetMax = new Vector2(-24f, infoRow.offsetMax.y);
 
             BuildShopIconBadge(infoRow, def.IconGlyph, def.ThemeColor, new Vector2(50f, -50f));
 
-            var iTitle = UiBuilder.CreateText("ITitle", infoRow, def.Title, 24, FontStyle.Bold, TextAnchor.UpperLeft, Color.white);
+            var iTitle = UiBuilder.CreateText("ITitle", infoRow, def.Title, 24, FontStyle.Bold, TextAnchor.UpperLeft, UiTheme.InkPrimary);
             var itrt = (RectTransform)iTitle.transform;
             itrt.anchorMin = new Vector2(0f, 1f);
             itrt.anchorMax = new Vector2(1f, 1f);
@@ -1424,7 +1426,7 @@ namespace PenguinRun.Game.UI
             var priceBlock = UiBuilder.CreateRect("PriceBlock", dialog,
                 new Vector2(0f, 0f), new Vector2(1f, 0f),
                 new Vector2(0f, 170f), new Vector2(0f, 120f),
-                new Color(0.03f, 0.08f, 0.14f, 0.85f), rounded: true);
+                new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.28f), rounded: true);
             priceBlock.pivot = new Vector2(0.5f, 0f);
             priceBlock.offsetMin = new Vector2(24f, priceBlock.offsetMin.y);
             priceBlock.offsetMax = new Vector2(-24f, priceBlock.offsetMax.y);

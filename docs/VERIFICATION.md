@@ -30,7 +30,8 @@ Get-ChildItem tools/Verify*.ps1 | ForEach-Object {
 | `VerifyUiArtP0.ps1` | UI/美术 P0 契约：图标注册表、道具视觉档案、移动端画质预算入口 |
 | `VerifyStorybookUiPhase1.ps1` | 童话 UI 阶段一：纸张页面、章节标题、墨色正文结构 |
 | `VerifyPremiumStorybookHome.ps1` | 童话营地大厅的资产与结构 |
-| `VerifyStorybookPalette.ps1` | 纸张 UI 层不得引用旧霓虹色板；主/次按钮语言；大厅美术 `.meta` 必须含导入块 |
+| `VerifyStorybookPalette.ps1` | 纸张 UI 层不得引用旧霓虹色板（含 `Success` / `TextTertiary`）；主/次按钮语言；大厅美术 `.meta` 必须含导入块 |
+| `VerifyImage2Art.ps1` | Image 2 七张插画的 Sprite 导入、目录路径，以及大厅/面板/死亡/暂停/战绩消费点 |
 | `VerifyRunDepthPhase2.ps1` | 局内深度阶段二：路线事件、旅途札记、技巧分 |
 | `VerifyLongTermGrowthPhase3.ps1` | 长期成长阶段三：营地重建、伙伴羁绊、图鉴发现 |
 | `VerifyThemeMechanicsPhase4.ps1` | 主题地图机关与精通阶段四 |
@@ -40,7 +41,7 @@ Get-ChildItem tools/Verify*.ps1 | ForEach-Object {
 | `VerifyProtagonistAvatarRevamp.ps1` | 主角表现层边界、视角空间主光、贴片轮廓裁剪 |
 | `VerifyVisualJudgmentRevamp.ps1` | 2026-07-20 建模/特效/判定批次，含 LOD 阈值防回归 |
 | `VerifyCustomMapAssetsBatch1.ps1` | 自定义地图资产批次一 |
-| `VerifyCubePetAndNatureProps.ps1` | Cube Pet 主角路径 + 六主题路边开源 FBX（KayKit / Quaternius `vendor_*`）与 credits |
+| `VerifyCubePetAndNatureProps.ps1` | Cube Pet 主角路径 + 六主题路边开源 FBX（含中景带与灯/旗/冰晶/海草换模）与 credits |
 | `VerifyQualityTierCalibration.ps1` | 画质分档由设备能力驱动、真的写入、且编辑器可达 |
 | `VerifyFileSizeRatchet.ps1` | 六个超大文件只准缩小，不准增长 |
 

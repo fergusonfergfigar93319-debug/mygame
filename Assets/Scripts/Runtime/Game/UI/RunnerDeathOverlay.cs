@@ -18,6 +18,7 @@ namespace PenguinRun.Game.UI
             var card = UiBuilder.CreateCard("ResultCard", root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(760f, 700f), Vector2.zero, UiTheme.PaperWarm, addBorder: true, addShadow: true);
             UiBuilder.AddOutline(card.gameObject, UiTheme.StitchBorder, new Vector2(2f, -2f));
+            UiBuilder.AttachArtVignette("ResultCelebrationArt", card, Image2ArtCatalog.ResultCelebration, 0.16f);
             card.PlayPanelPopIn();
 
             // These labels are center-anchored, so a zero X size collapses them to a

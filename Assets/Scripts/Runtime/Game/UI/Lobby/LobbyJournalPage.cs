@@ -25,6 +25,8 @@ namespace PenguinRun.Game.UI.Lobby
                 WithAlpha(UiTheme.PaperWarm, 0.96f));
             Place(page.Root, new Vector2(0.03f, 0.20f), new Vector2(0.27f, 0.82f));
 
+            UiBuilder.AttachArtVignette("JournalMapArt", page.Root, Image2ArtCatalog.JournalMap, 0.14f);
+
             var eyebrow = StorybookUi.CreateStoryLabel("JournalEyebrow", page.Root, "今日手记", UiTheme.Caption);
             eyebrow.color = UiTheme.CoralAction;
             Place(eyebrow.rectTransform, new Vector2(0.08f, 0.82f), new Vector2(0.92f, 0.94f));

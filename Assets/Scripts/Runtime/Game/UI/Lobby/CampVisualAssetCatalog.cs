@@ -8,7 +8,10 @@ namespace PenguinRun.Game.UI.Lobby
     /// <summary>Stable premium-home resource paths with deterministic legacy fallbacks.</summary>
     public static class CampVisualAssetCatalog
     {
-        public const string PanoramaPath = "PenguinRun/StorybookUI/PremiumHome/camp_panorama_premium";
+        // Image 2 replacement: richer blue-hour camp art with a clear center for the mascot and UI.
+        public const string PanoramaPath = "PenguinRun/StorybookUI/Image2/camp_panorama_image2";
+        public const string ChapterBackdropPath = "PenguinRun/StorybookUI/Image2/chapter_card_image2";
+        public const string RunBackdropPath = "PenguinRun/StorybookUI/Image2/ice_run_backdrop_image2";
         public const string MascotPath = "PenguinRun/StorybookUI/PremiumHome/mascot_gugugaga_premium";
         public const string TuanTuanPath = "PenguinRun/StorybookUI/PremiumHome/companion_tuantuan";
         public const string DrorPath = "PenguinRun/StorybookUI/PremiumHome/companion_dror";
@@ -25,6 +28,8 @@ namespace PenguinRun.Game.UI.Lobby
         private static readonly Dictionary<string, Sprite> AtlasSlices = new();
 
         public static Sprite Panorama => Load(PanoramaPath) ?? StorybookArtCatalog.LobbyPanorama;
+        public static Sprite ChapterBackdrop => Load(ChapterBackdropPath);
+        public static Sprite RunBackdrop => Load(RunBackdropPath);
         public static Sprite Mascot => Load(MascotPath) ?? StorybookArtCatalog.Mascot;
         /// <summary>
         /// 伙伴立绘。**没有**美术时返回 null，由调用方隐藏节点。

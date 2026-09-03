@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using PenguinRun.Game.UI;
+using PenguinRun.Game.UI.Lobby;
 using PenguinRun.Game.UI.Storybook;
 using TMPro;
 using UnityEngine;
@@ -121,6 +122,8 @@ namespace PenguinRun
             overlayGroup = overlayCanvas.AddComponent<CanvasGroup>();
             var root = UiBuilder.CreateRect("LoadingPage", overlayCanvas.transform, Vector2.zero, Vector2.one,
                 Vector2.zero, Vector2.zero, UiTheme.PaperBase);
+
+            UiBuilder.AttachArtVignette("RunBackdrop", root, CampVisualAssetCatalog.RunBackdrop, 0.16f);
 
             var wash = UiBuilder.CreateRect("MistWash", root, Vector2.zero, Vector2.one,
                 Vector2.zero, Vector2.zero,

@@ -152,7 +152,7 @@
 ### 纸张 UI 层（PaperUiLayer）
 
 - **意指：** `Assets/Scripts/Runtime/Game/UI` 下的大厅与面板 UI，使用童话纸张色板（`PaperBase` / `InkPrimary` / `PineGreen` / `MistBlue` / `CoralAction` / `StitchBorder`）。
-- **权威边界：** 该层**禁止**引用旧霓虹色板令牌（`UiTheme.AccentCyan` / `UiTheme.Surface*` / `UiTheme.TextPrimary` 等），一律走 `UiBuilder` 别名。整套纸张改版就是靠别名层重映射完成的，漏掉一个别名（当年的 `AccentCyan`）就会让几十个调用点同时跑偏。由 `VerifyStorybookPalette.ps1` 断言。
+- **权威边界：** 该层**禁止**引用旧霓虹色板令牌（`UiTheme.AccentCyan` / `UiTheme.Surface*` / `UiTheme.TextPrimary` / `UiTheme.TextSecondary` / `UiTheme.TextTertiary` / `UiTheme.Success` 等），一律走 `UiBuilder` 别名。整套纸张改版就是靠别名层重映射完成的，漏掉一个别名（当年的 `AccentCyan`，以及后来的 `Success` / `TextTertiary`）就会让几十个调用点同时跑偏。由 `VerifyStorybookPalette.ps1` 断言。
 - **勿混淆：** 局内 HUD（`RunnerHudCanvas`，`Runtime/PenguinRun/Systems`）画在深色 3D 场景上，继续使用旧令牌是正当的，不在本层范围内。
 - **主操作语言：** 主 CTA 一律 `CoralAction` + 白字（与大厅底坞一致）；选中/激活态用 `AccentActive`（PineGreen）；次级按钮用 `MistBlue` + 墨色字。
 - **相关陷阱：** `UiBuilder.AddOutline` 走 uGUI `Shadow`，描边 alpha 会乘以源顶点 alpha——底色全透明的「幽灵按钮」连描边一起消失。
@@ -163,7 +163,8 @@
 - **风险：** 整条链**静默**——资源缺失不抛异常、不打日志，画面上只是少了角色或多了个白圆。吉祥物就是这样消失了很久没被发现（`.meta` 缺 `TextureImporter:` 块 → 资源从未导入 → 一路退到占位圆）。
 - **规则：** 会显示出来的美术必须是真资源；允许"缺席"（隐藏节点），**不允许**退化成占位圆或复用他人的立绘（伙伴退化成吉祥物会让大厅出现两个同样的角色）。由 `ProjectLobbyArtValidation` 断言。
 - **相关：** 新增 PNG 资源必须确认 `.meta` 含 `TextureImporter:` 与 `textureType: 8`；只有 `fileFormatVersion` + `guid` 的 60 字节 meta 是残缺的。
-- **勿混淆：** `CampVisualAssetCatalog` 里声明了路径不代表资源存在——`companion_tuantuan` / `companion_dror` / `mascot_gugugaga_premium` / `camp_panorama_premium` 至今没有产出。
+- **现网主视觉：** premium 吉祥物、团团、Dror 与营地建筑图集已于 2026-07-28 落盘；大厅全景优先 `camp_panorama_image2`，次级纸张页（章节/手记/图鉴/商店/结算/死亡/战绩/暂停/加载）走 `Image2ArtCatalog` 或 `CampVisualAssetCatalog` 的 Image 2 路径。路径写在目录里仍不等于能加载——必须同时有完整 `TextureImporter` `.meta`。
+- **勿混淆：** 伙伴缺失时返回 null（隐藏节点），不得回退成吉祥物立绘或占位圆。旧 premium 全景文件仍保留作资产，但运行时全景入口已切到 Image 2。
 
 ### UI 字形（UiGlyph）
 
@@ -196,8 +197,9 @@
 ### 跑道可视走廊（PlayableViewCorridor）
 
 - **意指：** 第三人称镜头与玩家之间的近场带内，程序化布景不得用大体块遮挡三车道与前方障碍预判；侧向装饰应落在护坡外（`|x| ≥ SceneryMinAbsX` = **8.5 m**，以代码常量为准），相机—玩家 Z 带内误入走廊的物体在 `AnimateScenery` 中淡出至低 alpha。
+- **中景带：** 第二排主题模型填近场道具与远山剪影之间的空带，落在护坡外更远一侧（约 13–16 m）。只做视觉，必须剥掉碰撞，不得挤进走廊。
 - **例外：** 贴在路面上的扁平细节（冰裂等）作为**路面瓦片的子物体**存在，随路滚动、随瓦片销毁，不注册进布景系统，也不受本走廊淡出约束。
-- **执行点：** `PenguinRunnerGame` 常量 `ViewCorridorHalfWidth`（约 **5.2 m**）、`SceneryLateralOffset`（布景随弯道 `WorldCurveX` 偏移）、`ApplyViewCorridorFade`（走廊内隐藏或极低 alpha）；天空浮云/光柱/侧向彩虹条、远山 `Distant Ice Ridge` 为高风险装饰。
+- **执行点：** `PenguinRunnerGame` 常量 `ViewCorridorHalfWidth`（约 **5.2 m**）、`SceneryLateralOffset`（布景随弯道 `WorldCurveX` 偏移）、`ApplyViewCorridorFade`（走廊内隐藏或极低 alpha）；天空浮云（`sky_cloud`，不贴地）/光柱/侧向彩虹条、远山 `Distant Ice Ridge` 为高风险装饰。主题套件（珊瑚、废墟、拱门等）走开源网格，不得再用大方块堆进走廊。
 - **勿混淆：** 玩法障碍与宽墙（`SegmentSpawner`）属碰撞实体，不在本走廊规则内。
 
 ### 画面构图基准（FramingReference）

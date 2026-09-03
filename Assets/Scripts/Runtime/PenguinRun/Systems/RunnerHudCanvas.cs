@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using PenguinRun.Game;
 using PenguinRun.Game.UI;
+using PenguinRun.Game.UI.Lobby;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -218,6 +219,7 @@ namespace PenguinRun
             var pauseRoot = UiBuilder.CreateRect("Paused", root, new Vector2(0.25f, 0.18f),
                 new Vector2(0.75f, 0.82f), Vector2.zero, Vector2.zero,
                 new Color(0.03f, 0.08f, 0.12f, 0.96f), rounded: true);
+            UiBuilder.AttachArtVignette("RunBackdrop", pauseRoot, CampVisualAssetCatalog.RunBackdrop, 0.14f);
             UiBuilder.AddOutline(pauseRoot.gameObject,
                 new Color(UiTheme.AccentCyan.r, UiTheme.AccentCyan.g, UiTheme.AccentCyan.b, 0.5f),
                 new Vector2(2f, -2f));

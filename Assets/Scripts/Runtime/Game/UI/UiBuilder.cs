@@ -27,8 +27,11 @@ namespace PenguinRun.Game.UI
         public static readonly Color AccentActive = UiTheme.PineGreen;
         /// <summary>次要强调色：柔和金色，用于奖励、货币。</summary>
         public static readonly Color WarmGold = UiTheme.CoralAction;
-        /// <summary>成功/已完成色。</summary>
-        public static readonly Color Success = UiTheme.Success;
+        /// <summary>
+        /// 成功/已完成色。旧别名指向霓虹绿 <c>UiTheme.Success</c>，在米黄纸面上会再冒出
+        /// 一截和 AccentCyan 同类的「工程占位色」。纸张层成功态与激活态同属松绿。
+        /// </summary>
+        public static readonly Color Success = UiTheme.PineGreen;
         /// <summary>警告/危险色。</summary>
         public static readonly Color Warning = UiTheme.Warning;
         /// <summary>错误/提示红色。</summary>
@@ -55,7 +58,11 @@ namespace PenguinRun.Game.UI
         // ── 文字色（Text Palette）─────────────────────────────────────────────
         public static readonly Color TextPrimary = UiTheme.InkPrimary;
         public static readonly Color TextSecondary = UiTheme.InkSecondary;
-        public static readonly Color TextTertiary = UiTheme.TextTertiary;
+        /// <summary>
+        /// 更弱一档的辅文。旧令牌是深色 HUD 用的浅灰蓝，压在纸面上接近看不见。
+        /// </summary>
+        public static readonly Color TextTertiary = new Color(
+            UiTheme.InkSecondary.r, UiTheme.InkSecondary.g, UiTheme.InkSecondary.b, 0.55f);
         /// <summary>反向文字色（用于亮色按钮上的文字）。</summary>
         public static readonly Color TextOnAccent = Color.white;
 
@@ -405,6 +412,27 @@ namespace PenguinRun.Game.UI
                 }
             }
             return rt;
+        }
+
+        /// <summary>
+        /// Low-alpha illustration wash. Missing art is omitted: the fallback chain
+        /// allows absence, not a placeholder circle or a blank white rectangle.
+        /// </summary>
+        public static Image AttachArtVignette(string name, Transform parent, Sprite sprite, float alpha,
+            Vector2? anchorMin = null, Vector2? anchorMax = null)
+        {
+            if (parent == null || sprite == null) return null;
+
+            var rect = CreateRect(name, parent,
+                anchorMin ?? Vector2.zero, anchorMax ?? Vector2.one,
+                Vector2.zero, Vector2.zero, Color.white);
+            var image = rect.GetComponent<Image>();
+            image.sprite = sprite;
+            image.preserveAspect = false;
+            image.color = new Color(1f, 1f, 1f, Mathf.Clamp01(alpha));
+            image.raycastTarget = false;
+            rect.SetAsFirstSibling();
+            return image;
         }
 
         public static RectTransform CreateTriangle(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 sizeDelta, Vector2 anchoredPosition, Color bg)

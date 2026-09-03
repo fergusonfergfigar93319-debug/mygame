@@ -55,6 +55,9 @@ namespace PenguinRun.Game.UI
                 r.NewBest ? new Color(UiTheme.CoralAction.r, UiTheme.CoralAction.g, UiTheme.CoralAction.b, 0.75f) : UiTheme.StitchBorder,
                 new Vector2(3f, -3f));
             UiBuilder.AddShadow(panel.gameObject, new Color(0f, 0f, 0f, 0.7f), new Vector2(0f, -10f));
+
+            UiBuilder.AttachArtVignette("ResultCelebrationArt", panel, Image2ArtCatalog.ResultCelebration,
+                r.NewBest ? 0.18f : 0.10f, new Vector2(0.04f, 0.54f), new Vector2(0.96f, 0.98f));
 #if DOTWEEN
             panel.transform.localScale = Vector3.one * 0.72f;
             panel.transform.DOScale(1f, 0.38f).SetEase(Ease.OutBack);

@@ -38,6 +38,7 @@ if (-not $SkipChecks) {
         'VerifyRunDepthPhase2.ps1',
         'VerifyLongTermGrowthPhase3.ps1',
         'VerifyPremiumStorybookHome.ps1',
+        'VerifyImage2Art.ps1',
         'VerifyCustomMapAssetsBatch1.ps1',
         'VerifyThemeMechanicsPhase4.ps1',
         'VerifyPlayerExperienceAudit.ps1'

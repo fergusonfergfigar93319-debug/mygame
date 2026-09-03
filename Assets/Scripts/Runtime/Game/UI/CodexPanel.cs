@@ -51,6 +51,8 @@ namespace PenguinRun.Game.UI
             progressContainer.pivot = new Vector2(0.5f, 1f);
             UiBuilder.AddOutline(progressContainer.gameObject, UiBuilder.BorderSubtle, new Vector2(1f, -1f));
 
+            UiBuilder.AttachArtVignette("CodexGalleryArt", progressContainer, Image2ArtCatalog.CodexGallery, 0.14f);
+
             // 左侧：进度文本
             progressText = UiBuilder.CreateText("ProgressText", progressContainer.transform,
                 string.Empty, 22, FontStyle.Bold,

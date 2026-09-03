@@ -249,28 +249,61 @@ namespace PenguinRun.Editor
                     yield return (NaturePropCatalog.IceLakeTree(1), 6.2f, 16f, Vector3.one * 1.2f);
                     yield return (NaturePropCatalog.IceLakeAccent(0), 5.8f, 20f, Vector3.one * 1.1f);
                     yield return (NaturePropCatalog.SnowPineLandmark(), -5.8f, 22f, Vector3.one * 1.15f);
+                    yield return (NaturePropCatalog.IceLakeFar(0), -8.4f, 26f, Vector3.one * 1.15f);
+                    yield return (NaturePropCatalog.IceLakeFar(1), 8.4f, 30f, Vector3.one);
+                    yield return (NaturePropCatalog.IceCrystal(1), -6.4f, 28f, Vector3.one);
+                    yield return (NaturePropCatalog.SnowBank(0), 6.6f, 32f, Vector3.one);
+                    yield return (NaturePropCatalog.SnowBank(1), -6.8f, 34f, Vector3.one);
+                    yield return (NaturePropCatalog.IceArch(), 6.4f, 36f, Vector3.one);
                     break;
                 case RunnerMapTheme.CedarRuins:
                     yield return (NaturePropCatalog.CedarTree(), -6.0f, 10f, Vector3.one * 1.25f);
                     yield return (NaturePropCatalog.CedarAccent(1), 5.6f, 15f, Vector3.one);
                     yield return (NaturePropCatalog.CedarAccent(2), -5.6f, 20f, Vector3.one);
                     yield return ("tent_detailedOpen", 5.8f, 13f, Vector3.one * 1.1f);
+                    yield return (NaturePropCatalog.CedarFar(0), -8.2f, 24f, Vector3.one * 1.15f);
+                    yield return (NaturePropCatalog.CedarFar(1), 8.2f, 28f, Vector3.one);
+                    yield return (NaturePropCatalog.CedarRuin(0), -5.8f, 32f, Vector3.one);
+                    yield return (NaturePropCatalog.CedarRuin(1), 5.8f, 34f, Vector3.one);
+                    yield return (NaturePropCatalog.CedarRuin(2), -5.4f, 36f, Vector3.one);
                     break;
                 case RunnerMapTheme.AuroraField:
                     yield return (NaturePropCatalog.AuroraTree(0), -6.0f, 10f, Vector3.one * 1.05f);
                     yield return (NaturePropCatalog.AuroraTree(1), 6.0f, 16f, Vector3.one * 1.05f);
                     yield return (NaturePropCatalog.AuroraAccent(0), 5.5f, 20f, Vector3.one * 1.4f);
+                    yield return (NaturePropCatalog.AuroraFar(0), -8.2f, 24f, Vector3.one * 1.05f);
+                    yield return (NaturePropCatalog.AuroraFar(1), 8.2f, 28f, Vector3.one * 1.05f);
+                    yield return (NaturePropCatalog.IceCrystal(0), 5.8f, 32f, Vector3.one);
+                    yield return (NaturePropCatalog.AuroraBeacon(0), -5.6f, 34f, Vector3.one);
+                    yield return (NaturePropCatalog.AuroraBeacon(1), 5.6f, 36f, Vector3.one);
                     break;
                 case RunnerMapTheme.MistDike:
                     yield return (NaturePropCatalog.MistAccentA(0), -5.8f, 10f, Vector3.one * 0.9f);
                     yield return (NaturePropCatalog.MistAccentA(1), 5.8f, 15f, Vector3.one * 1.3f);
                     yield return (NaturePropCatalog.MistAccentB(1), -5.8f, 20f, Vector3.one);
                     yield return (NaturePropCatalog.FogStoneLandmark(), 5.8f, 22f, Vector3.one * 1.3f);
+                    yield return (NaturePropCatalog.MistFar(0), -8.2f, 26f, Vector3.one);
+                    yield return (NaturePropCatalog.MistFar(1), 8.2f, 30f, Vector3.one);
+                    yield return (NaturePropCatalog.IceCrystal(1), -5.6f, 32f, Vector3.one);
+                    yield return (NaturePropCatalog.SnowBank(1), 6.0f, 34f, Vector3.one);
+                    yield return (NaturePropCatalog.MistVeil(0), -5.4f, 36f, Vector3.one);
+                    yield return (NaturePropCatalog.MistVeil(1), 5.4f, 38f, Vector3.one);
                     break;
                 case RunnerMapTheme.OceanReef:
                     yield return (NaturePropCatalog.OceanTree(), -6.0f, 10f, Vector3.one * 1.15f);
                     yield return ("canoe", 6.0f, 15f, Vector3.one * 1.15f);
                     yield return ("CubePets/cubepet_fish", 5.4f, 20f, Vector3.one);
+                    yield return (NaturePropCatalog.OceanFar(0), -8.2f, 24f, Vector3.one * 1.1f);
+                    yield return (NaturePropCatalog.OceanFar(1), 8.2f, 28f, Vector3.one);
+                    yield return (NaturePropCatalog.OceanWeed(0), -5.6f, 18f, Vector3.one);
+                    yield return (NaturePropCatalog.OceanWeed(1), 5.8f, 22f, Vector3.one);
+                    yield return (NaturePropCatalog.OceanWeed(2), -5.4f, 32f, Vector3.one);
+                    yield return (NaturePropCatalog.OceanShell(0), 5.2f, 30f, Vector3.one);
+                    yield return (NaturePropCatalog.OceanShell(1), -5.2f, 34f, Vector3.one);
+                    yield return (NaturePropCatalog.CoralReef(0), -5.8f, 36f, Vector3.one);
+                    yield return (NaturePropCatalog.CoralReef(1), 5.8f, 38f, Vector3.one);
+                    yield return (NaturePropCatalog.CoralReef(2), -5.2f, 40f, Vector3.one);
+                    yield return (NaturePropCatalog.TreasureChest(), 5.2f, 42f, Vector3.one);
                     break;
                 case RunnerMapTheme.SkyFlight:
                     // sky_cloud.glb does not always resolve via Resources.Load in batch; use FBX roadside set.
@@ -278,6 +311,10 @@ namespace PenguinRun.Editor
                     yield return ("crate_strong", 6.2f, 15f, Vector3.one);
                     yield return (NaturePropCatalog.SkyAccent(0), 5.6f, 20f, Vector3.one);
                     yield return (NaturePropCatalog.SkyAccent(1), -5.6f, 22f, Vector3.one);
+                    yield return (NaturePropCatalog.SkyFar(0), -8.2f, 26f, Vector3.one);
+                    yield return (NaturePropCatalog.SkyFar(1), 8.2f, 30f, Vector3.one);
+                    yield return (NaturePropCatalog.SkyArch(0), -5.6f, 32f, Vector3.one);
+                    yield return (NaturePropCatalog.SkyArch(1), 5.6f, 34f, Vector3.one);
                     break;
             }
         }

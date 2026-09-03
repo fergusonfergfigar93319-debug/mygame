@@ -35,13 +35,35 @@ Require-Match $avatarCs 'landSquashTimer' 'CubePet has landing squash'
 $gameCs = Require-File 'Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs'
 Require-Match $gameCs 'CubePetPenguinCharacter\.TryCreate' 'runner prefers CubePet protagonist'
 Require-Match $gameCs 'NaturePropCatalog\.' 'runner uses NaturePropCatalog'
-Require-Match $gameCs 'RegisterSceneryProp\(go,\s*x,\s*z\)' 'open nature props register for track align'
+Require-Match $gameCs 'ThemeRoadsideDressing\.PlaceFarBelt' 'runner places the mid-ground far belt'
+Require-Match $gameCs 'RegisterSceneryProp\(go,\s*x,\s*z,\s*snapToGround\)' 'open nature props register for track align'
 Require-Match $gameCs 'NaturePropCatalog\.ApplyScale' 'open nature props apply pack scale'
 Require-Match $gameCs 'prop_flag' 'Sky uses flag prop'
 Require-Match $gameCs 'tent_detailedOpen' 'Cedar uses camp tent'
 Require-Match $gameCs 'canoe' 'Ocean uses canoe prop'
 Require-Match $gameCs 'sky_cloud' 'Sky uses cloud prop'
 Require-Match $gameCs 'GetComponentsInChildren<Collider>' 'open props strip colliders'
+Require-Match $gameCs 'EnvironmentPropId\.Light' 'cube lamps replaced by theme light sculptures'
+Require-Match $gameCs 'EnvironmentPropId\.Signpost' 'cube flags replaced by theme signpost sculptures'
+Require-Match $gameCs 'NaturePropCatalog\.IceCrystal' 'crystals use catalog models'
+Require-Match $gameCs 'NaturePropCatalog\.SnowBank' 'snow banks use catalog models'
+Require-Match $gameCs 'NaturePropCatalog\.OceanWeed' 'seaweed uses catalog models'
+Require-Match $gameCs 'NaturePropCatalog\.OceanShell' 'seashells use catalog models'
+Require-Match $gameCs 'NaturePropCatalog\.CoralReef' 'coral set pieces use catalog models'
+Require-Match $gameCs 'NaturePropCatalog\.TreasureChest' 'chests use catalog models'
+Require-Match $gameCs 'NaturePropCatalog\.CedarRuin' 'cedar ruins use catalog models'
+Require-Match $gameCs 'NaturePropCatalog\.AuroraBeacon' 'aurora beacons use catalog models'
+Require-Match $gameCs 'NaturePropCatalog\.IceArch' 'ice arches use catalog models'
+Require-Match $gameCs 'NaturePropCatalog\.SkyArch' 'sky arches use catalog models'
+Require-Match $gameCs 'NaturePropCatalog\.MistVeil' 'mist veils use catalog models'
+Require-Match $gameCs 'NaturePropCatalog\.SkyCloud' 'floating clouds use sky_cloud'
+Require-Match $gameCs 'bool snapToGround' 'open props can spawn off the ground'
+if ($gameCs -match 'AddLampGroup|AddBannerFlag|Warm Track Lamp|Penguin Run Banner|Seaweed Cluster|Aurora Crystal Cluster') {
+    $failures.Add('runner still builds cube lamp/flag/weed/crystal placeholders')
+}
+if ($gameCs -match 'Coral Stalk|Chest Base|Broken Cedar Post|Beacon Crystal|Low Fog Veil|Arch Pillar|Cloud Main|Floating Stone') {
+    $failures.Add('runner still builds cube theme set-piece placeholders')
+}
 
 $catalogCs = Require-File 'Assets/Scripts/Runtime/PenguinRun/Visuals/NaturePropCatalog.cs'
 Require-Match $catalogCs 'class\s+NaturePropCatalog' 'NaturePropCatalog type'
@@ -53,6 +75,29 @@ Require-Match $catalogCs 'vendor_sn/Pine_1' 'catalog Cedar stylized pine'
 Require-Match $catalogCs 'vendor_un_PalmTree_1' 'catalog Ocean palm'
 Require-Match $catalogCs 'vendor_un_Rock_1' 'catalog Sky rock accent'
 Require-Match $catalogCs 'ScaleFor' 'catalog pack scale multipliers'
+Require-Match $catalogCs 'IceLakeFar' 'catalog IceLake far-belt models'
+Require-Match $catalogCs 'CedarFar' 'catalog Cedar far-belt models'
+Require-Match $catalogCs 'AuroraFar' 'catalog Aurora far-belt models'
+Require-Match $catalogCs 'MistFar' 'catalog Mist far-belt models'
+Require-Match $catalogCs 'OceanFar' 'catalog Ocean far-belt models'
+Require-Match $catalogCs 'SkyFar' 'catalog Sky far-belt models'
+Require-Match $catalogCs 'IceCrystal' 'catalog ice crystal models'
+Require-Match $catalogCs 'SnowBank' 'catalog snow bank models'
+Require-Match $catalogCs 'OceanWeed' 'catalog ocean weed models'
+Require-Match $catalogCs 'OceanShell' 'catalog ocean shell models'
+Require-Match $catalogCs 'CoralReef' 'catalog coral reef models'
+Require-Match $catalogCs 'TreasureChest' 'catalog treasure chest model'
+Require-Match $catalogCs 'CedarRuin' 'catalog cedar ruin models'
+Require-Match $catalogCs 'AuroraBeacon' 'catalog aurora beacon models'
+Require-Match $catalogCs 'IceArch' 'catalog ice arch model'
+Require-Match $catalogCs 'SkyArch' 'catalog sky arch models'
+Require-Match $catalogCs 'MistVeil' 'catalog mist veil models'
+Require-Match $catalogCs 'SkyCloud' 'catalog sky cloud model'
+
+$dressingCs = Require-File 'Assets/Scripts/Runtime/PenguinRun/Visuals/ThemeRoadsideDressing.cs'
+Require-Match $dressingCs 'class\s+ThemeRoadsideDressing' 'ThemeRoadsideDressing type'
+Require-Match $dressingCs 'PlaceFarBelt' 'far belt placement entry'
+Require-Match $dressingCs 'MinAbsX\s*=\s*13\.2f' 'far belt stays outside the 8.5m corridor'
 
 $fbxModels = @(
     'tent_detailedOpen','canoe','prop_flag','crate_strong',
@@ -67,9 +112,23 @@ foreach ($name in $fbxModels) {
     Require-Match $meta 'ModelImporter:' "$name meta has ModelImporter"
 }
 
-$snModels = @('Pine_1','Bush_Common','Flower_3_Group','Mushroom_Common','DeadTree_1')
+$snModels = @('Pine_1','Bush_Common','Flower_3_Group','Mushroom_Common','DeadTree_1','Rock_Medium_1','Plant_1_Big','Fern_1','Grass_Common_Tall','Mushroom_Laetiporus','Bush_Common_Flowers')
 foreach ($name in $snModels) {
     Require-File "Assets/Resources/PenguinRun/Models/vendor_sn/$name.fbx" | Out-Null
+}
+
+$farModels = @('tree_pine_snow_small','block_snow_large','log_large','tree_palmTall','cliff_block_rock',
+    'vendor_un_Willow_Autumn_1','vendor_un_Willow_Dead_1','vendor_un_CommonTree_Autumn_1',
+    'vendor_Tree_2_A_Color1','vendor_Tree_3_A_Color1')
+foreach ($name in $farModels) {
+    Require-File "Assets/Resources/PenguinRun/Models/$name.fbx" | Out-Null
+}
+
+$swapModels = @('stone_tallA','block_snow','block_snow_hexagon','flower_yellowA','vendor_un_Lilypad','vendor_Grass_2_A_Color1',
+    'mushroom_redTall','mushroom_tanGroup','log_single','campfire_stones','cliff_half_stone','cliff_block_stone',
+    'prop_crate','rock_tallA','vendor_un_WoodLog_Moss','vendor_un_BushBerries_1','vendor_un_Flowers','vendor_Bush_4_A_Color1')
+foreach ($name in $swapModels) {
+    Require-File "Assets/Resources/PenguinRun/Models/$name.fbx" | Out-Null
 }
 
 Require-File 'Assets/Resources/PenguinRun/Models/kaykit_forest_texture.png' | Out-Null
@@ -108,6 +167,9 @@ $preview = Require-File 'Assets/Scripts/Editor/PenguinRun/ProjectOpenNaturePrevi
 Require-Match $preview 'ProjectOpenNaturePreviewCapture' 'open nature preview capture exists'
 Require-Match $preview 'CaptureAllFromCommandLine' 'open nature preview has CLI entry'
 Require-Match $preview 'NaturePropCatalog' 'open nature preview uses NaturePropCatalog'
+Require-Match $preview 'IceLakeFar|CedarFar|AuroraFar|MistFar|OceanFar|SkyFar' 'open nature preview covers far-belt models'
+Require-Match $preview 'IceCrystal|SnowBank|OceanWeed|OceanShell' 'open nature preview covers cube-swap models'
+Require-Match $preview 'CoralReef|CedarRuin|AuroraBeacon|IceArch|SkyArch|MistVeil' 'open nature preview covers theme set-piece models'
 Require-Match $preview 'RenderTexture' 'open nature preview uses RenderTexture path'
 
 $dock = Require-File 'Assets/Scripts/Runtime/Game/UI/Lobby/LobbyDock.cs'

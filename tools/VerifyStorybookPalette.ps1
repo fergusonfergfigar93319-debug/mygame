@@ -38,6 +38,10 @@ $banned = @(
        Label   = 'legacy dark surface (use the UiBuilder.Surface* aliases)' }
     @{ Pattern = 'UiTheme\.TextPrimary|UiTheme\.TextSecondary';
        Label   = 'legacy light-on-dark text (use UiBuilder.TextPrimary/TextSecondary)' }
+    @{ Pattern = 'UiTheme\.TextTertiary';
+       Label   = 'legacy light-on-dark tertiary (use UiBuilder.TextTertiary)' }
+    @{ Pattern = 'UiTheme\.Success';
+       Label   = 'legacy neon success (use UiBuilder.Success)' }
 )
 
 foreach ($file in Get-ChildItem -LiteralPath $paperLayer -Recurse -Filter '*.cs') {
@@ -59,6 +63,10 @@ function Require-Pattern([string]$relativePath, [string]$pattern, [string]$label
 
 $uiBuilder = 'Assets/Scripts/Runtime/Game/UI/UiBuilder.cs'
 Require-Pattern $uiBuilder 'AccentActive\s*=\s*UiTheme\.PineGreen' 'active accent is a storybook token'
+Require-Pattern $uiBuilder 'Success\s*=\s*UiTheme\.PineGreen' 'success accent is a storybook token'
+if ((Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $ProjectRoot $uiBuilder)) -match 'TextTertiary\s*=\s*UiTheme\.TextTertiary') {
+    $failures.Add('UiBuilder.TextTertiary still points at the legacy light-on-dark token')
+}
 # The post-run screens must speak the same CTA language as the lobby dock.
 Require-Pattern $uiBuilder 'CreateButton\(name, parent, label, UiTheme\.CoralAction' 'primary CTA uses the lobby coral'
 Require-Pattern $uiBuilder 'CreateButton\(name, parent, label, UiTheme\.MistBlue' 'secondary button sits on paper'

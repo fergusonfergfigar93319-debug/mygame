@@ -1031,16 +1031,16 @@ namespace PenguinRun
             for (var i = 0; i < 8; i++)
             {
                 var z = 10f + i * 15f;
-                AddLampGroup(-8.8f, z);
-                AddLampGroup(8.8f, z + 7.5f);
+                AddCustomEnvironmentProp(theme, EnvironmentPropId.Light, -8.8f, z, 0.92f);
+                AddCustomEnvironmentProp(theme, EnvironmentPropId.Light, 8.8f, z + 7.5f, 0.88f);
                 if (i % 2 == 1)
                 {
                     AddCheckpointGate(z + 4f);
                 }
 
                 // 旗帜放护坡外（SceneryMinAbsX=8.5），不再侵入可视走廊被淡出。
-                AddBannerFlag(-8.6f, z + 3.2f, true);
-                AddBannerFlag(8.6f, z + 10.2f, false);
+                AddCustomEnvironmentProp(theme, EnvironmentPropId.Signpost, -8.6f, z + 3.2f, 0.9f);
+                AddCustomEnvironmentProp(theme, EnvironmentPropId.Signpost, 8.6f, z + 10.2f, 0.9f);
                 if (wantCrystals)
                 {
                     AddCrystalCluster(-8.6f - Random.Range(0f, 1.1f), z + Random.Range(1f, 7f));
@@ -1053,6 +1053,7 @@ namespace PenguinRun
                 }
                 AddThemeSetPiece(theme, z, i);
             }
+            ThemeRoadsideDressing.PlaceFarBelt(theme, AddOpenNatureProp);
 
             // 远山剪影配色随主题走：雪松暮紫、海洋礁蓝、天空云白，不再六图共用冰蓝。
             var (ridgeBody, ridgeCap) = theme switch
@@ -1191,17 +1192,10 @@ namespace PenguinRun
             }
         }
 
-        /// <summary>冰拱地标：两根冰柱 + 横梁。此前回退成一条 2.8m 冰裂，作为路边地标完全不可读。</summary>
+        /// <summary>冰拱地标：半崖石块。此前回退成一条 2.8m 冰裂，作为路边地标完全不可读。</summary>
         private void AddIceArchLandmark(float x, float z)
         {
-            var group = new GameObject("Ice Arch Landmark");
-            group.transform.position = new Vector3(x, 0f, z);
-            var ice = new Color(0.55f, 0.85f, 1f, 0.8f);
-            AddChildPrimitive(group.transform, "Arch Pillar L", PrimitiveType.Cube, new Vector3(-1.1f, 1.1f, 0f), new Vector3(0.42f, 2.2f, 0.42f), ice, true);
-            AddChildPrimitive(group.transform, "Arch Pillar R", PrimitiveType.Cube, new Vector3(1.1f, 1.1f, 0f), new Vector3(0.42f, 2.2f, 0.42f), ice, true);
-            var lintel = AddChildPrimitive(group.transform, "Arch Lintel", PrimitiveType.Cube, new Vector3(0f, 2.35f, 0f), new Vector3(2.9f, 0.4f, 0.5f), new Color(0.7f, 0.94f, 1f, 0.85f), true);
-            lintel.transform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-4f, 4f));
-            RegisterSceneryProp(group, x, z);
+            AddOpenNatureProp(NaturePropCatalog.IceArch(), x, z, Vector3.one, new Color(0.55f, 0.85f, 1f));
         }
 
         private void AddIceCrack(Transform tile, float x, float z, float length)
@@ -1217,27 +1211,14 @@ namespace PenguinRun
 
         private void AddSeaweedCluster(float x, float z)
         {
-            var group = new GameObject("Seaweed Cluster");
-            group.transform.position = new Vector3(x, 0f, z);
-            for (var i = 0; i < 3; i++)
-            {
-                var height = 0.4f + Random.value * 0.6f;
-                var seaweed = AddChildPrimitive(group.transform, "Seaweed", PrimitiveType.Cube,
-                    new Vector3((i - 1) * 0.15f + Random.Range(-0.05f, 0.05f), height * 0.5f, Random.Range(-0.1f, 0.1f)),
-                    new Vector3(0.08f, height, 0.08f),
-                    new Color(0.15f, 0.65f + Random.value * 0.2f, 0.35f));
-                seaweed.transform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-15f, 15f));
-            }
-            AddSceneryProp(group);
+            AddOpenNatureProp(NaturePropCatalog.OceanWeed(Mathf.RoundToInt(Mathf.Abs(x + z))),
+                x, z, Vector3.one, new Color(0.22f, 0.72f, 0.48f));
         }
 
         private void AddSeashell(float x, float z)
         {
-            var group = new GameObject("Seashell");
-            group.transform.position = new Vector3(x, 0.02f, z);
-            AddChildPrimitive(group.transform, "Shell Base", PrimitiveType.Sphere, Vector3.zero, new Vector3(0.18f, 0.08f, 0.15f), new Color(0.95f, 0.85f, 0.78f));
-            AddChildPrimitive(group.transform, "Shell Glow", PrimitiveType.Cube, new Vector3(0f, 0.06f, 0.02f), new Vector3(0.06f, 0.02f, 0.08f), new Color(0.3f, 0.9f, 1f, 0.6f), true);
-            AddSceneryProp(group);
+            AddOpenNatureProp(NaturePropCatalog.OceanShell(Mathf.RoundToInt(Mathf.Abs(z))),
+                x, z, Vector3.one, new Color(0.95f, 0.78f, 0.62f));
         }
 
         private void AddBubbleStream(float x, float z)
@@ -1257,14 +1238,9 @@ namespace PenguinRun
 
         private void AddFloatingCloud(float x, float z, float scale)
         {
-            var group = new GameObject("Floating Cloud");
-            x = ClampScenerySideX(x);
-            var y = 7.5f + Random.value * 2.5f;
-            group.transform.position = new Vector3(x, y, z);
-            AddChildPrimitive(group.transform, "Cloud Main", PrimitiveType.Sphere, Vector3.zero, new Vector3(1.2f, 0.6f, 0.8f) * scale, new Color(1f, 1f, 1f, 0.45f), true);
-            AddChildPrimitive(group.transform, "Cloud Puff L", PrimitiveType.Sphere, new Vector3(-0.42f, 0.1f, 0f) * scale, new Vector3(0.55f, 0.4f, 0.5f) * scale, new Color(1f, 1f, 1f, 0.38f), true);
-            AddChildPrimitive(group.transform, "Cloud Puff R", PrimitiveType.Sphere, new Vector3(0.42f, 0.12f, 0.08f) * scale, new Vector3(0.5f, 0.38f, 0.48f) * scale, new Color(1f, 1f, 1f, 0.4f), true);
-            RegisterSceneryProp(group, x, z, snapToGround: false);
+            AddOpenNatureProp(NaturePropCatalog.SkyCloud(), ClampScenerySideX(x), z,
+                Vector3.one * Mathf.Max(0.55f, scale), new Color(0.92f, 0.96f, 1f),
+                7.6f + Random.value * 2.4f, false);
         }
 
         private void AddSunlightBeam(float x, float z)
@@ -1284,49 +1260,10 @@ namespace PenguinRun
             RegisterSceneryProp(bird, x, z, snapToGround: false);
         }
 
-        private void AddLampGroup(float x, float z)
-        {
-            var group = new GameObject("Warm Track Lamp");
-            group.transform.position = new Vector3(x, 0f, z);
-            var pole = RunnerVisuals.CreatePrimitive("Lamp Pole", PrimitiveType.Cylinder, group.transform.position + new Vector3(0f, 0.65f, 0f), new Vector3(0.08f, 0.65f, 0.08f), new Color(0.12f, 0.24f, 0.32f));
-            var lightBall = RunnerVisuals.CreatePrimitive("Lamp Glow", PrimitiveType.Sphere, group.transform.position + new Vector3(0f, 1.42f, 0f), Vector3.one * 0.28f, new Color(1f, 0.82f, 0.45f, 0.42f), true);
-            var lightHalo = RunnerVisuals.CreatePrimitive("Lamp Soft Halo", PrimitiveType.Sphere, group.transform.position + new Vector3(0f, 1.42f, 0f), Vector3.one * 0.34f, new Color(1f, 0.7f, 0.32f, 0.08f), true);
-            pole.transform.SetParent(group.transform, true);
-            lightBall.transform.SetParent(group.transform, true);
-            lightHalo.transform.SetParent(group.transform, true);
-            RegisterSceneryProp(group, x, z);
-        }
-
-        private void AddBannerFlag(float x, float z, bool leftSide)
-        {
-            var group = new GameObject("Penguin Run Banner");
-            group.transform.position = new Vector3(x, 0f, z);
-            AddChildPrimitive(group.transform, "Banner Pole", PrimitiveType.Cylinder, new Vector3(0f, 0.76f, 0f), new Vector3(0.06f, 0.76f, 0.06f), new Color(0.16f, 0.28f, 0.36f));
-            var flag = AddChildPrimitive(group.transform, "Blue Snow Flag", PrimitiveType.Cube, new Vector3(leftSide ? -0.28f : 0.28f, 1.36f, 0f), new Vector3(0.56f, 0.28f, 0.035f), new Color(0.05f, 0.48f, 0.9f));
-            flag.transform.localRotation = Quaternion.Euler(0f, 0f, leftSide ? -5f : 5f);
-            AddChildPrimitive(flag.transform, "Flag Highlight", PrimitiveType.Cube, new Vector3(0f, 0.16f, -0.03f), new Vector3(0.92f, 0.16f, 0.5f), new Color(0.48f, 0.88f, 1f, 0.38f), true);
-            AddSceneryProp(group);
-        }
-
         private void AddCrystalCluster(float x, float z)
         {
-            var group = new GameObject("Aurora Crystal Cluster");
-            group.transform.position = new Vector3(x, 0f, z);
-            for (var i = 0; i < 3; i++)
-            {
-                var height = 0.65f + Random.value * 0.75f;
-                var crystal = AddChildPrimitive(
-                    group.transform,
-                    "Blue Ice Crystal",
-                    PrimitiveType.Cube,
-                    new Vector3((i - 1) * 0.26f, height * 0.42f, Random.Range(-0.12f, 0.12f)),
-                    new Vector3(0.18f, height, 0.18f),
-                    i == 1 ? new Color(0.34f, 0.92f, 1f, 0.72f) : new Color(0.54f, 0.7f, 1f, 0.64f),
-                    true);
-                crystal.transform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-16f, 16f));
-            }
-
-            AddSceneryProp(group);
+            AddOpenNatureProp(NaturePropCatalog.IceCrystal(Mathf.RoundToInt(Mathf.Abs(x + z))),
+                x, z, Vector3.one, new Color(0.45f, 0.85f, 1f));
         }
 
         private void AddThemeSetPiece(RunnerMapTheme theme, float z, int index)
@@ -1387,7 +1324,7 @@ namespace PenguinRun
                     AddSkyArch(8.0f, z + 9.5f, index + 1);
                     if (index % 3 == 0)
                         AddRainbow(z + 26f);
-                    AddOpenNatureProp(index % 2 == 0 ? "prop_flag" : "sky_cloud",
+                    AddOpenNatureProp(index % 2 == 0 ? "prop_flag" : NaturePropCatalog.SkyCloud(),
                         index % 2 == 0 ? -11.2f : 11.2f, z + 5.8f,
                         new Vector3(0.95f, 0.95f, 0.95f), new Color(0.82f, 0.9f, 1f));
                     AddOpenNatureProp(NaturePropCatalog.SkyAccent(index), index % 2 == 0 ? 9.6f : -9.6f, z + 15f, Vector3.one, new Color(0.86f, 0.7f, 0.5f));
@@ -1468,72 +1405,17 @@ namespace PenguinRun
 
         private void AddCoralReef(float x, float z, int index)
         {
-            var group = new GameObject("Coral Reef Set");
-            group.transform.position = new Vector3(x, 0f, z);
-            var side = x < 0f ? -1f : 1f;
-            // 主珊瑚柱
-            AddChildPrimitive(group.transform, "Coral Stalk", PrimitiveType.Cylinder, new Vector3(0f, 1.0f, 0f), new Vector3(0.55f, 1.0f, 0.55f), new Color(1f, 0.45f, 0.55f));
-            // 珊瑚分支
-            for (var i = 0; i < 3; i++)
-            {
-                var branch = AddChildPrimitive(group.transform, $"Coral Branch {i}", PrimitiveType.Cylinder,
-                    new Vector3(side * (0.3f + i * 0.15f), 1.5f + i * 0.25f, Mathf.Sin(i * 1.7f) * 0.2f),
-                    new Vector3(0.32f, 0.4f, 0.32f),
-                    Color.Lerp(new Color(1f, 0.4f, 0.5f), new Color(1f, 0.7f, 0.75f), i / 3f));
-                branch.transform.localRotation = Quaternion.Euler(20f * side, 0f, side * 35f);
-            }
-            // 顶部珊瑚簇
-            AddChildPrimitive(group.transform, "Coral Bloom", PrimitiveType.Sphere, new Vector3(0f, 2.1f, 0f), new Vector3(0.55f, 0.4f, 0.55f), new Color(1f, 0.6f, 0.7f));
-            // 海星点缀
-            if (index % 2 == 0)
-            {
-                var starfish = AddChildPrimitive(group.transform, "Starfish", PrimitiveType.Cube, new Vector3(side * 0.6f, 0.1f, 0.4f), new Vector3(0.35f, 0.04f, 0.35f), new Color(1f, 0.65f, 0.3f));
-                starfish.transform.localRotation = Quaternion.Euler(0f, 30f * index, 0f);
-            }
-            // 海葵触手
-            for (var i = 0; i < 5; i++)
-            {
-                var ang = i * 72f * Mathf.Deg2Rad;
-                var tentacle = AddChildPrimitive(group.transform, $"Anemone {i}", PrimitiveType.Capsule,
-                    new Vector3(Mathf.Cos(ang) * 0.18f, 0.4f, Mathf.Sin(ang) * 0.18f),
-                    new Vector3(0.08f, 0.3f, 0.08f),
-                    new Color(0.65f, 0.85f, 1f, 0.85f), true);
-                tentacle.transform.localRotation = Quaternion.Euler(15f, 0f, 0f);
-            }
-            AddSceneryProp(group);
+            AddOpenNatureProp(NaturePropCatalog.CoralReef(index), x, z, Vector3.one, new Color(1f, 0.5f, 0.58f));
         }
 
         private void AddTreasureChest(float x, float z)
         {
-            var group = new GameObject("Treasure Chest");
-            group.transform.position = new Vector3(x, 0f, z);
-            AddChildPrimitive(group.transform, "Chest Base", PrimitiveType.Cube, new Vector3(0f, 0.18f, 0f), new Vector3(0.55f, 0.36f, 0.4f), new Color(0.45f, 0.28f, 0.16f));
-            AddChildPrimitive(group.transform, "Chest Lid", PrimitiveType.Cube, new Vector3(0f, 0.42f, -0.15f), new Vector3(0.55f, 0.18f, 0.18f), new Color(0.55f, 0.35f, 0.2f));
-            AddChildPrimitive(group.transform, "Chest Lock", PrimitiveType.Cube, new Vector3(0f, 0.32f, 0.22f), new Vector3(0.1f, 0.12f, 0.05f), new Color(1f, 0.85f, 0.3f));
-            AddChildPrimitive(group.transform, "Chest Glow", PrimitiveType.Sphere, new Vector3(0f, 0.55f, 0f), Vector3.one * 0.3f, new Color(1f, 0.85f, 0.3f, 0.55f), true);
-            AddSceneryProp(group);
+            AddOpenNatureProp(NaturePropCatalog.TreasureChest(), x, z, Vector3.one, new Color(0.72f, 0.5f, 0.28f));
         }
 
         private void AddSkyArch(float x, float z, int index)
         {
-            var group = new GameObject("Sky Arch Set");
-            group.transform.position = new Vector3(x, 0f, z);
-            // 浮空云石平台
-            AddChildPrimitive(group.transform, "Floating Stone", PrimitiveType.Cube, new Vector3(0f, 1.5f, 0f), new Vector3(1.4f, 0.45f, 1.2f), new Color(0.65f, 0.7f, 0.8f));
-            AddChildPrimitive(group.transform, "Stone Cloud Halo", PrimitiveType.Sphere, new Vector3(0f, 1.3f, 0f), new Vector3(1.2f, 0.35f, 1f), new Color(1f, 1f, 1f, 0.28f), true);
-            // 拱门
-            for (var i = 0; i < 5; i++)
-            {
-                var ang = (i / 4f) * Mathf.PI;
-                var arch = AddChildPrimitive(group.transform, $"Arch {i}", PrimitiveType.Cube,
-                    new Vector3(Mathf.Sin(ang) * 0.85f, 1.85f + Mathf.Cos(ang) * 0.85f, 0f),
-                    new Vector3(0.18f, 0.4f, 0.18f),
-                    new Color(0.95f, 0.78f, 0.45f));
-                arch.transform.localRotation = Quaternion.Euler(0f, 0f, -ang * Mathf.Rad2Deg);
-            }
-            // 顶部光球
-            AddChildPrimitive(group.transform, "Arch Beacon", PrimitiveType.Sphere, new Vector3(0f, 2.7f, 0f), Vector3.one * 0.32f, new Color(1f, 0.95f, 0.55f, 0.85f), true);
-            RegisterSceneryProp(group, x, z);
+            AddOpenNatureProp(NaturePropCatalog.SkyArch(index), x, z, Vector3.one, new Color(0.65f, 0.7f, 0.8f));
         }
 
         private void AddRainbow(float z)
@@ -1572,46 +1454,17 @@ namespace PenguinRun
 
         private void AddCedarRuin(float x, float z, int index)
         {
-            var group = new GameObject("Cedar Ruin Set");
-            group.transform.position = new Vector3(x, 0f, z);
-            var side = x < 0f ? -1f : 1f;
-            AddChildPrimitive(group.transform, "Broken Cedar Post", PrimitiveType.Cube, new Vector3(0f, 0.82f, 0f), new Vector3(0.34f, 1.64f, 0.34f), new Color(0.36f, 0.24f, 0.16f));
-            var beam = AddChildPrimitive(group.transform, "Fallen Cedar Beam", PrimitiveType.Cube, new Vector3(-side * 0.42f, 0.42f, 0.48f), new Vector3(1.55f, 0.22f, 0.24f), new Color(0.48f, 0.34f, 0.22f));
-            beam.transform.localRotation = Quaternion.Euler(0f, side * 16f, side * (index % 2 == 0 ? -12f : 8f));
-            AddChildPrimitive(group.transform, "Snow On Beam", PrimitiveType.Cube, new Vector3(-side * 0.42f, 0.58f, 0.48f), new Vector3(1.38f, 0.08f, 0.2f), new Color(0.82f, 0.9f, 0.9f));
-            AddSceneryProp(group);
+            AddOpenNatureProp(NaturePropCatalog.CedarRuin(index), x, z, Vector3.one, new Color(0.48f, 0.34f, 0.22f));
         }
 
         private void AddAuroraBeacon(float x, float z, int index)
         {
-            var group = new GameObject("Aurora Beacon Set");
-            group.transform.position = new Vector3(x, 0f, z);
-            var core = AddChildPrimitive(group.transform, "Beacon Crystal", PrimitiveType.Cube, new Vector3(0f, 0.9f, 0f), new Vector3(0.42f, 1.8f, 0.42f), new Color(0.46f, 0.92f, 1f, 0.7f), true);
-            core.transform.localRotation = Quaternion.Euler(0f, 28f + index * 11f, 0f);
-            AddChildPrimitive(group.transform, "Beacon Halo", PrimitiveType.Cylinder, new Vector3(0f, 1.15f, 0f), new Vector3(1.8f, 0.04f, 1.8f), new Color(0.46f, 0.28f, 1f, 0.18f), true);
-            AddChildPrimitive(group.transform, "Beacon Foot Glow", PrimitiveType.Sphere, new Vector3(0f, 0.2f, 0f), new Vector3(1.6f, 0.34f, 1.6f), new Color(0.18f, 1f, 0.78f, 0.14f), true);
-            AddSceneryProp(group);
+            AddOpenNatureProp(NaturePropCatalog.AuroraBeacon(index), x, z, Vector3.one, new Color(0.46f, 0.92f, 1f));
         }
 
         private void AddMistVeil(float x, float z, int index)
         {
-            var group = new GameObject("Mist Veil Set");
-            group.transform.position = new Vector3(x, 0f, z);
-            for (var i = 0; i < 3; i++)
-            {
-                var veil = AddChildPrimitive(
-                    group.transform,
-                    "Low Fog Veil",
-                    PrimitiveType.Cube,
-                    new Vector3((i - 1) * 0.52f, 0.55f + i * 0.08f, i * 0.34f),
-                    new Vector3(1.2f, 0.42f, 0.08f),
-                    new Color(0.72f, 0.84f, 0.9f, 0.16f),
-                    true);
-                veil.transform.localRotation = Quaternion.Euler(0f, index * 9f + i * 14f, 0f);
-            }
-
-            AddChildPrimitive(group.transform, "Dike Marker", PrimitiveType.Cylinder, new Vector3(0f, 0.48f, -0.52f), new Vector3(0.16f, 0.48f, 0.16f), new Color(0.28f, 0.36f, 0.42f));
-            AddSceneryProp(group);
+            AddOpenNatureProp(NaturePropCatalog.MistVeil(index), x, z, Vector3.one, new Color(0.72f, 0.84f, 0.9f));
         }
 
         private void AddCheckpointGate(float z)
@@ -1645,7 +1498,11 @@ namespace PenguinRun
             return tex;
         }
 
-        private void AddOpenNatureProp(string modelName, float x, float z, Vector3 scale, Color tint)
+        private void AddOpenNatureProp(string modelName, float x, float z, Vector3 scale, Color tint) =>
+            AddOpenNatureProp(modelName, x, z, scale, tint, 0f, true);
+
+        private void AddOpenNatureProp(string modelName, float x, float z, Vector3 scale, Color tint,
+            float y, bool snapToGround)
         {
             var prefab = LoadModelPrefab(modelName);
             if (prefab == null)
@@ -1656,7 +1513,7 @@ namespace PenguinRun
             x = ClampScenerySideX(x);
             var go = Object.Instantiate(prefab);
             go.name = $"OpenModel_{modelName}";
-            go.transform.position = new Vector3(x, 0f, z);
+            go.transform.position = new Vector3(x, y, z);
             go.transform.localScale = NaturePropCatalog.ApplyScale(modelName, scale);
             go.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
             foreach (var collider in go.GetComponentsInChildren<Collider>(true))
@@ -1679,7 +1536,7 @@ namespace PenguinRun
                 }
             }
 
-            RegisterSceneryProp(go, x, z);
+            RegisterSceneryProp(go, x, z, snapToGround);
         }
 
         private GameObject LoadModelPrefab(string modelName)
@@ -1714,24 +1571,8 @@ namespace PenguinRun
 
         private void AddSnowBankGroup(float x, float z)
         {
-            var group = new GameObject("Snow Bank");
-            group.transform.position = new Vector3(x, 0f, z);
-            var baseSize = Random.Range(0.8f, 1.7f);
-            for (var i = 0; i < 3; i++)
-            {
-                var snow = RunnerVisuals.CreatePrimitive(
-                    "Snow Lump",
-                    PrimitiveType.Sphere,
-                    group.transform.position + new Vector3((i - 1) * baseSize * 0.42f, 0.08f + i * 0.03f, Random.Range(-0.25f, 0.25f)),
-                    new Vector3(baseSize, 0.34f + i * 0.05f, baseSize * 0.8f),
-                    new Color(0.86f, 0.96f, 1f));
-                snow.transform.SetParent(group.transform, true);
-            }
-
-            var sparkle = AddChildPrimitive(group.transform, "Snow Sparkle", PrimitiveType.Cube, new Vector3(0.15f, 0.38f, -0.18f), new Vector3(0.08f, 0.08f, 0.08f), new Color(0.84f, 1f, 1f, 0.62f), true);
-            sparkle.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
-
-            AddSceneryProp(group);
+            AddOpenNatureProp(NaturePropCatalog.SnowBank(Mathf.RoundToInt(Mathf.Abs(z))),
+                x, z, Vector3.one, new Color(0.86f, 0.96f, 1f));
         }
 
         private void AddMountainGroup(float x, float z, float height, Color bodyColor, Color capColor)
@@ -1876,7 +1717,7 @@ namespace PenguinRun
                 || name.Contains("Distant Ice Ridge")
                 || name.Contains("Sunlight Beam")
                 || name.Contains("Floating Cloud")
-                || name.Contains("Warm Track Lamp")
+                || name.Contains("sky_cloud")
                 || name.Contains("Sky Arch");
         }
 

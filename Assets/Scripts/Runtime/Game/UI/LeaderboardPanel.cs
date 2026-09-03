@@ -65,8 +65,7 @@ namespace PenguinRun.Game.UI
             hlg.childForceExpandWidth = true;
             hlg.childForceExpandHeight = true;
 
-            // \u279E / \u231B 是已知豆腐块字符，直接用文字
-            CreateSortBtn(sortRow, "\u2605 总分", LeaderboardSort.ByTotalScore);
+            CreateSortBtn(sortRow, "总分", LeaderboardSort.ByTotalScore);
             CreateSortBtn(sortRow, "距离", LeaderboardSort.ByDistance);
             CreateSortBtn(sortRow, "存活", LeaderboardSort.BySurvivalTime);
             ApplySortBarStyle();
@@ -200,8 +199,12 @@ namespace PenguinRun.Game.UI
             UiBuilder.AddOutline(iconCircle.gameObject,
                 new Color(UiBuilder.AccentActive.r, UiBuilder.AccentActive.g, UiBuilder.AccentActive.b, 0.45f),
                 new Vector2(2f, -2f));
-            UiBuilder.CreateText("IconText", iconCircle.transform, "\u2605", 56, FontStyle.Bold,
-                TextAnchor.MiddleCenter, UiBuilder.AccentActive);
+            var trophy = UiIcons.CreateImage("Icon", iconCircle, UiIcons.Trophy, UiBuilder.AccentActive);
+            var trophyRt = (RectTransform)trophy.transform;
+            trophyRt.anchorMin = new Vector2(0.18f, 0.18f);
+            trophyRt.anchorMax = new Vector2(0.82f, 0.82f);
+            trophyRt.offsetMin = Vector2.zero;
+            trophyRt.offsetMax = Vector2.zero;
 
             var t = UiBuilder.CreateText("Title", empty,
                 todayBucket ? "今日还没有本地纪录" : "还没有本地纪录",

@@ -32,8 +32,9 @@ namespace PenguinRun.Game.UI
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(720f, 640f), Vector2.zero,
                 UiBuilder.Surface1, rounded: true);
-            UiBuilder.AddOutline(card.gameObject, UiBuilder.BorderDefault, new Vector2(1.5f, -1.5f));
+            UiBuilder.AddOutline(card.gameObject, UiTheme.StitchBorder, new Vector2(1.5f, -1.5f));
             UiBuilder.AddShadow(card.gameObject, new Color(0f, 0f, 0f, 0.55f), new Vector2(0f, -12f));
+            UiBuilder.AttachArtVignette("JournalMapArt", card, Image2ArtCatalog.JournalMap, 0.10f);
 
             // \u2715 不在可渲染符号名单里，稳妥起见直接用文字「关闭」
             var closeBtn = UiBuilder.CreateButton("Close", card, "关闭",
@@ -62,11 +63,11 @@ namespace PenguinRun.Game.UI
             var avatarSlot = UiBuilder.CreateRect("Avatar", card,
                 new Vector2(0f, 1f), new Vector2(0f, 1f),
                 new Vector2(64f, 64f), new Vector2(28f, -88f),
-                new Color(0.12f, 0.45f, 0.75f, 0.95f), circle: true);
+                UiTheme.MistBlue, circle: true);
             var avatarInner = UiBuilder.CreateRect("AvatarInner", avatarSlot,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(54f, 54f), Vector2.zero,
-                new Color(0.06f, 0.2f, 0.38f, 0.98f), circle: true);
+                UiTheme.PaperWarm, circle: true);
             host.DrawMiniAvatar?.Invoke(avatarInner);
 
             var nickname = PlayerSave.PlayerNickname;
@@ -93,7 +94,7 @@ namespace PenguinRun.Game.UI
             var xpTrack = UiBuilder.CreateRect("XpTrack", card,
                 new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(-56f, 14f), new Vector2(0f, -158f),
-                new Color(0.04f, 0.09f, 0.16f, 1f), rounded: true);
+                new Color(UiTheme.MistBlue.r, UiTheme.MistBlue.g, UiTheme.MistBlue.b, 0.55f), rounded: true);
             xpTrack.pivot = new Vector2(0.5f, 1f);
             var xpFill = UiBuilder.CreateRect("XpFill", xpTrack,
                 new Vector2(0f, 0f), new Vector2(0f, 1f),
@@ -113,7 +114,7 @@ namespace PenguinRun.Game.UI
             var recordStats = RunRecords.GetStats();
             BuildStatCell(statsRow, 0f, "历史最高", $"{PlayerSave.BestScore:N0}", UiBuilder.AccentActive);
             BuildStatCell(statsRow, 0.34f, "总局数", $"{PlayerSave.TotalRuns:N0}", UiBuilder.WarmGold);
-            BuildStatCell(statsRow, 0.67f, "累计鱼干", $"{PlayerSave.TotalFishSnacks:N0}", UiBuilder.Success);
+            BuildStatCell(statsRow, 0.67f, "累计鱼干", $"{PlayerSave.TotalFishSnacks:N0}", UiBuilder.WarmGold);
             if (recordStats.TotalRuns > 0)
             {
                 var avgRow = UiBuilder.CreateRect("AvgRow", card,
@@ -217,7 +218,7 @@ namespace PenguinRun.Game.UI
             });
 
             var codexBtn = UiBuilder.CreateButton("Codex", btnRow, "图鉴",
-                UiBuilder.Surface2, new Color(0.7f, 0.55f, 0.95f, 1f), 22, rounded: true);
+                UiTheme.MistBlue, UiBuilder.TextPrimary, 22, rounded: true);
             var cbrt2 = (RectTransform)codexBtn.transform;
             cbrt2.anchorMin = new Vector2(0.5f, 0f);
             cbrt2.anchorMax = new Vector2(1f, 1f);

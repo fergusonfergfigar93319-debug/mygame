@@ -54,8 +54,22 @@ namespace PenguinRun.Editor
             // 四张 premium 主视觉已经正式产出，不再允许静默回落到旧图或隐藏伙伴。
             if (Resources.Load<Sprite>(CampVisualAssetCatalog.PanoramaPath) == null)
                 errors.Add("Premium camp panorama failed to load.");
+            if (Resources.Load<Sprite>(CampVisualAssetCatalog.ChapterBackdropPath) == null)
+                errors.Add("Image 2 chapter backdrop failed to load.");
+            if (Resources.Load<Sprite>(CampVisualAssetCatalog.RunBackdropPath) == null)
+                errors.Add("Image 2 run backdrop failed to load.");
             if (Resources.Load<Sprite>(CampVisualAssetCatalog.MascotPath) == null)
                 errors.Add("Premium mascot failed to load.");
+
+            // Secondary surfaces use dedicated Image 2 illustrations; fail early if an import or path drifts.
+            if (Resources.Load<Sprite>(Image2ArtCatalog.ResultCelebrationPath) == null)
+                errors.Add("Image 2 result celebration art failed to load.");
+            if (Resources.Load<Sprite>(Image2ArtCatalog.CodexGalleryPath) == null)
+                errors.Add("Image 2 codex gallery art failed to load.");
+            if (Resources.Load<Sprite>(Image2ArtCatalog.ShopSupplyPath) == null)
+                errors.Add("Image 2 shop supply art failed to load.");
+            if (Resources.Load<Sprite>(Image2ArtCatalog.JournalMapPath) == null)
+                errors.Add("Image 2 journal map art failed to load.");
 
             foreach (var drorUnlocked in new[] { false, true })
             {
@@ -76,7 +90,7 @@ namespace PenguinRun.Editor
                 throw new UnityException(message);
             }
 
-            Debug.Log("[ProjectLobbyArtValidation] PASS: premium panorama, mascot, TuanTuan, and Dror are real assets.");
+            Debug.Log("[ProjectLobbyArtValidation] PASS: Image 2 backdrops, mascot, TuanTuan, and Dror are real assets.");
         }
     }
 }

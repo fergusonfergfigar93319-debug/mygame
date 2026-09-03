@@ -186,8 +186,35 @@ Boss 活跃时，HUD 应优先显示生命、当前招式、破绽进度和必�
 ## 后续优先级
 
 1. Android 实机（骁龙 7 系）60fps 性能实测与 Post Processing 分档校准（含主角 Avatar 材质批次）。
+2. 中景带 Android Draw Call / 60fps 回校（PX-012 实机半边）。
 
 已完成并移出列表：六主题音频差异（见 2026-07-26 节）、主角视觉瑕疵与跑酷实距可读性（见 2026-07-26 节）、减轻首局信息量（能力驱动新手期，见 2026-07-25 节）、移动端输入阈值响应式（`RunnerGestureThresholds.ForViewport`）、跑酷 HUD 迁 uGUI 并与大厅同一套 `UiTheme` 令牌（IMGUI `RunnerHud` 已裁撤）、Boss 战 HUD 压缩（Boss 态只保留生命/招式/反制提示）。
+
+## 2026-09-03 Image 2 纸张插画与别名收口
+
+七张 Image 2 插画接到大厅全景、章节卡、手记、图鉴、商店、结算、加载页，并补到死亡卡、暂停卡和「我的战绩」Sheet。插画一律低透明铺底；缺图时省略，不许退回占位圆或白矩形。衬底统一走 `UiBuilder.AttachArtVignette`。
+
+同一批次收口又一次别名漏映射：`UiBuilder.Success` 从霓虹绿改到 `PineGreen`，`UiBuilder.TextTertiary` 从深色 HUD 浅灰蓝改到半透明墨色。战绩页头像/经验条不再用海军蓝圈，商店确认弹窗不再把墨色字压在深蓝底上。排行榜空状态改用 `UiIcons.Trophy`。
+
+验证：`VerifyImage2Art.ps1` 与加强后的 `VerifyStorybookPalette.ps1`。Unity 批处理与 Android 实机仍属运行时待验证。
+
+## 2026-09-03 中景路边带（PX-012 布景半边）
+
+近场主题套件（约 9–11 m）和远山剪影（约 18 m+）之间原先是空带。六个主题现在各有一排已入库、此前未上跑道的 CC0 模型，落在护坡外 13–16 m：冰湖小雪松/雪块、雪松 KayKit 树与原木、极光秋柳、雾堤枯柳与苔石、海洋高棕榈、天空旗岩。生成走既有 `AddOpenNatureProp`（剥碰撞、跟弯道），主文件只加一行调用，避免顶到棘轮。`VerifyCubePetAndNatureProps.ps1` 锁住目录与走廊下限。
+
+仍未声称：Android 实机 60fps 与这排中景的 Draw Call 实测。
+
+## 2026-09-03 路边方块灯/旗/海草换成已入库模型
+
+跑道两侧原先用程序化方块搭灯、旗、冰晶、雪堆和海草。灯与旗改为每主题已有的 `EnvironmentPropId.Light` / `Signpost` 雕塑（和套件错开落点，不是再叠一层方块）。冰晶/雪堆/海草/贝壳走 `NaturePropCatalog` 已入库 FBX（雪岩与矮石、雪块、蕨/高草、睡莲/黄花），经 `AddOpenNatureProp` 剥碰撞。主文件删掉方块搭建函数，给棘轮让出空位。`VerifyCubePetAndNatureProps.ps1` 禁止再出现那些方块占位名。
+
+未换：气泡、光柱、飞鸟剪影仍是程序化体，库里没有对应模型。浮云已改走 `sky_cloud`。
+
+## 2026-09-03 主题套件方块换成已入库模型
+
+珊瑚柱、雪松废墟、宝箱、极光信标、雾堤纱、冰拱和天空拱原先都是 Primitive 堆叠。现在改走已入库、此前只当障碍或闲置的 CC0 网格：蘑菇当珊瑚、原木/营火当废墟、木箱当宝箱、浆果丛/花当信标、半崖当冰拱、石块当天空拱、花丛当雾堤。浮云改 Kenney `sky_cloud`，不贴地。`AddOpenNatureProp` 增加高度与贴地开关；套件落点一并收到护坡外。主文件再瘦一截。
+
+未换：气泡、光柱、飞鸟、彩虹条、检查门仍是轻量程序化体。
 
 ## 2026-08-05 CC0 场景增量与 Cube Pet 主角
 
