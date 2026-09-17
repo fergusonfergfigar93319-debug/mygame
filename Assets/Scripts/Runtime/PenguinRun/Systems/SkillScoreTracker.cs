@@ -10,6 +10,8 @@ namespace PenguinRun
         NoHitSegment,
         RiskRoute,
         BossCounter,
+        /// <summary>擦身而过：不跳不铲、仅靠车道位置以极小间距掠过障碍。</summary>
+        NearMiss,
     }
 
     internal readonly struct SkillScoreSnapshot
@@ -104,6 +106,7 @@ namespace PenguinRun
             SkillAction.NoHitSegment => "无伤片段",
             SkillAction.RiskRoute => "冒险路线",
             SkillAction.BossCounter => "Boss反击",
+            SkillAction.NearMiss => "擦身而过",
             _ => "技巧动作",
         };
     }

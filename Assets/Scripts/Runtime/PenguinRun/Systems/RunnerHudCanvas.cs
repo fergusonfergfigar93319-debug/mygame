@@ -16,6 +16,16 @@ namespace PenguinRun
     {
         private const int MaxVisibleUpgrades = 3;
         private const int MaxHeartSlots = 5;
+
+        // 局内 HUD 画在深色 3D 场景上，与纸张大厅是两套合法色板（见 CONTEXT「纸张 UI 层」）。
+        // 但此前同一张卡上会同时出现霓虹青描边、纸暖白正文与暖金强调——三套语言混用。
+        // 这里收敛成一组「霜面」令牌：冰雾色描边 / 雪白主文 / 霜蓝辅文 / 暖金奖励 / 珊瑚危险。
+        private static readonly Color CardFill = new(0.03f, 0.08f, 0.13f, 0.78f);
+        private static readonly Color CardStroke = new(0.72f, 0.88f, 0.94f, 0.22f);
+        private static readonly Color TextSnow = new(0.97f, 0.98f, 1f, 1f);
+        private static readonly Color TextFrost = new(0.72f, 0.86f, 0.94f, 0.85f);
+        private static readonly Color Reward = UiTheme.WarmGold;
+        private static readonly Color Danger = UiTheme.CoralAction;
         private readonly GameObject canvasObject;
         private readonly GameObject normalStatsRoot;
         private readonly BossHudPanel bossPanel;
@@ -128,17 +138,17 @@ namespace PenguinRun
                 Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0f));
 
             var left = CreateHudCard("RunStats", normal, new Vector2(0.018f, 0.79f), new Vector2(0.35f, 0.975f));
-            var mode = CreateHudText("Mode", left, string.Empty, UiTheme.Micro, UiTheme.AccentCyan,
+            var mode = CreateHudText("Mode", left, string.Empty, UiTheme.Micro, TextFrost,
                 new Vector2(0.05f, 0.72f), new Vector2(0.95f, 0.95f), TextAlignmentOptions.Left);
-            var score = CreateHudText("Score", left, "0", UiTheme.H1, Color.white,
+            var score = CreateHudText("Score", left, "0", UiTheme.H1, TextSnow,
                 new Vector2(0.05f, 0.34f), new Vector2(0.58f, 0.76f), TextAlignmentOptions.Left);
-            var distance = CreateHudText("Distance", left, "0 m", UiTheme.Body, UiTheme.TextSecondary,
+            var distance = CreateHudText("Distance", left, "0 m", UiTheme.Body, TextFrost,
                 new Vector2(0.58f, 0.37f), new Vector2(0.95f, 0.70f), TextAlignmentOptions.Right);
-            var combo = CreateHudText("Combo", left, string.Empty, UiTheme.Caption, UiTheme.WarmGold,
+            var combo = CreateHudText("Combo", left, string.Empty, UiTheme.Caption, Reward,
                 new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.33f), TextAlignmentOptions.Left);
 
             var right = CreateHudCard("Resources", normal, new Vector2(0.72f, 0.82f), new Vector2(0.982f, 0.975f));
-            var fish = CreateHudText("Fish", right, "鱼干 0", UiTheme.Body, UiTheme.WarmGold,
+            var fish = CreateHudText("Fish", right, "鱼干 0", UiTheme.Body, Reward,
                 new Vector2(0.06f, 0.50f), new Vector2(0.94f, 0.92f), TextAlignmentOptions.Right);
 
             // 生命：心形图标行（Sprite 染色），替代 Unicode ♥♡ 文本
@@ -147,7 +157,7 @@ namespace PenguinRun
                 Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0f));
             var livesLayout = livesRow.gameObject.AddComponent<HorizontalLayoutGroup>();
             livesLayout.childAlignment = TextAnchor.MiddleRight;
-            livesLayout.spacing = 5f;
+            livesLayout.spacing = 6f;
             livesLayout.childControlWidth = false;
             livesLayout.childControlHeight = false;
             livesLayout.childForceExpandWidth = false;
@@ -155,63 +165,64 @@ namespace PenguinRun
             var hearts = new Image[MaxHeartSlots];
             for (var i = 0; i < hearts.Length; i++)
             {
-                var heart = UiIcons.CreateImage($"Heart{i}", livesRow, UiIcons.HeartFull, UiTheme.Danger);
-                ((RectTransform)heart.transform).sizeDelta = new Vector2(30f, 30f);
+                var heart = UiIcons.CreateImage($"Heart{i}", livesRow, UiIcons.HeartFull, Danger);
+                // 生命是余光里最重要的读数：30px 在手机上约 13dp，放大到 40px。
+                ((RectTransform)heart.transform).sizeDelta = new Vector2(40f, 40f);
                 heart.gameObject.SetActive(i < 3);
                 hearts[i] = heart;
             }
 
             var buffCard = CreateHudCard("Buffs", normal, new Vector2(0.018f, 0.055f), new Vector2(0.31f, 0.17f));
-            var buffs = CreateHudText("BuffSummary", buffCard, string.Empty, UiTheme.Caption, Color.white,
+            var buffs = CreateHudText("BuffSummary", buffCard, string.Empty, UiTheme.Caption, TextSnow,
                 new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.92f), TextAlignmentOptions.Left);
             buffCard.gameObject.SetActive(false);
 
             var upgradeRoot = CreateHudCard("RunBuild", normal, new Vector2(0.69f, 0.055f), new Vector2(0.982f, 0.17f));
             var upgradeText = CreateHudText("UpgradeSummary", upgradeRoot, string.Empty,
-                UiTheme.Caption, UiTheme.PaperWarm,
+                UiTheme.Caption, TextSnow,
                 new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.92f), TextAlignmentOptions.Right);
             upgradeRoot.gameObject.SetActive(false);
 
             var skillRoot = CreateHudCard("SkillChain", normal, new Vector2(0.355f, 0.055f), new Vector2(0.645f, 0.15f));
             var skillText = CreateHudText("SkillSummary", skillRoot, string.Empty,
-                UiTheme.Caption, UiTheme.WarmGold,
+                UiTheme.Caption, Reward,
                 new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.92f), TextAlignmentOptions.Center);
             skillRoot.gameObject.SetActive(false);
 
             var routeRoot = CreateHudCard("RouteChoice", normal, new Vector2(0.25f, 0.79f), new Vector2(0.75f, 0.90f));
             var routeTitle = CreateHudText("RouteTitle", routeRoot, string.Empty,
-                UiTheme.Caption, UiTheme.PaperWarm,
+                UiTheme.Caption, TextSnow,
                 new Vector2(0.04f, 0.52f), new Vector2(0.96f, 0.94f), TextAlignmentOptions.Center);
             var routeChoice = CreateHudText("RouteLabels", routeRoot, string.Empty,
-                UiTheme.Micro, UiTheme.WarmGold,
+                UiTheme.Micro, Reward,
                 new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.52f), TextAlignmentOptions.Center);
             routeRoot.gameObject.SetActive(false);
 
             var mechanicRoot = CreateHudCard("MechanicBanner", root,
                 new Vector2(0.28f, 0.76f), new Vector2(0.72f, 0.88f));
             var mechanicTitle = CreateHudText("MechanicTitle", mechanicRoot, string.Empty,
-                UiTheme.Caption, UiTheme.AccentCyan,
+                UiTheme.Caption, TextSnow,
                 new Vector2(0.04f, 0.5f), new Vector2(0.96f, 0.94f), TextAlignmentOptions.Center);
             var mechanicHint = CreateHudText("MechanicHint", mechanicRoot, string.Empty,
-                UiTheme.Micro, UiTheme.TextSecondary,
+                UiTheme.Micro, TextFrost,
                 new Vector2(0.04f, 0.06f), new Vector2(0.96f, 0.5f), TextAlignmentOptions.Center);
             mechanicRoot.gameObject.SetActive(false);
 
             var resonanceTrack = UiBuilder.CreateProgressFill("Resonance", root,
-                new Color(1f, 1f, 1f, 0.12f), UiTheme.AccentCyan, out var resonanceFill);
+                new Color(1f, 1f, 1f, 0.12f), TextFrost, out var resonanceFill);
             resonanceFill.gameObject.name = "ResonanceFill";
             Place(resonanceTrack.rectTransform,
                 new Vector2(0.36f, 0.185f), new Vector2(0.64f, 0.198f));
 
-            var pause = UiBuilder.CreateButton("Pause", root, "暂停", new Color(0.05f, 0.10f, 0.16f, 0.88f),
-                Color.white, UiTheme.Caption, rounded: true);
+            var pause = UiBuilder.CreateButton("Pause", root, "暂停", CardFill, TextSnow, UiTheme.Caption, rounded: true);
+            UiBuilder.AddOutline(pause.gameObject, CardStroke, new Vector2(1f, -1f));
             Place((RectTransform)pause.transform, new Vector2(0.445f, 0.89f), new Vector2(0.555f, 0.975f));
             pause.onClick.AddListener(() => onPause?.Invoke());
 
             var feedbackRoot = UiBuilder.CreateRect("Feedback", root, new Vector2(0.24f, 0.67f),
-                new Vector2(0.76f, 0.80f), Vector2.zero, Vector2.zero,
-                new Color(0.03f, 0.08f, 0.12f, 0.78f), rounded: true);
-            var feedback = CreateHudText("Message", feedbackRoot, string.Empty, UiTheme.H2, Color.white,
+                new Vector2(0.76f, 0.80f), Vector2.zero, Vector2.zero, CardFill, rounded: true);
+            UiBuilder.AddOutline(feedbackRoot.gameObject, CardStroke, new Vector2(1f, -1f));
+            var feedback = CreateHudText("Message", feedbackRoot, string.Empty, UiTheme.H2, TextSnow,
                 new Vector2(0.04f, 0.08f), new Vector2(0.96f, 0.92f), TextAlignmentOptions.Center);
 
             var bossPanel = BossHudPanel.Create(root);
@@ -220,20 +231,19 @@ namespace PenguinRun
                 new Vector2(0.75f, 0.82f), Vector2.zero, Vector2.zero,
                 new Color(0.03f, 0.08f, 0.12f, 0.96f), rounded: true);
             UiBuilder.AttachArtVignette("RunBackdrop", pauseRoot, CampVisualAssetCatalog.RunBackdrop, 0.14f);
-            UiBuilder.AddOutline(pauseRoot.gameObject,
-                new Color(UiTheme.AccentCyan.r, UiTheme.AccentCyan.g, UiTheme.AccentCyan.b, 0.5f),
-                new Vector2(2f, -2f));
-            CreateHudText("PausedText", pauseRoot, "已暂停", UiTheme.H2, Color.white,
+            UiBuilder.AddOutline(pauseRoot.gameObject, CardStroke, new Vector2(2f, -2f));
+            CreateHudText("PausedText", pauseRoot, "已暂停", UiTheme.H2, TextSnow,
                 new Vector2(0.04f, 0.72f), new Vector2(0.96f, 0.93f), TextAlignmentOptions.Center);
             var contractSummary = CreateHudText("ContractSummary", pauseRoot, string.Empty,
-                UiTheme.Micro, UiTheme.PaperWarm,
+                UiTheme.Micro, TextFrost,
                 new Vector2(0.06f, 0.50f), new Vector2(0.94f, 0.70f), TextAlignmentOptions.Center);
-            var resume = UiBuilder.CreateButton("Resume", pauseRoot, "继续奔跑", UiTheme.AccentCyan,
-                new Color(0.02f, 0.10f, 0.14f, 1f), UiTheme.Body, rounded: true);
+            // 主操作与大厅底坞同一语言：珊瑚底 + 白字；次级为霜蓝底。
+            var resume = UiBuilder.CreateButton("Resume", pauseRoot, "继续奔跑", UiTheme.CoralAction,
+                Color.white, UiTheme.Body, rounded: true);
             Place((RectTransform)resume.transform, new Vector2(0.08f, 0.25f), new Vector2(0.92f, 0.43f));
             resume.onClick.AddListener(() => onResume?.Invoke());
             var returnToCamp = UiBuilder.CreateButton("ReturnToCamp", pauseRoot, "结算并返回营地",
-                new Color(0.12f, 0.20f, 0.30f, 1f), Color.white, UiTheme.Caption, rounded: true);
+                new Color(0.16f, 0.26f, 0.34f, 1f), TextSnow, UiTheme.Caption, rounded: true);
             Place((RectTransform)returnToCamp.transform, new Vector2(0.08f, 0.06f), new Vector2(0.92f, 0.21f));
             returnToCamp.onClick.AddListener(() => onReturnToCamp?.Invoke());
             pauseRoot.gameObject.SetActive(false);
@@ -294,8 +304,8 @@ namespace PenguinRun
                     var full = i < world.Lives;
                     heartIcons[i].sprite = UiIcons.Load(full ? UiIcons.HeartFull : UiIcons.HeartEmpty);
                     heartIcons[i].color = full
-                        ? UiTheme.Danger
-                        : new Color(UiTheme.Danger.r, UiTheme.Danger.g, UiTheme.Danger.b, 0.42f);
+                        ? Danger
+                        : new Color(Danger.r, Danger.g, Danger.b, 0.38f);
                 }
                 // 掉血/回血的那颗心 punch 一次，让余光也能捕捉到生命变化。
                 if (previousLives != int.MinValue)
@@ -349,7 +359,7 @@ namespace PenguinRun
             cachedRouteSafe = snapshot.SafeLabel;
             cachedRouteRisk = snapshot.RiskLabel;
             routeTitleText.text = snapshot.Title;
-            routeChoiceText.text = $"← 安心：{snapshot.SafeLabel}    冒险：{snapshot.RiskLabel} →";
+            routeChoiceText.text = $"左道 安心：{snapshot.SafeLabel}    右道 冒险：{snapshot.RiskLabel}";
         }
 
         public void SetUpgradeSummary(RunUpgradeState upgrades)
@@ -436,7 +446,7 @@ namespace PenguinRun
             if (highlight != lastSkillHighlight)
             {
                 lastSkillHighlight = highlight;
-                skillText.color = highlight ? UiTheme.WarmGold : UiTheme.TextSecondary;
+                skillText.color = highlight ? Reward : TextFrost;
                 skillText.fontSize = highlight ? UiTheme.Body : UiTheme.Caption;
             }
         }
@@ -518,10 +528,8 @@ namespace PenguinRun
 
         private static RectTransform CreateHudCard(string name, Transform parent, Vector2 min, Vector2 max)
         {
-            var card = UiBuilder.CreateRect(name, parent, min, max, Vector2.zero, Vector2.zero,
-                new Color(0.03f, 0.08f, 0.13f, 0.82f), rounded: true);
-            UiBuilder.AddOutline(card.gameObject, new Color(UiTheme.AccentCyan.r,
-                UiTheme.AccentCyan.g, UiTheme.AccentCyan.b, 0.30f), new Vector2(1f, -1f));
+            var card = UiBuilder.CreateRect(name, parent, min, max, Vector2.zero, Vector2.zero, CardFill, rounded: true);
+            UiBuilder.AddOutline(card.gameObject, CardStroke, new Vector2(1f, -1f));
             return card;
         }
 

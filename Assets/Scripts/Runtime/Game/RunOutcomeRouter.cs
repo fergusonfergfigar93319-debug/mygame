@@ -86,7 +86,9 @@ namespace PenguinRun.Game
             var baseScore = score;
             coins = Mathf.Max(coins, Mathf.RoundToInt(baseCoins * fishMul));
             coins += helperFishBonus;
-            score = Mathf.Max(score, Mathf.RoundToInt(baseScore * scoreMul));
+            // 难度倍率必须真的生效：此前 Max(base, base*mul) 让「轻松 ×0.75」永远是空话，
+            // 难度选择页承诺的取舍并不存在。营地/道具倍率恒 ≥1，不受影响。
+            score = Mathf.RoundToInt(baseScore * scoreMul);
 
             var prevBest = PlayerSave.BestScore;
             var newBest = score > prevBest;

@@ -54,23 +54,14 @@ namespace PenguinRun
         private float nextThemeSwitchTime;
         private bool themeAppliedInTransition;
         private float themeTransitionTimer;
-        private GUIStyle themeTransitionLabelStyle;
-        private GUIStyle entranceNumberStyle;
-        private GUIStyle entranceGoStyle;
+        private RunnerScreenOverlay screenOverlay;
 
-        // ── Boss 战镜头特效 ──────────────────────────────────
+        // ── 镜头冲击（震屏 / 视野踢击）──────────────────────────
         private float cameraShakeTimer = 0f;
         private float cameraShakeIntensity = 0f;
+        private float cameraFovKick = 0f;
         private float defeatFreezeTimer = 0f;
         private bool wasBossDefeated = false;
-
-        // ── 屏幕闪屏特效 ───────────────────────────────────────
-        private float screenFlashTimer;
-        private float screenFlashDuration;
-        private Color screenFlashColor = Color.clear;
-        private Color screenFlashCurrent = Color.clear;
-        private bool bossSpawnFlashPending;
-        private float bossSpawnFlashIntensity;
 
         // ── 开局倒计时 overlay（逻辑在 RunnerGameController FSM Countdown）──
         // ── 死亡序列 ────────────────────────────────────────────
@@ -134,10 +125,11 @@ namespace PenguinRun
             particlePool = new ParticleEffectPool(transform, tuning.movement.groundY);
             worldEvents = new WorldEventScheduler(config.IsOnboarding);
             ApplyMapThemeVisuals(currentTheme);
-            game = new RunnerGameController(tuning, config, runnerAudio, player.transform, character, transform, PulseHaptic, TriggerScreenFlash, OnRunFinished);
+            game = new RunnerGameController(tuning, config, runnerAudio, player.transform, character, transform, HandleRunFeedback, TriggerScreenFlash, OnRunFinished);
             game.ResetRun(false);
             hudCanvas = RunnerHudCanvas.Create(config, RequestPauseFromHud,
                 RequestResumeFromHud, RequestFinishRunFromHud);
+            screenOverlay = RunnerScreenOverlay.Create();
             lastLives = game.World.Lives;
 
             // 道具拾取专属粒子环（音效由 RunnerAudio 处理，这里只做视觉）
@@ -196,6 +188,8 @@ namespace PenguinRun
             postFx = null;
             hudCanvas?.Dispose();
             hudCanvas = null;
+            screenOverlay?.Dispose();
+            screenOverlay = null;
             if (upgradeOverlay != null)
                 Destroy(upgradeOverlay.gameObject);
             if (deathOverlay != null)
@@ -285,7 +279,8 @@ namespace PenguinRun
             fogLantern.Tick(dt, game.World.FogLanternTimer > 0f);
             if (!game.IsSimulationFrozen)
             {
-                AnimateScenery(dt, effectiveSpeed);
+                // 顿帧期间布景与障碍必须同一时标放慢，否则路面在动、障碍不动会露馅。
+                AnimateScenery(dt * game.SimulationTimeScale, effectiveSpeed);
                 game.TickRunningWorld(dt, effectiveSpeed);
                 TryShowRunUpgradeChoice();
                 TickParticleEvents(dt);
@@ -352,6 +347,43 @@ namespace PenguinRun
             hudCanvas.SetSkillSnapshot(game.SkillScore);
             hudCanvas.SetPaused(game.IsPaused);
             UpdateBossAtmosphere();
+            UpdateScreenOverlay();
+        }
+
+        /// <summary>全屏表现层每帧同步：倒计时 / 主题幕布跟随 FSM，闪屏与预警按真实时间衰减。</summary>
+        private void UpdateScreenOverlay()
+        {
+            if (screenOverlay == null) return;
+            screenOverlay.Tick(Time.unscaledDeltaTime);
+
+            if (game.IsCountdown && game.EntrancePhase == EntrancePhase.Numbers)
+            {
+                var step = Mathf.FloorToInt(game.EntranceTimer / 0.7f);
+                screenOverlay.ShowCountdown(game.CountdownNumber, (game.EntranceTimer - step * 0.7f) / 0.7f);
+            }
+            else if (game.IsCountdown && game.EntrancePhase == EntrancePhase.GoText)
+            {
+                screenOverlay.ShowGo(game.EntranceTimer / 0.6f);
+            }
+            else
+            {
+                screenOverlay.HideCountdown();
+            }
+
+            screenOverlay.SetThemeTransition(game.IsThemeTransition ? ThemeTransitionAlpha() : 0f,
+                game.IsThemeTransition ? $"场景切换 · {GetThemeDisplayName(pendingTheme)}" : null);
+        }
+
+        private float ThemeTransitionAlpha()
+        {
+            var total = ThemeTransitionFadeOutSeconds + ThemeTransitionHoldSeconds + ThemeTransitionFadeInSeconds;
+            var t = Mathf.Clamp(themeTransitionTimer, 0f, total);
+            if (t < ThemeTransitionFadeOutSeconds)
+                return Mathf.SmoothStep(0f, 0.82f, t / ThemeTransitionFadeOutSeconds);
+            if (t < ThemeTransitionFadeOutSeconds + ThemeTransitionHoldSeconds)
+                return 0.82f;
+            var fadeInT = (t - ThemeTransitionFadeOutSeconds - ThemeTransitionHoldSeconds) / ThemeTransitionFadeInSeconds;
+            return Mathf.SmoothStep(0.82f, 0f, fadeInT);
         }
 
         /// <summary>Boss 战氛围后处理：危险窗口收暗角压红，破绽窗口转暖绿。纯表现层。</summary>
@@ -399,6 +431,8 @@ namespace PenguinRun
 
             var dt = Mathf.Min(rawDt, 0.05f);
             deathStateTimer += dt;
+            // 定格阶段镜头与角色以 0.35 倍速推进：撞击的那一瞬被拉长，玩家能看清自己撞到了什么。
+            var presentationDt = deathState == DeathState.Freeze ? dt * 0.35f : dt;
 
             switch (deathState)
             {
@@ -408,17 +442,14 @@ namespace PenguinRun
                         deathState = DeathState.FadeRed;
                         deathStateTimer = 0f;
                     }
-                    game.TickAvatarPresentation(dt, false, true);
+                    game.TickAvatarPresentation(presentationDt, false, true);
                     game.RunnerAudio.UpdateRunState(0f, false, false, false, false);
-                    UpdateCamera(dt);
+                    UpdateCamera(presentationDt);
                     break;
 
                 case DeathState.FadeRed:
                     var redAlpha = Mathf.Clamp01(deathStateTimer / 0.6f) * 0.55f;
-                    screenFlashColor = new Color(0.75f, 0.08f, 0.02f, redAlpha);
-                    screenFlashCurrent = screenFlashColor;
-                    screenFlashTimer = 0.02f;
-                    screenFlashDuration = 0.02f;
+                    screenOverlay?.SetHold(new Color(0.75f, 0.08f, 0.02f, redAlpha));
 
                     game.TickAvatarPresentation(dt, false, true);
                     UpdateCamera(dt);
@@ -451,6 +482,7 @@ namespace PenguinRun
             deathState = DeathState.None;
             deathStateTimer = 0f;
             postFx?.SetDeathEmphasis(0f);
+            screenOverlay?.SetHold(Color.clear);
 
             if (!exiting)
             {
@@ -516,33 +548,13 @@ namespace PenguinRun
             cameraYawVel = 0f;
             cameraShakeTimer = 0f;
             cameraShakeIntensity = 0f;
+            cameraFovKick = 0f;
             defeatFreezeTimer = 0f;
             wasBossDefeated = false;
-#if DOTWEEN
-            if (runnerCamera != null) runnerCamera.transform.DOKill();
-#endif
 
-            screenFlashTimer = 0f;
-            screenFlashDuration = 0f;
-            screenFlashColor = Color.clear;
-            screenFlashCurrent = Color.clear;
-            bossSpawnFlashPending = false;
-            bossSpawnFlashIntensity = 0f;
+            screenOverlay?.Reset();
         }
 
-        private void DrawDeathOverlay()
-        {
-            if (!game.IsDeathPresentation) return;
-
-            // 红屏覆盖
-            if (deathState == DeathState.FadeRed)
-            {
-                var alpha = Mathf.Clamp01(deathStateTimer / 0.6f) * 0.45f;
-                GUI.color = new Color(0.7f, 0.05f, 0.02f, alpha);
-                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
-                GUI.color = Color.white;
-            }
-        }
 
         // ── 粒子事件跟踪状态 ──────────────────────────────────────
         private int lastCoinCount;
@@ -706,8 +718,8 @@ namespace PenguinRun
             {
                 // Boss 首次被击败：定格 + 震动 + 金色闪屏 + 企鹅庆祝演出
                 defeatFreezeTimer = 0.25f;
-                cameraShakeTimer = 0.5f;
-                cameraShakeIntensity = 0.15f;
+                TriggerCameraShake(0.5f, 0.15f);
+                cameraFovKick = 6f;
                 TriggerScreenFlash(new Color(1f, 0.85f, 0.2f, 0.45f), 0.55f);
                 wasBossDefeated = true;
                 character?.TriggerCelebration();
@@ -735,38 +747,38 @@ namespace PenguinRun
                     amp *= 1.12f;
                 }
 
-                cameraShakeTimer = Mathf.Max(cameraShakeTimer, dur);
-                cameraShakeIntensity = Mathf.Max(cameraShakeIntensity, amp);
+                TriggerCameraShake(dur, amp);
             }
         }
 
-        /// <summary>触发相机震动（供外部调用）。DOTween 可用时优先使用高性能补间。</summary>
+        /// <summary>
+        /// 局内反馈总分发：判定层只报告「发生了什么」，闪屏 / 震屏 / 视野踢击 / 振动的配方
+        /// 全部来自 <see cref="RunFeedbackProfile"/>。此前受伤只有一层红闪且振动散落在三处。
+        /// </summary>
+        private void HandleRunFeedback(RunFeedbackKind kind)
+        {
+            var profile = RunFeedbackProfile.For(kind);
+            if (profile.FlashSeconds > 0f) TriggerScreenFlash(profile.FlashColor, profile.FlashSeconds);
+            if (profile.ShakeSeconds > 0f) TriggerCameraShake(profile.ShakeSeconds, profile.ShakeAmplitude);
+            if (!Mathf.Approximately(profile.FovKick, 0f)) cameraFovKick = profile.FovKick;
+            if (profile.Haptic) PulseHaptic(profile.HitStopSeconds > 0f ? 1f : 0.55f);
+        }
+
+        /// <summary>
+        /// 触发相机震动。统一走 UpdateCamera 里的位移叠加（作用在 SmoothDamp 之后，读作一次「punch」）；
+        /// 此前 DOTWEEN 分支直接补间相机位置，与每帧 SmoothDamp 写位置互相覆盖，实际震不出来。
+        /// </summary>
         public void TriggerCameraShake(float duration, float intensity)
         {
-#if DOTWEEN
-            if (runnerCamera != null)
-                runnerCamera.PlayCameraShake(duration, intensity);
-#else
-            cameraShakeTimer = duration;
-            cameraShakeIntensity = intensity;
-#endif
+            cameraShakeTimer = Mathf.Max(cameraShakeTimer, duration);
+            cameraShakeIntensity = Mathf.Max(cameraShakeIntensity, intensity);
         }
 
         /// <summary>触发全屏闪屏特效（Boss 攻击击发 / 玩家受伤 / Boss 击败）。</summary>
-        public void TriggerScreenFlash(Color color, float duration)
-        {
-            screenFlashColor = color;
-            screenFlashDuration = duration;
-            screenFlashTimer = duration;
-            screenFlashCurrent = color;
-        }
+        public void TriggerScreenFlash(Color color, float duration) => screenOverlay?.Flash(color, duration);
 
         /// <summary>Boss 出场时触发屏幕边缘红光预警。</summary>
-        public void TriggerBossSpawnWarning(float intensity)
-        {
-            bossSpawnFlashPending = true;
-            bossSpawnFlashIntensity = intensity;
-        }
+        public void TriggerBossSpawnWarning(float intensity) => screenOverlay?.SetBossWarning(true, intensity);
 
         public void FinishFromAndroidButton(string _)
         {
@@ -774,10 +786,25 @@ namespace PenguinRun
             game.FinishRun();
         }
 
-        private void PulseHaptic()
+        /// <summary>
+        /// 振动：<paramref name="strength01"/> 区分轻击（格挡 / 擦碰）与重击（掉心 / 死亡），再乘以玩家的振动强度设置。
+        /// 此前只有 Handheld.Vibrate() 的固定约 500ms 系统长震，设置里的 0–1 滑杆除开关外没有任何效果。
+        /// </summary>
+        private void PulseHaptic(float strength01)
         {
+            var intensity = Mathf.Clamp01(config.HapticIntensity) * Mathf.Clamp01(strength01);
+            if (intensity <= 0.05f) return;
 #if UNITY_ANDROID && !UNITY_EDITOR
-            if (config.HapticIntensity > 0.05f)
+            var milliseconds = Mathf.RoundToInt(Mathf.Lerp(18f, 70f, intensity));
+            try
+            {
+                using var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+                using var activity = player.GetStatic<AndroidJavaObject>("currentActivity");
+                using var vibrator = activity.Call<AndroidJavaObject>("getSystemService", "vibrator");
+                if (vibrator == null) { Handheld.Vibrate(); return; }
+                vibrator.Call("vibrate", (long)milliseconds);
+            }
+            catch (System.Exception)
             {
                 Handheld.Vibrate();
             }
@@ -1909,28 +1936,37 @@ namespace PenguinRun
                 surface + cam.aimHeightAboveSurface + jumpBoost * 0.25f + landingBounceOffset * 0.3f,
                 px.z + cam.aimAhead + dynamicAimAhead);
 
-            if (cameraShakeTimer > 0f)
-            {
-                cameraShakeTimer -= dt;
-                var shakeX = (Random.value - 0.5f) * cameraShakeIntensity;
-                var shakeY = (Random.value - 0.5f) * cameraShakeIntensity;
-                targetCam += new Vector3(shakeX, shakeY, 0f);
-            }
-
             if (defeatFreezeTimer > 0f)
             {
                 defeatFreezeTimer -= dt;
                 dt *= 0.1f;
             }
 
-            runnerCamera.transform.position = Vector3.SmoothDamp(runnerCamera.transform.position, targetCam, ref cameraVelocity, 0.18f, 52f, dt);
+            var smoothed = Vector3.SmoothDamp(runnerCamera.transform.position, targetCam, ref cameraVelocity, 0.18f, 52f, dt);
 
-            // ── 速度动态 FOV：低速窄视野，高速宽视野 ───────────────────────
+            // 震屏叠在 SmoothDamp 之后：原先加在目标点上会被 0.18s 阻尼滤成软晃，读不出「撞击」。
+            // 幅度随剩余时间线性衰减，避免结束帧突然归位。
+            if (cameraShakeTimer > 0f)
+            {
+                var shakeSeconds = Mathf.Max(0.01f, cameraShakeTimer);
+                cameraShakeTimer = Mathf.Max(0f, cameraShakeTimer - dt);
+                var falloff = Mathf.Clamp01(cameraShakeTimer / shakeSeconds);
+                var amp = cameraShakeIntensity * Mathf.Lerp(0.35f, 1f, falloff);
+                smoothed += runnerCamera.transform.right * ((Random.value - 0.5f) * amp)
+                    + runnerCamera.transform.up * ((Random.value - 0.5f) * amp);
+                if (cameraShakeTimer <= 0f) cameraShakeIntensity = 0f;
+            }
+            runnerCamera.transform.position = smoothed;
+
+            // ── 速度动态 FOV：低速窄视野，高速宽视野；事件踢击叠加后指数回落 ─────────
+            cameraFovKick = Mathf.MoveTowards(cameraFovKick, 0f, Mathf.Abs(cameraFovKick) * dt * 6f + dt * 4f);
             var speedFov = Mathf.Lerp(58f, 78f, speed01);
             var dashFovBoost = game.World.DashTimer > 0f ? 7f : 0f;
             var bossFovBoost = bossFight ? (bossDanger ? 4f : 2f) : 0f;
-            var targetFov = speedFov + dashFovBoost + bossFovBoost;
-            runnerCamera.fieldOfView = Mathf.Lerp(runnerCamera.fieldOfView, targetFov, 1f - Mathf.Exp(-dt * 10f));
+            var targetFov = speedFov + dashFovBoost + bossFovBoost + cameraFovKick;
+            // 踢击是瞬时的，用更快的追随；常态仍保持原来的 10/s 平滑。
+            var fovFollow = Mathf.Abs(cameraFovKick) > 0.1f ? 22f : 10f;
+            runnerCamera.fieldOfView = Mathf.Lerp(runnerCamera.fieldOfView, targetFov, 1f - Mathf.Exp(-dt * fovFollow));
 
             var dir = aim - runnerCamera.transform.position;
             if (dir.sqrMagnitude > 0.0001f)
@@ -1992,106 +2028,6 @@ namespace PenguinRun
             RunnerDeviceTier.Apply();
         }
 
-        private void OnGUI()
-        {
-            if (game == null)
-                return;
-
-            // ── 倒计时覆盖层 ──────────────────────────────────────────
-            DrawEntranceOverlay();
-
-            // ── 死亡序列覆盖层 ────────────────────────────────────────
-            DrawDeathOverlay();
-
-            DrawThemeTransitionOverlay();
-            DrawScreenFlashOverlay();
-        }
-
-        private void DrawEntranceOverlay()
-        {
-            if (game == null || !game.IsCountdown || game.EntrancePhase == EntrancePhase.None) return;
-
-            var cx = Screen.width * 0.5f;
-            var cy = Screen.height * 0.4f;
-            var entranceTimer = game.EntranceTimer;
-
-            if (game.EntrancePhase == EntrancePhase.Numbers)
-            {
-                var step = Mathf.FloorToInt(entranceTimer / 0.7f);
-                var tInStep = (entranceTimer - step * 0.7f) / 0.7f;
-                var scale = 1f + (1f - tInStep) * 0.5f;
-                var alpha = 1f - tInStep * 0.6f;
-
-                // OnGUI 每帧至少调用两次（Layout + Repaint）。样式建一次后只改字段，
-                // 数字用预置常量串——倒计时正是最容易被察觉到卡顿的时刻。
-                entranceNumberStyle ??= new GUIStyle(GUI.skin.label)
-                {
-                    fontStyle = FontStyle.Bold,
-                    alignment = TextAnchor.MiddleCenter,
-                };
-                entranceNumberStyle.fontSize = Mathf.RoundToInt(120f * scale);
-                entranceNumberStyle.normal.textColor = new Color(1f, 1f, 1f, alpha);
-                GUI.Label(new Rect(cx - 100f, cy - 80f, 200f, 160f),
-                    CountdownLabel(game.CountdownNumber), entranceNumberStyle);
-            }
-            else if (game.EntrancePhase == EntrancePhase.GoText)
-            {
-                var t = entranceTimer / 0.6f;
-                var scale = 1f + t * 0.3f;
-                var alpha = 1f - t;
-
-                entranceGoStyle ??= new GUIStyle(GUI.skin.label)
-                {
-                    fontStyle = FontStyle.Bold,
-                    alignment = TextAnchor.MiddleCenter,
-                };
-                entranceGoStyle.fontSize = Mathf.RoundToInt(80f * scale);
-                entranceGoStyle.normal.textColor = new Color(0.34f, 1f, 0.82f, alpha);
-                GUI.Label(new Rect(cx - 200f, cy - 60f, 400f, 120f), "出发！", entranceGoStyle);
-            }
-        }
-
-        /// <summary>倒计时数字的预置串，避免每次 OnGUI 走 int.ToString()。</summary>
-        private static string CountdownLabel(int n) => n switch
-        {
-            1 => "1",
-            2 => "2",
-            3 => "3",
-            _ => n.ToString(),
-        };
-
-        private void DrawScreenFlashOverlay()
-        {
-            if (screenFlashTimer <= 0f && !bossSpawnFlashPending) return;
-
-            if (screenFlashTimer > 0f)
-            {
-                screenFlashTimer -= Time.deltaTime;
-                var t = Mathf.Clamp01(screenFlashTimer / Mathf.Max(0.01f, screenFlashDuration));
-                var alpha = screenFlashColor.a * (1f - t) * (1f - t); // ease-out quad
-                screenFlashCurrent = new Color(screenFlashColor.r, screenFlashColor.g, screenFlashColor.b, alpha);
-            }
-
-            // Boss 出场预警：屏幕边缘红光脉冲
-            if (bossSpawnFlashPending)
-            {
-                var pulse = Mathf.Sin(Time.time * 6f) * 0.5f + 0.5f;
-                var warnAlpha = bossSpawnFlashIntensity * pulse * 0.22f;
-                var warnColor = new Color(0.8f, 0.15f, 0.08f, warnAlpha);
-
-                // 顶部和底部边缘条
-                var edgeH = Screen.height * 0.12f;
-                GUI.color = warnColor;
-                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, edgeH), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(0f, Screen.height - edgeH, Screen.width, edgeH), Texture2D.whiteTexture);
-            }
-
-            if (screenFlashTimer <= 0f && !bossSpawnFlashPending) return;
-
-            GUI.color = screenFlashCurrent;
-            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-        }
 
         private void TryStartThemeTransition()
         {
@@ -2167,47 +2103,6 @@ namespace PenguinRun
             objects.Clear();
         }
 
-        private void DrawThemeTransitionOverlay()
-        {
-            if (game == null || !game.IsThemeTransition) return;
-
-            var total = ThemeTransitionFadeOutSeconds + ThemeTransitionHoldSeconds + ThemeTransitionFadeInSeconds;
-            var t = Mathf.Clamp(themeTransitionTimer, 0f, total);
-
-            float alpha;
-            if (t < ThemeTransitionFadeOutSeconds)
-            {
-                alpha = Mathf.SmoothStep(0f, 0.82f, t / ThemeTransitionFadeOutSeconds);
-            }
-            else if (t < ThemeTransitionFadeOutSeconds + ThemeTransitionHoldSeconds)
-            {
-                alpha = 0.82f;
-            }
-            else
-            {
-                var fadeInT = (t - ThemeTransitionFadeOutSeconds - ThemeTransitionHoldSeconds) / ThemeTransitionFadeInSeconds;
-                alpha = Mathf.SmoothStep(0.82f, 0f, fadeInT);
-            }
-
-            if (alpha <= 0f) return;
-
-            GUI.color = new Color(0.02f, 0.06f, 0.12f, alpha);
-            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            var labelAlpha = Mathf.Clamp01(alpha / 0.82f) * 0.92f;
-            if (themeTransitionLabelStyle == null)
-            {
-                themeTransitionLabelStyle = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = 42,
-                    fontStyle = FontStyle.Bold,
-                    alignment = TextAnchor.MiddleCenter,
-                };
-            }
-            themeTransitionLabelStyle.normal.textColor = new Color(0.78f, 0.97f, 1f, labelAlpha);
-            GUI.Label(new Rect(0f, Screen.height * 0.42f, Screen.width, 56f), $"场景切换 · {GetThemeDisplayName(pendingTheme)}", themeTransitionLabelStyle);
-        }
 
         private static RunnerMapTheme GetNextTheme(RunnerMapTheme theme)
         {

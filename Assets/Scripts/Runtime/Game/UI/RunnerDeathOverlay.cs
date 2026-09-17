@@ -16,7 +16,8 @@ namespace PenguinRun.Game.UI
                 Vector2.zero, Vector2.zero, new Color(0.01f, 0.025f, 0.07f, 0.82f));
 
             var card = UiBuilder.CreateCard("ResultCard", root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(760f, 700f), Vector2.zero, UiTheme.PaperWarm, addBorder: true, addShadow: true);
+                new Vector2(760f, 700f), Vector2.zero, UiTheme.PaperWarm, addBorder: false, addShadow: true);
+            // 只留一道缝线描边；CreateCard 默认的 BorderSubtle 是霓虹蓝，叠在纸面上会出现双框。
             UiBuilder.AddOutline(card.gameObject, UiTheme.StitchBorder, new Vector2(2f, -2f));
             UiBuilder.AttachArtVignette("ResultCelebrationArt", card, Image2ArtCatalog.ResultCelebration, 0.16f);
             card.PlayPanelPopIn();
@@ -44,7 +45,7 @@ namespace PenguinRun.Game.UI
             });
 
             var lobby = UiBuilder.CreateSecondaryButton("ReturnToLobby", card, "回到营地", UiTheme.Body, null);
-            PlaceButton(lobby, new Vector2(0f, -310f), new Vector2(560f, 66f));
+            PlaceButton(lobby, new Vector2(0f, -306f), new Vector2(560f, 76f));
             lobby.onClick.AddListener(() =>
             {
                 UnityEngine.Object.Destroy(canvas);

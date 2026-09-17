@@ -7,7 +7,7 @@ namespace PenguinRun
     {
         [Header("Lanes")]
         public float laneWidth = 3f;
-        public float laneLerp = 23f;
+        public float laneLerp = 29f; // 与 RunnerTuningConfig.LaneLerp 同步；运行时以 config 为准
 
         [Header("Vertical")]
         public float gravity = 22f;
@@ -43,7 +43,7 @@ namespace PenguinRun
         public float despawnZ = -8f;
         public float spawnLeadMin = 8f;
         public float spawnLeadMax = 15f;
-        public float spawnSpacingMin = 14f;
+        public float spawnSpacingMin = 15f; // 与 RunnerTuningConfig.SpawnSpacingMin 同步
         public float spawnSpacingMax = 21f;
     }
 

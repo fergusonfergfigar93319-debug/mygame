@@ -190,6 +190,24 @@ Boss 活跃时，HUD 应优先显示生命、当前招式、破绽进度和必�
 
 已完成并移出列表：六主题音频差异（见 2026-07-26 节）、主角视觉瑕疵与跑酷实距可读性（见 2026-07-26 节）、减轻首局信息量（能力驱动新手期，见 2026-07-25 节）、移动端输入阈值响应式（`RunnerGestureThresholds.ForViewport`）、跑酷 HUD 迁 uGUI 并与大厅同一套 `UiTheme` 令牌（IMGUI `RunnerHud` 已裁撤）、Boss 战 HUD 压缩（Boss 态只保留生命/招式/反制提示）。
 
+## 2026-09-17 手感与局内 UI 批次
+
+本批次针对「撞到了却没感觉」「局内 HUD 三套色板混用」「难度选择是空话」三类问题，只动表现层与结算算式，不改任何碰撞几何或 Boss 判定。
+
+- **反馈配方单表：** 新增 `RunFeedbackProfile`，把每种 `RunFeedbackKind` 的闪屏 / 震屏 / 视野踢击 / 命中顿帧 / 振动写成一张表。`RunnerGameController` 从此只报告种类；`PenguinRunnerGame.HandleRunFeedback` 是唯一分发点。振动从「Android 固定 500ms 系统长震、设置滑杆只当开关」改为按强度 × 玩家设置换算成 18–70ms 的 `Vibrator.vibrate`，格挡轻、掉心重。
+- **命中顿帧：** 受伤 / Boss 击中 0.14s、格挡 0.06s，模拟时间 ×0.3；布景滚动乘同一个 `SimulationTimeScale`，输入照常读取。死亡定格阶段相机与角色以 0.35 倍速推进，撞击瞬间被拉长。
+- **震屏改成 punch：** 原先震动加在 SmoothDamp 的目标点上，被 0.18s 阻尼滤成软晃；DOTWEEN 分支又与每帧写位置互相覆盖。现在统一叠在 SmoothDamp 之后、沿相机右/上轴、随剩余时间衰减。受伤 / 完美 / 冲刺起手 / Boss 击败各带一次视野踢击（−10°…+6°），22/s 追随后回落到常态 10/s 平滑。
+- **擦身而过：** 新技巧动作 `SkillAction.NearMiss`（基础 40 分，走连段倍率）：不跳不铲、在判定盒外 0.55m 带内掠过且无靴底净空。此前干净换道贴过障碍零反馈，玩家学不到「贴着走更值」。
+- **全屏表现层迁出 IMGUI：** 新增 `RunnerScreenOverlay`（保留式 uGUI，`sortingOrder` 200，无 Raycaster），承载闪屏、Boss 边缘预警、死亡红幕、倒计时与主题切换幕布。`PenguinRunnerGame.OnGUI` 整段删除，文件 2230 → 2058 行，尺寸棘轮下调到 2180。
+- **难度倍率真实生效：** `RunOutcomeRouter` 原 `Max(base, base×mul)` 让「轻松 ×0.75」永远是空话。改为如实相乘；营地/道具倍率恒 ≥1，不受影响。
+- **局内 HUD 霜面色板：** `RunnerHudCanvas` 同一张卡上此前混用霓虹青描边、纸暖白正文、暖金强调。收敛成 CardFill / CardStroke / TextSnow / TextFrost / Reward / Danger 六个令牌；暂停面板主操作改珊瑚底白字与大厅底坞同语言；生命心形 30 → 40px；Boss HUD 破绽态改 `PineGreen`。死亡卡去掉叠在缝线外的霓虹蓝双框，「回到营地」按钮 66 → 76px。
+- **字形：** 删除局内文案里的 ⚠ ⚡ 🎯 ← → 等在动态 CJK 图集上会变豆腐块的符号，路线提示改为「左道 / 右道」文字。
+- **死代码同步：** `RunnerTuning` 里被 `FromConfig` 永远覆盖的 `laneLerp` / `spawnSpacingMin` 默认值与 config 对齐，避免有人在死副本上调参。
+
+**新增门禁** `tools/VerifyRunFeelBatch.ps1`，已接入 Android 构建链末尾；断言上述八项契约（含 `PenguinRunnerGame` 不得再出现 `OnGUI` / `GUI.` / `GUIStyle`）。
+
+验证：全量 Roslyn 编译通过（189 源文件）；18 个静态门禁全过。**Unity 批处理校验器（`ProjectUiLayoutRegressionTest`、`ProjectPlayerExperienceValidation`）本机因无有效 Editor license 返回 198，未能运行**；两者断言的 HUD 节点路径（`SafeArea/Pause`、`SafeArea/Paused/Resume`、`SafeArea/Paused/ReturnToCamp`、`NormalStats/Buffs`）与按钮尺寸在本批次未改动，但以运行为准。Android 实机手感（顿帧、振动强度分级、震屏幅度）待验证。
+
 ## 2026-09-03 Image 2 纸张插画与别名收口
 
 七张 Image 2 插画接到大厅全景、章节卡、手记、图鉴、商店、结算、加载页，并补到死亡卡、暂停卡和「我的战绩」Sheet。插画一律低透明铺底；缺图时省略，不许退回占位圆或白矩形。衬底统一走 `UiBuilder.AttachArtVignette`。

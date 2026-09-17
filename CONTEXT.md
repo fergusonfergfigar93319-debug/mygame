@@ -181,6 +181,31 @@
 - **调用顺序：** `RunnerDeviceTier.Apply()` 必须早于 `RunnerPostFx.TryAttach`。
 - **勿混淆：** `Application.targetFrameRate` 与 vSync 由 `ConfigureRuntimePerformance` 管理，不属于档位表。
 
+### 局内反馈配方（RunFeedbackProfile）
+
+- **意指：** 一次局内反馈事件（完美闪避 / 擦身 / 受伤 / 死亡 / Boss 击中 / 格挡 / 冲刺起手…）在各表现通道上的配方：闪屏颜色与时长、震屏幅度与时长、视野踢击度数、命中顿帧秒数、是否振动。纯数据表，`RunFeedbackProfile.For(kind)` 查询。
+- **权威边界：** 判定层（`RunnerGameController` / `CollisionSystem`）只产出 `RunFeedbackKind`，不得再写死 `new Color(...)` 闪屏或直接调振动；`PenguinRunnerGame.HandleRunFeedback` 是唯一分发点。振动强度 = 配方强度 × 玩家设置 `HapticIntensity`，Android 走 `Vibrator.vibrate(ms)`，时长 18–70ms。
+- **命中顿帧：** 受伤 / Boss 击中 0.14s、格挡 0.06s，模拟 dt × `HitStopTimeScale`（0.3）。**布景滚动必须乘同一个 `SimulationTimeScale`**，否则路面在动、障碍不动。输入在顿帧期间照常读取。
+- **勿混淆：** Boss 击败的 `defeatFreezeTimer` 只放慢相机 dt，是演出而非顿帧；死亡定格阶段以 0.35 倍速推进相机与角色，属死亡序列。
+
+### 全屏表现层（RunnerScreenOverlay）
+
+- **意指：** 跑酷场景里所有铺满屏幕的表现：一次性闪屏、Boss 边缘红光预警、死亡红幕、开局 3-2-1 倒计时与主题切换幕布。保留式 uGUI，`sortingOrder` 200（HUD 170 之上、死亡卡 240 / 札记 260 之下），**不带 GraphicRaycaster**（闪屏不得吞掉暂停按钮触摸）。
+- **背景：** 原先这些都在 `PenguinRunnerGame.OnGUI` 里用 IMGUI 画。IMGUI 每帧至少跑两遍（Layout + Repaint），闪屏计时器在绘制里递减，衰减速度随该帧 IMGUI 遍数漂移；倒计时字体、缩放与其余 uGUI 不一致。
+- **规则：** `PenguinRunnerGame` 不得再出现 `OnGUI` / `GUI.` / `GUIStyle`；闪屏按 `Time.unscaledDeltaTime` 每帧只衰减一次；颜色写入按 `Color32` 量化门控，缩放/透明度按 1/100 门控。由 `VerifyRunFeelBatch.ps1` 断言。
+
+### 擦身而过（NearMiss）
+
+- **意指：** 未做跳/铲、仅靠车道位置以极小侧向间距（判定盒外 `NearMissBandX` = 0.55m 带内）掠过障碍，且没有靴底净空。记 `SkillAction.NearMiss`（基础 40 分，走技巧连段倍率）、高频短促气流音、淡青闪屏 + 视野微扩。
+- **边界：** 只看本帧真实重叠带（`overlapsNow`），掉帧穿透补判不算；从上方跳过的属于完美跳跃路径，不重复计；每个障碍只计一次。
+- **勿混淆：** 完美闪避要求在动作窗口内以跳/铲清过障碍；擦身是「换道贴过去」的奖励，两者互斥。
+
+### 局内 HUD 霜面色板（RunnerHudFrostPalette）
+
+- **意指：** 深色 3D 场景上的跑酷 HUD 使用一组独立令牌：`CardFill`（深海蓝 78% 底）/ `CardStroke`（冰雾描边）/ `TextSnow`（雪白主文）/ `TextFrost`（霜蓝辅文）/ `Reward`（暖金）/ `Danger`（珊瑚）。暂停面板主操作与大厅底坞同语言：珊瑚底 + 白字。
+- **规则：** `RunnerHudCanvas` 不得引用 `UiTheme.AccentCyan` / `UiTheme.TextSecondary` / `UiTheme.PaperWarm`（此前同一张卡上三套色板混用）；`BossHudPanel` 破绽态用 `UiTheme.PineGreen`，不用霓虹 `Success`。生命心形 ≥ 40px。
+- **勿混淆：** 这不是纸张 UI 层（`PaperUiLayer`），纸张层的别名门禁不覆盖本层；本层由 `VerifyRunFeelBatch.ps1` 单独断言。
+
 ### 主题听感档案（ThemeAudioProfile）
 
 - **意指：** 每个 `RunnerMapTheme` 的听觉身份：循环环境音床（clip + 音调 + 音量缩放）、落地/受击共用的地面音色、金币音调性、Boss 击发音调缩放。与 `ThemePresentationProfile` 对称，同为纯表现层，不改任何判定。
@@ -283,6 +308,9 @@
 - 主角网格改动一律改 `tools/blender/build_gugugaga_avatar.py` 后重建，不得直接编辑 FBX；重建后必须依次跑 `RunnerAvatarAssetBuilder`（重建预制体 + LOD/材质校验）与 `ProjectAvatarGameplayViewCapture`（实距读感）。
 - 新增贴在角色曲面上的颜色分区必须走 `conform_inside()`；未裁剪的贴片视为未完成（见「表面贴片」）。
 - 每帧刷新的 HUD 文本必须按值变更门控，不得逐帧构造字符串；倒计时类文本以其显示粒度（如 0.1s）为比对单位。
+- 新增局内反馈事件必须同时扩展 `RunFeedbackKind` 与 `RunFeedbackProfile.For`；判定层只报告种类，不得自带闪屏颜色或振动调用。
+- 跑酷场景内任何铺满屏幕的表现一律挂到 `RunnerScreenOverlay`，不得新增 IMGUI 绘制。
+- 难度得分倍率（`DifficultyPreset.ScoreMultiplier`）在结算中按乘法如实生效，不得用 `Max(base, …)` 之类写法把 <1 的倍率抹平——难度页承诺的取舍必须真实存在。
 - `tools/` 下的门禁脚本一律纯 ASCII 注释（无 BOM 时 PowerShell 5.1 按 ANSI 读取，中文会导致误导性解析错误）。
 - `VerifyFileSizeRatchet.ps1` 登记的超大文件只准缩小，不准增长。拆分落地时同步下调上限；上调上限必须在评审中说明理由，不得顺手改。
 - 门禁脚本中的「禁止出现某写法」检查必须先剥掉注释再匹配，否则解释该规则的注释本身会让门禁失败。

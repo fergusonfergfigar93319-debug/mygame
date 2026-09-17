@@ -26,7 +26,7 @@ $failures = [System.Collections.Generic.List[string]]::new()
 # to absorb a new feature dropped into an already-oversized file.
 $ceilings = [ordered]@{
     'Assets/Scripts/Runtime/PenguinRun/Systems/SegmentSpawner.cs'      = 2400
-    'Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs'           = 2290
+    'Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs'           = 2180 # lowered 2026-09-17: IMGUI overlay moved out
     'Assets/Scripts/Runtime/PenguinRun/Systems/BossEncounter.cs'       = 1900
     'Assets/Scripts/Runtime/Game/UI/CampShopPanel.cs'                  = 1820
     'Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs'              = 1390

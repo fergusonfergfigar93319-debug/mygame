@@ -10,10 +10,15 @@ namespace PenguinRun
         private const float PlayerMarginZ = 0.02f;
         private const int PerfectDodgePruneThreshold = 64;
 
+        // 擦身带：障碍判定盒外侧这一圈内掠过（且没有靴底净空）即算「擦身而过」。
+        // 0.55m 约为一颗鱼干的宽度——比车道间距 3m 小一个量级，只有贴着障碍走才触发。
+        private const float NearMissBandX = 0.55f;
+
         private readonly RunnerAudio audio;
         private readonly RunnerCombatTuning combat;
         private readonly RunUpgradeState upgrades;
         private readonly HashSet<GameObject> perfectDodged = new();
+        private readonly HashSet<GameObject> nearMissed = new();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private readonly HashSet<GameObject> warnedMissingSpecs = new();
 #endif
@@ -25,7 +30,11 @@ namespace PenguinRun
             this.upgrades = upgrades;
         }
 
-        public void Reset() => perfectDodged.Clear();
+        public void Reset()
+        {
+            perfectDodged.Clear();
+            nearMissed.Clear();
+        }
 
         public bool CheckCollisions(
             Transform player,
@@ -43,7 +52,8 @@ namespace PenguinRun
             PlayerMotor motor = null,
             System.Action onPerfectDodge = null,
             System.Action onPlayerDamaged = null,
-            float obstacleSweepDz = 0f)
+            float obstacleSweepDz = 0f,
+            System.Action onNearMiss = null)
         {
             if (world.HitInvulnerabilityTimer > 0f) return false;
 
@@ -52,6 +62,10 @@ namespace PenguinRun
             if (perfectDodged.Count > PerfectDodgePruneThreshold)
             {
                 perfectDodged.RemoveWhere(o => o == null);
+            }
+            if (nearMissed.Count > PerfectDodgePruneThreshold)
+            {
+                nearMissed.RemoveWhere(o => o == null);
             }
 
             // 蹲姿判定盒：滑铲立即压低、结束后逐渐起身；无 motor 时按站姿处理
@@ -89,7 +103,21 @@ namespace PenguinRun
                 var tunneledPast = relZ > halfDz && relZ < obstacleSweepDz - halfDz;
                 if (!overlapsNow && !tunneledPast) continue;
                 var dx = Mathf.Abs(obstacle.transform.position.x - px);
-                if (dx > spec.HalfDx + PlayerMarginX) continue;
+                var hitHalfDx = spec.HalfDx + PlayerMarginX;
+                if (dx > hitHalfDx)
+                {
+                    // 擦身而过：只看本帧真实重叠带（tunneled 补判不算），且玩家没有靴底净空——
+                    // 从上方跳过去的属于完美跳跃那条路径，不重复计。
+                    if (overlapsNow && onNearMiss != null && dx < hitHalfDx + NearMissBandX
+                        && playerY <= obstacle.transform.position.y + spec.FeetClearanceAboveRoot
+                        && nearMissed.Add(obstacle))
+                    {
+                        feedbackText = "擦身而过！";
+                        feedbackTimer = 0.55f;
+                        onNearMiss.Invoke();
+                    }
+                    continue;
+                }
 
                 if (obstacle.TryGetComponent<ObstacleBehavior>(out var behavior) && !behavior.IsCollidable)
                     continue;
@@ -115,7 +143,7 @@ namespace PenguinRun
                     {
                         perfectDodged.Add(obstacle);
                         world.AddPerfectDodge();
-                        feedbackText = "\u26A1 完美滑铲！+25";
+                        feedbackText = "完美滑铲！+25";
                         feedbackTimer = 0.7f;
                         EventBus.Emit(GameEvents.PerfectDodge);
                         onPerfectDodge?.Invoke();
@@ -124,7 +152,7 @@ namespace PenguinRun
                     {
                         perfectDodged.Add(obstacle);
                         world.AddPerfectDodge();
-                        feedbackText = "\u26A1 完美跳跃！+25";
+                        feedbackText = "完美跳跃！+25";
                         feedbackTimer = 0.7f;
                         EventBus.Emit(GameEvents.PerfectDodge);
                         onPerfectDodge?.Invoke();
@@ -179,17 +207,15 @@ namespace PenguinRun
 
             switch (outcome.Kind)
             {
+                // 振动统一由 RunFeedbackProfile 按反馈种类决定，这里不再直接触发，避免同一次受伤震两回。
                 case HitOutcomeKind.BlockedByDefense:
                     audio.PlayShieldBreak();
-                    pulseHaptic?.Invoke();
                     break;
                 case HitOutcomeKind.Damage:
                     EventBus.Emit(GameEvents.PlayerHurt);
-                    pulseHaptic?.Invoke();
                     break;
                 case HitOutcomeKind.GameOver:
                     audio.PlayCrash();
-                    pulseHaptic?.Invoke();
                     break;
             }
         }

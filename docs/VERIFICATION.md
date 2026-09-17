@@ -44,6 +44,7 @@ Get-ChildItem tools/Verify*.ps1 | ForEach-Object {
 | `VerifyCubePetAndNatureProps.ps1` | Cube Pet 主角路径 + 六主题路边开源 FBX（含中景带与灯/旗/冰晶/海草换模）与 credits |
 | `VerifyQualityTierCalibration.ps1` | 画质分档由设备能力驱动、真的写入、且编辑器可达 |
 | `VerifyFileSizeRatchet.ps1` | 六个超大文件只准缩小，不准增长 |
+| `VerifyRunFeelBatch.ps1` | 2026-09-17 手感与局内 UI 批次：保留式全屏表现层取代 IMGUI、反馈配方单表、命中顿帧双端同步、擦身技巧分、难度倍率真实生效、振动单一权威、HUD 霜面单色板、无豆腐块字形 |
 
 **约定：** 这些脚本一律**纯 ASCII 注释**。无 BOM 时 PowerShell 5.1 按 ANSI 读取，中文注释会变成误导性的解析错误。
 

@@ -44,10 +44,13 @@ namespace PenguinRun
         // 编译器缓存，写在调用点上等于每帧各新建一个委托；这里建一次复用整局。
         private readonly System.Action onAirCollection;
         private readonly System.Action<int> onFishCollected;
+        private readonly System.Action onNearMiss;
+        private readonly System.Action onShatterWall;
         private readonly OnboardingState onboarding;
         private readonly Transform sceneRoot;
-        private readonly System.Action pulseHaptic;
+        private readonly System.Action<RunFeedbackKind> onFeedback;
         private readonly System.Action<Color, float> onScreenFlash;
+        private float hitStopTimer;
         private readonly System.Action<RunnerRunResult> onFinish;
 
         private readonly GameStateMachine stateMachine = new();
@@ -79,7 +82,7 @@ namespace PenguinRun
             Transform playerTransform,
             IPlayerCharacterPresentation character,
             Transform sceneRoot,
-            System.Action pulseHaptic,
+            System.Action<RunFeedbackKind> onFeedback,
             System.Action<Color, float> onScreenFlash,
             System.Action<RunnerRunResult> onFinish)
         {
@@ -89,7 +92,7 @@ namespace PenguinRun
             this.playerTransform = playerTransform;
             this.character = character;
             this.sceneRoot = sceneRoot;
-            this.pulseHaptic = pulseHaptic;
+            this.onFeedback = onFeedback;
             this.onScreenFlash = onScreenFlash;
             this.onFinish = onFinish;
 
@@ -109,6 +112,8 @@ namespace PenguinRun
                 ThemeMasteryStore.For(config.MapTheme).TutorialSeen);
             onAirCollection = () => AwardSkill(SkillAction.AirCollection, 60);
             onFishCollected = themeMastery.RecordFish;
+            onNearMiss = HandleNearMiss;
+            onShatterWall = () => onFeedback?.Invoke(RunFeedbackKind.DefenseBlock);
             pickups = new PickupSystem(tuning.pickup, tuning.powerUp, config, runUpgradeState);
             collisions = new CollisionSystem(runnerAudio, tuning.combat, runUpgradeState);
             bossSystem = new BossSystem(runnerAudio, config, sceneRoot, tuning.movement.groundY, tuning.movement.laneWidth, tuning.combat);
@@ -213,6 +218,8 @@ namespace PenguinRun
             waitingForGuidedReaction = false;
             manualDashCooldownTimer = 0f;
             dashBufferTimer = 0f;
+            hitStopTimer = 0f;
+            HitStopActive = false;
             lastLifeCount = world.Lives;
 
             if (start)
@@ -411,6 +418,11 @@ namespace PenguinRun
 
         public float PauseUiHold => pauseHoldUI;
 
+        /// <summary>本帧处于命中顿帧；表现层据此把布景与障碍滚动放慢到同一时标。</summary>
+        public bool HitStopActive { get; private set; }
+
+        public float SimulationTimeScale => HitStopActive ? RunFeedbackProfile.HitStopTimeScale : 1f;
+
         public void TickIdle(float rawDt)
         {
             var action = input.Poll();
@@ -479,6 +491,15 @@ namespace PenguinRun
                 runnerAudio.UpdateRunState(0f, stateMachine.IsRunning, world.DashTimer > 0f, world.MagnetTimer > 0f, world.ShieldTimer > 0f);
                 return 0f;
             }
+
+            // 命中顿帧：受伤后的短暂时间内世界以 0.3 倍速运行，输入照常读取。
+            // 这是「被撞到了」最直接的体感——原先只有一层红闪，玩家常常分不清是擦过还是掉了一颗心。
+            if (hitStopTimer > 0f)
+            {
+                hitStopTimer = Mathf.Max(0f, hitStopTimer - dt);
+                dt *= RunFeedbackProfile.HitStopTimeScale;
+            }
+            HitStopActive = hitStopTimer > 0f;
 
             skillScoreTracker.Tick(dt);
             themeMastery.Tick(dt);
@@ -631,7 +652,7 @@ namespace PenguinRun
             var milestoneReward = world.TryHitDistanceMilestone();
             if (milestoneReward > 0)
             {
-                feedbackText = $"🎯 {world.DistanceMilestonesHit * 500}m 里程碑！+{milestoneReward} 鱼干";
+                feedbackText = $"{world.DistanceMilestonesHit * 500}m 里程碑！+{milestoneReward} 鱼干";
                 feedbackTimer = 1.5f;
                 runnerAudio.PlayCheckpoint();
             }
@@ -694,7 +715,7 @@ namespace PenguinRun
                 if (nextDef != null)
                 {
                     spawner.SpawnBossPrelude(world.Distance, nextDef);
-                    feedbackText = $"⚠ 前方高能：{nextDef.DisplayName} 即将出现！\n{nextDef.SignatureMechanic}";
+                    feedbackText = $"前方高能：{nextDef.DisplayName} 即将出现！\n{nextDef.SignatureMechanic}";
                     feedbackTimer = 3.0f;
                     EmitRunFeedback(RunFeedbackKind.BossWarning);
                 }
@@ -736,7 +757,6 @@ namespace PenguinRun
                     BreakSkillChain();
                     character.TriggerHurt();
                     EventBus.Emit(GameEvents.PlayerHurt);
-                    pulseHaptic?.Invoke();
                     EmitRunFeedback(RunFeedbackKind.BossHit);
                 }
             }
@@ -769,12 +789,13 @@ namespace PenguinRun
                     spawner.obstacleSpecs,
                     ref feedbackText,
                     ref feedbackTimer,
-                    pulseHaptic,
+                    onShatterWall,
                     motor,
                     HandlePerfectDodge,
                     RecordThemeDamage,
                     // 障碍本帧沿 -Z 的位移，供扫掠判定补齐掉帧时被跳过的命中。
-                    effectiveSpeed * dt);
+                    effectiveSpeed * dt,
+                    onNearMiss);
 
             if (world.Lives < livesBeforeCollision)
             {
@@ -1016,39 +1037,27 @@ namespace PenguinRun
             skillScoreTracker.BreakChain();
         }
 
+        private void HandleNearMiss()
+        {
+            AwardSkill(SkillAction.NearMiss, 40);
+            runnerAudio.PlayNearMiss();
+            EmitRunFeedback(RunFeedbackKind.NearMiss);
+        }
+
         private void EmitRunFeedback(RunFeedbackKind kind)
         {
+            // 闪屏 / 震屏 / 视野 / 振动的配方在 RunFeedbackProfile 一处定义，由 PenguinRunnerGame 分发。
+            // 这里只保留会改变玩法或角色状态的副作用。
+            var profile = RunFeedbackProfile.For(kind);
+            if (profile.HitStopSeconds > 0f) hitStopTimer = Mathf.Max(hitStopTimer, profile.HitStopSeconds);
+            onFeedback?.Invoke(kind);
             switch (kind)
             {
                 case RunFeedbackKind.PerfectDodge:
-                    onScreenFlash?.Invoke(new Color(1f, 0.85f, 0.2f, 0.22f), 0.25f);
                     character.TriggerPerfectDodge();
                     break;
-                case RunFeedbackKind.ObstacleDamage:
-                    onScreenFlash?.Invoke(new Color(1f, 0.35f, 0.2f, 0.4f), 0.28f);
-                    break;
-                case RunFeedbackKind.ObstacleDeath:
-                    onScreenFlash?.Invoke(new Color(1f, 0.1f, 0.05f, 0.65f), 0.45f);
-                    break;
-                case RunFeedbackKind.BossWarning:
-                    onScreenFlash?.Invoke(new Color(0.8f, 0.45f, 0.08f, 0.15f), 0.4f);
-                    break;
-                case RunFeedbackKind.BossHit:
-                    onScreenFlash?.Invoke(new Color(1f, 0.2f, 0.15f, 0.55f), 0.35f);
-                    break;
                 case RunFeedbackKind.BossDeath:
-                    onScreenFlash?.Invoke(new Color(1f, 0.05f, 0.02f, 0.7f), 0.6f);
                     runnerAudio.PlayCrash();
-                    pulseHaptic?.Invoke();
-                    break;
-                case RunFeedbackKind.DefenseBlock:
-                    onScreenFlash?.Invoke(new Color(0.4f, 0.85f, 1f, 0.28f), 0.22f);
-                    break;
-                case RunFeedbackKind.SegmentHazard:
-                    onScreenFlash?.Invoke(new Color(1f, 0.55f, 0.35f, 0.12f), 0.35f);
-                    break;
-                case RunFeedbackKind.SegmentReward:
-                    onScreenFlash?.Invoke(new Color(1f, 0.85f, 0.4f, 0.12f), 0.35f);
                     break;
             }
         }
@@ -1180,6 +1189,7 @@ namespace PenguinRun
             dashBufferTimer = 0f;
             feedbackText = "冲刺！";
             feedbackTimer = 0.65f;
+            EmitRunFeedback(RunFeedbackKind.DashStart);
         }
     }
 }

@@ -138,7 +138,7 @@ namespace PenguinRun
             {
                 cachedVulnerable = vulnerable;
                 // 破绽期整块面板转绿：这是全场唯一的进攻窗口，值得压过其它配色。
-                patternText.color = vulnerable ? UiTheme.Success : Color.white;
+                patternText.color = vulnerable ? UiTheme.PineGreen : Color.white;
             }
 
             var hint = string.IsNullOrWhiteSpace(boss.CurrentBossCounterHint)
@@ -178,7 +178,7 @@ namespace PenguinRun
                 if (i >= MaxRhythmPips) break;
                 var pending = i < remaining;
                 rhythmPips[i].gameObject.SetActive(i < MaxRhythmPips);
-                rhythmPips[i].color = pending ? RhythmPending : UiTheme.Success;
+                rhythmPips[i].color = pending ? RhythmPending : UiTheme.PineGreen;
             }
         }
 

@@ -333,6 +333,9 @@ namespace PenguinRun
 
         public void PlayPerfectDodge() => Play("score_star", 0.65f, 1.25f);
 
+        /// <summary>擦身而过：复用滑铲气流音的高频短促版，不引入新资源。</summary>
+        public void PlayNearMiss() => Play("slide", 0.42f, 1.45f);
+
         public void PlayPause() => Play("ui_select", 0.55f, 0.85f);
 
         public void EnterBossMusic(BossDefinition boss)

@@ -154,12 +154,12 @@ namespace PenguinRun
                 SpawnBoss(runDistance);
                 if (guidanceEnabledForCurrentBoss)
                 {
-                    feedbackText = $"⚠ BOSS 来袭：{CurrentBoss.Definition.DisplayName}【{difficultyHintTag}】\n{GetDashHowToHint()}；破绽圈变绿时冲刺穿身反击";
+                    feedbackText = $"BOSS 来袭：{CurrentBoss.Definition.DisplayName}【{difficultyHintTag}】\n{GetDashHowToHint()}；破绽圈变绿时冲刺穿身反击";
                     feedbackTimer = 1.9f;
                 }
                 else
                 {
-                    feedbackText = $"⚠ BOSS 再临：{CurrentBoss.Definition.DisplayName}";
+                    feedbackText = $"BOSS 再临：{CurrentBoss.Definition.DisplayName}";
                     feedbackTimer = 1.1f;
                 }
                 audio.PlayBossLand();
