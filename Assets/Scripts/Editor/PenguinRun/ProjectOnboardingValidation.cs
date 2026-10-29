@@ -139,8 +139,8 @@ namespace PenguinRun.Editor
             }
 
             var worldEvents = new WorldEventScheduler(suppressed: true);
-            Expect(!worldEvents.Tick(500f), "suppressed WorldEventScheduler must not fire at 500m", failures);
-            Expect(!worldEvents.Tick(1000f), "suppressed WorldEventScheduler must not fire at 1000m", failures);
+            Expect(!worldEvents.Tick(500f, 0.02f), "suppressed WorldEventScheduler must not fire at 500m", failures);
+            Expect(!worldEvents.Tick(1000f, 0.02f), "suppressed WorldEventScheduler must not fire at 1000m", failures);
             Expect(!worldEvents.EventActive, "suppressed WorldEventScheduler must stay inactive", failures);
 
             var openRoute = new RouteEventDirector(RunnerMapTheme.IceLakeEcho, daily: false, runCount: 0, suppressed: false);

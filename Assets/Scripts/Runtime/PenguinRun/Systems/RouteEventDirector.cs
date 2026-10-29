@@ -10,10 +10,12 @@ namespace PenguinRun
         internal const float MinimumEventSpacing = 280f;
         private const float DecisionDistance = 72f;
 
-        private readonly IReadOnlyList<RouteEventDefinition> pool;
+        private IReadOnlyList<RouteEventDefinition> pool;
         private readonly int seed;
+        private readonly RunnerMapTheme openingTheme;
+        private readonly Dictionary<RunnerMapTheme, int> eventOrdinals = new();
+        private RunnerMapTheme theme;
         private readonly bool suppressed;
-        private int eventIndex;
         private float nextEventDistance = FirstEventDistance;
         private float eventStartDistance;
         private RouteEventDefinition activeDefinition;
@@ -22,6 +24,8 @@ namespace PenguinRun
 
         public RouteEventDirector(RunnerMapTheme theme, bool daily, int runCount, bool suppressed = false)
         {
+            this.theme = theme;
+            openingTheme = theme;
             pool = RouteEventCatalog.For(theme);
             seed = BuildSeed(theme, daily, runCount);
             this.suppressed = suppressed;
@@ -35,6 +39,18 @@ namespace PenguinRun
 
         public int RiskyCompletedCount { get; private set; }
         public IReadOnlyList<string> CompletedEventIds => completedEventIds;
+
+        public RunnerMapTheme CurrentTheme => theme;
+
+        /// <summary>Swap only future event definitions; progress and spacing remain run-global.</summary>
+        public void SetTheme(RunnerMapTheme nextTheme, float currentDistance)
+        {
+            if (!RunThemeSessionState.IsValid(nextTheme)) return;
+            if (theme == nextTheme) return;
+            if (snapshot.AwaitingChoice) Cancel(currentDistance);
+            theme = nextTheme;
+            pool = RouteEventCatalog.For(nextTheme);
+        }
 
         public bool Tick(float distanceMeters)
         {
@@ -53,7 +69,9 @@ namespace PenguinRun
                 return false;
             }
 
-            activeDefinition = pool[DeterministicIndex(eventIndex++, pool.Count)];
+            eventOrdinals.TryGetValue(theme, out var ordinal);
+            activeDefinition = pool[DeterministicIndex(theme, ordinal++, pool.Count)];
+            eventOrdinals[theme] = ordinal;
             eventStartDistance = distanceMeters;
             snapshot = BuildSnapshot(activeDefinition, 0f, true);
             return true;
@@ -92,9 +110,19 @@ namespace PenguinRun
 
         public RouteEventResolution Expire(float distanceMeters) => Choose(false, distanceMeters);
 
+        /// <summary>Higher-priority world content cancels without awarding a choice.</summary>
+        public void Cancel(float distanceMeters)
+        {
+            if (!snapshot.AwaitingChoice) return;
+            nextEventDistance = Mathf.Max(eventStartDistance + MinimumEventSpacing,
+                Mathf.Max(0f, distanceMeters) + MinimumEventSpacing);
+            activeDefinition = default;
+            snapshot = RouteEventSnapshot.Empty;
+        }
+
         public void Reset()
         {
-            eventIndex = 0;
+            eventOrdinals.Clear();
             nextEventDistance = FirstEventDistance;
             eventStartDistance = 0f;
             activeDefinition = default;
@@ -102,13 +130,18 @@ namespace PenguinRun
             CompletedCount = 0;
             RiskyCompletedCount = 0;
             completedEventIds.Clear();
+            theme = openingTheme;
+            pool = RouteEventCatalog.For(openingTheme);
         }
 
-        private int DeterministicIndex(int ordinal, int count)
+        private int DeterministicIndex(RunnerMapTheme eventTheme, int ordinal, int count)
         {
             unchecked
             {
-                var value = seed + ordinal * 1103515245 + 12345;
+                // Remove the opening theme salt, then apply this theme's original salt.
+                var themeSeed = seed ^ ((int)openingTheme + 1) * 73856093
+                    ^ ((int)eventTheme + 1) * 73856093;
+                var value = themeSeed + ordinal * 1103515245 + 12345;
                 value ^= value >> 16;
                 return (int)((uint)value % (uint)count);
             }

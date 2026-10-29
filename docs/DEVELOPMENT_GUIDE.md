@@ -10,16 +10,17 @@
 
 1. [README.md](../README.md)
 2. [docs/CURRENT_DESIGN.md](CURRENT_DESIGN.md)
-3. [CONTEXT.md](../CONTEXT.md) — 术语、领域规则与工程约束，**动手前必读**
-4. [docs/VERIFICATION.md](VERIFICATION.md) — 怎么验证你的改动
-5. [docs/STORY.md](STORY.md)
-6. [docs/UNITY_INTEGRATION.md](UNITY_INTEGRATION.md)
-7. [docs/adr/](adr/) — 四份架构决策记录（横屏锁定、Boss 动画范式、主角 Mecanim、新手期）
-8. [Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs](../Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs)
-9. [Assets/Scripts/Runtime/PenguinRun/Systems/RunnerSegmentCatalog.cs](../Assets/Scripts/Runtime/PenguinRun/Systems/RunnerSegmentCatalog.cs)
-10. [Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs](../Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs)
+3. [docs/GDD.md](GDD.md) — 设计总纲：各系统数值、已知缺口与路线图
+4. [CONTEXT.md](../CONTEXT.md) — 术语、领域规则与工程约束，**动手前必读**
+5. [docs/VERIFICATION.md](VERIFICATION.md) — 怎么验证你的改动
+6. [docs/STORY.md](STORY.md)
+7. [docs/UNITY_INTEGRATION.md](UNITY_INTEGRATION.md)
+8. [docs/adr/](adr/) — 五份架构决策记录（横屏锁定、Boss 动画范式、主角 Mecanim、新手期、剧情后置）
+9. [Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs](../Assets/Scripts/Runtime/PenguinRun/PenguinRunnerGame.cs)
+10. [Assets/Scripts/Runtime/PenguinRun/Systems/RunnerSegmentCatalog.cs](../Assets/Scripts/Runtime/PenguinRun/Systems/RunnerSegmentCatalog.cs)
+11. [Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs](../Assets/Scripts/Runtime/Game/UI/MainMenuBootstrap.cs)
 
-`GAME_DESIGN.md` 是旧横版动作冒险历史稿，只作为世界观和命名参考。
+`GAME_DESIGN.md` 是旧横版动作冒险历史稿，只作为世界观和命名参考。`docs/STORY.md` 的章节结构按 ADR-0005 后置，不要拿它排本阶段玩法。
 
 ## 当前开发重点
 
@@ -32,13 +33,15 @@
 - 六主题各自的光照档案与听感档案
 - 能力驱动的首局新手期（ADR-0004）
 - 跑酷 HUD 已全部迁到保留式 uGUI，与大厅共用 `UiTheme` 令牌
+- 2026-09-21：换道跟手、镜头与构图对齐、新手期第一次道具、片段横幅
 
 ### 下一步建议
 
-1. **Android 实机 60fps 实测**与画质分档阈值回校（分档阈值目前是先验值，未经真机数据验证）
-2. 伙伴立绘（团团 / Dror）与 premium 全景图仍缺美术，大厅当前隐藏该节点
+1. 继续打磨局内片段节奏、道具可读性与操作跟手（ADR-0005）
+2. **Android 实机 60fps 实测**与画质分档阈值回校（分档阈值目前是先验值，未经真机数据验证）
 3. UI 代码里仍有约 30 处裸 Unicode 字形，部分在实机是豆腐块（见 CONTEXT 的「UI 字形」）
 4. `BossEncounter` / `CampShopPanel` / `PenguinRunnerGame` 的职责下沉（有行数棘轮兜底，不会继续恶化）
+5. 剧情与章节结构后置，不在本阶段展开
 
 ## 提交代码建议
 

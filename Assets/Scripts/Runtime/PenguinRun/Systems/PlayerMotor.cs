@@ -64,6 +64,12 @@ namespace PenguinRun
         private float jumpBufferTimer;
         private float slideBufferTimer;
 
+        public void ClearBufferedActions()
+        {
+            jumpBufferTimer = 0f;
+            slideBufferTimer = 0f;
+        }
+
         public void ResetToStart()
         {
             Lane = RunnerLane.Center;
@@ -209,7 +215,7 @@ namespace PenguinRun
             var pos = player.position;
             LaneLean01 = Mathf.Clamp((targetX - pos.x) / laneWidth, -1f, 1f);
             var response = laneLerp * mechanic.LaneResponseMultiplier;
-            pos.x = Mathf.Lerp(pos.x, targetX, Mathf.Clamp01(response * dt));
+            pos.x = Mathf.Lerp(pos.x, targetX, RunnerMotion.Follow01(response, dt));
             pos.x += mechanic.LaneDriftLanesPerSecond * laneWidth * dt;
             pos.x = Mathf.Clamp(pos.x, -laneWidth, laneWidth);
             // 脚底在 PlayerY，身体中心在脚底上方；滑铲时身体降低

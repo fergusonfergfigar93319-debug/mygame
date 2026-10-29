@@ -51,7 +51,6 @@ namespace PenguinRun
         private bool warnedGameMissing;
         private RunnerMapTheme currentTheme;
         private RunnerMapTheme pendingTheme;
-        private float nextThemeSwitchTime;
         private bool themeAppliedInTransition;
         private float themeTransitionTimer;
         private RunnerScreenOverlay screenOverlay;
@@ -69,7 +68,6 @@ namespace PenguinRun
         private DeathState deathState;
         private float deathStateTimer;
 
-        private const float ThemeSwitchIntervalSeconds = 52f;
         private const float ThemeTransitionFadeOutSeconds = 0.45f;
         private const float ThemeTransitionHoldSeconds = 0.22f;
         private const float ThemeTransitionFadeInSeconds = 0.68f;
@@ -112,7 +110,6 @@ namespace PenguinRun
             ApplyMobileQualityBudget();
             config = RunnerSessionConfig.Snapshot();
             currentTheme = config.MapTheme;
-            nextThemeSwitchTime = ThemeSwitchIntervalSeconds;
 
             // 应用难度预设：覆盖速度曲线参数
             var diff = config.DifficultyPreset;
@@ -176,13 +173,14 @@ namespace PenguinRun
                 result.RouteEventsCompleted, result.RiskyRoutesCompleted,
                 result.SkillScore, result.PeakSkillChain,
                 result.SelectedUpgradeIds, result.CompletedRouteEventIds, result.ThemedRelicId,
-                result.ThemeMastery);
+                result.ThemeMastery, result.ThemeMasteries);
             if (publishAsLastResult) RunSession.LastResult = applied;
             return applied;
         }
 
         private void OnDestroy()
         {
+            game?.Spawner.CancelRouteEncounter();
             EventBus.Off<PowerUpKind>(GameEvents.PowerUpCollected, OnPowerUpCollectedFx);
             postFx?.Dispose();
             postFx = null;
@@ -204,14 +202,22 @@ namespace PenguinRun
 
         private void OnApplicationFocus(bool hasFocus)
         {
+            game?.ResetInput();
             ConfigureRuntimePerformance(hasFocus);
             if (!hasFocus) game?.SetPaused(true, false);
         }
 
         private void OnApplicationPause(bool pauseStatus)
         {
+            game?.ResetInput();
             ConfigureRuntimePerformance(!pauseStatus);
             if (pauseStatus) game?.SetPaused(true, false);
+        }
+
+        private void OnDisable()
+        {
+            game?.ResetInput();
+            game?.SetPaused(true, false);
         }
 
         private void Update()
@@ -289,7 +295,8 @@ namespace PenguinRun
             // 驱动粒子池和世界事件
             particlePool.Tick(dt, game.World.Distance);
 
-            if (worldEvents.Tick(game.World.Distance))
+            var eventDt = game.IsSimulationFrozen ? 0f : dt * game.SimulationTimeScale;
+            if (worldEvents.Tick(game.World.Distance, eventDt, !game.ThemeSwitchPending))
             {
                 // 事件触发：显示提示
                 game.FeedbackText = worldEvents.EventDisplayName;
@@ -297,9 +304,9 @@ namespace PenguinRun
             }
 
             // 世界事件粒子
-            if (worldEvents.EventActive)
+            if (worldEvents.EventActive && eventDt > 0f)
             {
-                EmitWorldEventParticles(dt);
+                EmitWorldEventParticles(eventDt);
             }
 
             // 检测 Boss 被击败，触发特效
@@ -338,7 +345,7 @@ namespace PenguinRun
         {
             if (game == null || hudCanvas == null) return;
             var world = game.World;
-            hudCanvas.RefreshDynamic(world, world.Score, game.FeedbackText, game.FeedbackTimer);
+            hudCanvas.RefreshDynamic(world, world.Score, game.FeedbackText, game.FeedbackTimer, game.ManualDashCooldown);
             hudCanvas.SetBossMode(game.Boss);
             hudCanvas.SetRouteEvent(game.RouteEvent);
             hudCanvas.SetThemeMechanic(game.ThemeMechanic);
@@ -527,7 +534,6 @@ namespace PenguinRun
 
             currentTheme = config.MapTheme;
             pendingTheme = currentTheme;
-            nextThemeSwitchTime = ThemeSwitchIntervalSeconds;
             themeTransitionTimer = 0f;
             themeAppliedInTransition = false;
             ApplyMapThemeVisuals(currentTheme);
@@ -2032,21 +2038,14 @@ namespace PenguinRun
         private void TryStartThemeTransition()
         {
             if (game == null || game.IsThemeTransition || !game.Running) return;
-            if (game.Boss != null && game.Boss.BossActive) return;
-            if (game.World.RunTime < nextThemeSwitchTime) return;
+            if (worldEvents.EventActive) return;
+            if (!game.ThemeSwitchPending || !game.CanApplyPendingThemeSwitch()) return;
 
-            pendingTheme = GetNextTheme(currentTheme);
-            if (pendingTheme == currentTheme)
-            {
-                nextThemeSwitchTime += ThemeSwitchIntervalSeconds;
-                return;
-            }
-
+            pendingTheme = RunThemeSessionState.NextTheme(game.CurrentTheme);
             if (!game.TryBeginThemeTransition()) return;
 
             themeAppliedInTransition = false;
             themeTransitionTimer = 0f;
-            nextThemeSwitchTime += ThemeSwitchIntervalSeconds;
             runnerAudio.PlayCheckpoint();
         }
 
@@ -2071,12 +2070,11 @@ namespace PenguinRun
 
         private void ApplyRuntimeThemeChange(RunnerMapTheme nextTheme)
         {
-            currentTheme = nextTheme;
-            RunSession.NextRunTheme = nextTheme;
-            TrackTerrain.SetThemeProfile(nextTheme);
-            ApplyMapThemeVisuals(nextTheme);
-            RebuildThemeScenery(nextTheme);
-            game.Spawner.ApplyTheme(nextTheme, clearSpawnedEntities: true);
+            if (!game.TryApplyCurrentTheme(nextTheme)) return;
+            currentTheme = game.CurrentTheme;
+            RunSession.NextRunTheme = currentTheme;
+            ApplyMapThemeVisuals(currentTheme);
+            RebuildThemeScenery(currentTheme);
             game.Spawner.SeedInitialObstacles(game.World.Distance);
         }
 
@@ -2103,19 +2101,6 @@ namespace PenguinRun
             objects.Clear();
         }
 
-
-        private static RunnerMapTheme GetNextTheme(RunnerMapTheme theme)
-        {
-            return theme switch
-            {
-                RunnerMapTheme.IceLakeEcho => RunnerMapTheme.CedarRuins,
-                RunnerMapTheme.CedarRuins => RunnerMapTheme.AuroraField,
-                RunnerMapTheme.AuroraField => RunnerMapTheme.MistDike,
-                RunnerMapTheme.MistDike => RunnerMapTheme.OceanReef,
-                RunnerMapTheme.OceanReef => RunnerMapTheme.SkyFlight,
-                _ => RunnerMapTheme.IceLakeEcho,
-            };
-        }
 
         // 主题展示名集中在 RunnerMapThemeInfo：这里原本有一份独立副本，且已经和大厅那份
         // 漂移（此处是「雾堤」，其余地方是「北境雾堤」）。

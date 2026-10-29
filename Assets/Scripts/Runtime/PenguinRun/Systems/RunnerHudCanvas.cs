@@ -53,6 +53,10 @@ namespace PenguinRun
         private readonly TextMeshProUGUI mechanicHintText;
         private readonly Image resonanceFill;
         private readonly TextMeshProUGUI contractSummaryText;
+        private GameObject dashChipRoot;
+        private TextMeshProUGUI dashChipText;
+        private RectTransform dashChargeFill;
+        private int cachedDashTenths = int.MinValue;
 
         private int cachedScore = int.MinValue;
         private int cachedDistance = int.MinValue;
@@ -147,13 +151,14 @@ namespace PenguinRun
             var combo = CreateHudText("Combo", left, string.Empty, UiTheme.Caption, Reward,
                 new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.33f), TextAlignmentOptions.Left);
 
-            var right = CreateHudCard("Resources", normal, new Vector2(0.72f, 0.82f), new Vector2(0.982f, 0.975f));
+            var right = CreateHudCard("Resources", normal, new Vector2(0.775f, 0.905f), new Vector2(0.982f, 0.975f));
             var fish = CreateHudText("Fish", right, "鱼干 0", UiTheme.Body, Reward,
-                new Vector2(0.06f, 0.50f), new Vector2(0.94f, 0.92f), TextAlignmentOptions.Right);
+                new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.92f), TextAlignmentOptions.Right);
 
             // 生命：心形图标行（Sprite 染色），替代 Unicode ♥♡ 文本
-            var livesRow = UiBuilder.CreateRect("LivesRow", right,
-                new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.50f),
+            var lifeCard = CreateHudCard("Lives", root, new Vector2(0.775f, 0.82f), new Vector2(0.982f, 0.895f));
+            var livesRow = UiBuilder.CreateRect("LivesRow", lifeCard,
+                new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.92f),
                 Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0f));
             var livesLayout = livesRow.gameObject.AddComponent<HorizontalLayoutGroup>();
             livesLayout.childAlignment = TextAnchor.MiddleRight;
@@ -189,13 +194,13 @@ namespace PenguinRun
                 new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.92f), TextAlignmentOptions.Center);
             skillRoot.gameObject.SetActive(false);
 
-            var routeRoot = CreateHudCard("RouteChoice", normal, new Vector2(0.25f, 0.79f), new Vector2(0.75f, 0.90f));
+            var routeRoot = CreateHudCard("RouteChoice", normal, new Vector2(0.365f, 0.79f), new Vector2(0.755f, 0.94f));
             var routeTitle = CreateHudText("RouteTitle", routeRoot, string.Empty,
                 UiTheme.Caption, TextSnow,
-                new Vector2(0.04f, 0.52f), new Vector2(0.96f, 0.94f), TextAlignmentOptions.Center);
+                new Vector2(0.04f, 0.68f), new Vector2(0.96f, 0.96f), TextAlignmentOptions.Center);
             var routeChoice = CreateHudText("RouteLabels", routeRoot, string.Empty,
                 UiTheme.Micro, Reward,
-                new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.52f), TextAlignmentOptions.Center);
+                new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.67f), TextAlignmentOptions.Center);
             routeRoot.gameObject.SetActive(false);
 
             var mechanicRoot = CreateHudCard("MechanicBanner", root,
@@ -257,6 +262,7 @@ namespace PenguinRun
                 mechanicRoot.gameObject, mechanicTitle, mechanicHint, resonanceFill,
                 contractSummary);
             hud.BindStatic(config);
+            hud.AttachDashChip(root);
             return hud;
         }
 
@@ -270,9 +276,11 @@ namespace PenguinRun
             };
         }
 
-        public void RefreshDynamic(WorldDirector world, int score, string feedback, float feedbackTimer)
+        public void RefreshDynamic(WorldDirector world, int score, string feedback, float feedbackTimer,
+            float manualDashCooldown)
         {
             if (world == null) return;
+            RefreshDashChip(manualDashCooldown);
             var distance = Mathf.RoundToInt(world.Distance);
             if (score != cachedScore) { cachedScore = score; scoreText.text = score.ToString("N0"); }
             if (distance != cachedDistance) { cachedDistance = distance; distanceText.text = $"{distance:N0} m"; }
@@ -346,20 +354,23 @@ namespace PenguinRun
             }
         }
 
+        private string cachedRouteEventId;
+
         public void SetRouteEvent(RouteEventSnapshot snapshot)
         {
             var visible = !bossMode && snapshot.AwaitingChoice;
             routeRoot.SetActive(visible);
             if (!visible) return;
 
-            if (cachedRouteTitle == snapshot.Title
+            if (cachedRouteEventId == snapshot.Id && cachedRouteTitle == snapshot.Title
                 && cachedRouteSafe == snapshot.SafeLabel
                 && cachedRouteRisk == snapshot.RiskLabel) return;
             cachedRouteTitle = snapshot.Title;
+            cachedRouteEventId = snapshot.Id;
             cachedRouteSafe = snapshot.SafeLabel;
             cachedRouteRisk = snapshot.RiskLabel;
             routeTitleText.text = snapshot.Title;
-            routeChoiceText.text = $"左道 安心：{snapshot.SafeLabel}    右道 冒险：{snapshot.RiskLabel}";
+            routeChoiceText.text = ThemeRoutePresentation.ChoiceLabels(snapshot);
         }
 
         public void SetUpgradeSummary(RunUpgradeState upgrades)
@@ -508,6 +519,7 @@ namespace PenguinRun
             var wasActive = pauseRoot.activeSelf;
             pauseRoot.SetActive(paused);
             pauseActionRoot.SetActive(!paused);
+            if (dashChipRoot != null) dashChipRoot.SetActive(!paused);
             // 暂停面板从瞬切改为弹出（SetUpdate(true)，timeScale=0 时照常播放）。
             if (paused && !wasActive)
                 ((RectTransform)pauseRoot.transform).PlayPanelPopIn(0.22f);
@@ -519,6 +531,38 @@ namespace PenguinRun
             feedbackText.color = color;
             feedbackRoot.SetActive(!string.IsNullOrWhiteSpace(message) && seconds > 0f);
             overrideFeedbackUntil = Time.unscaledTime + Mathf.Max(0f, seconds);
+        }
+
+        private void AttachDashChip(RectTransform safeArea)
+        {
+            // 挂在 SafeArea 而不是 NormalStats：Boss 战会藏掉常规统计，但破绽反击仍靠这次手动冲刺。
+            var chip = CreateHudCard("DashReady", safeArea, new Vector2(0.018f, 0.70f), new Vector2(0.185f, 0.775f));
+            dashChargeFill = UiBuilder.CreateRect("DashCharge", chip,
+                new Vector2(0.06f, 0.12f), new Vector2(0.94f, 0.28f),
+                Vector2.zero, Vector2.zero, UiTheme.PineGreen);
+            dashChargeFill.GetComponent<Image>().raycastTarget = false;
+            dashChipText = CreateHudText("DashLabel", chip, "可冲刺", UiTheme.Caption, UiTheme.PineGreen,
+                new Vector2(0.06f, 0.30f), new Vector2(0.94f, 0.92f), TextAlignmentOptions.Left);
+            dashChipRoot = chip.gameObject;
+        }
+
+        private void RefreshDashChip(float cooldown)
+        {
+            if (dashChipText == null) return;
+            var tenths = cooldown <= 0.05f ? 0 : Mathf.RoundToInt(cooldown * 10f);
+            if (tenths == cachedDashTenths) return;
+            var becameReady = cachedDashTenths > 0 && tenths == 0;
+            cachedDashTenths = tenths;
+            var ready = tenths == 0;
+            dashChipText.text = ready ? "可冲刺" : "冲刺 " + (tenths / 10f).ToString("0.0");
+            dashChipText.color = ready ? UiTheme.PineGreen : TextFrost;
+            var ready01 = ready
+                ? 1f
+                : 1f - Mathf.Clamp01(cooldown / RunnerGameController.ManualDashCooldownSeconds);
+            dashChargeFill.anchorMax = new Vector2(Mathf.Lerp(0.06f, 0.94f, ready01), dashChargeFill.anchorMax.y);
+            var fill = dashChargeFill.GetComponent<Image>();
+            fill.color = ready ? UiTheme.PineGreen : TextFrost;
+            if (becameReady) dashChipRoot.transform.PlayClickBounce();
         }
 
         public void Dispose()

@@ -23,6 +23,7 @@ namespace PenguinRun.Editor
             ValidateModalStack(failures);
             ValidateHudActions(failures);
             ValidateResponsiveGestures(failures);
+            ValidateLaneFollow(failures);
             ValidateSettlementGate(failures);
             ValidateDeathRetryCopy(failures);
             ValidateRetryResetDependencies(failures);
@@ -41,11 +42,11 @@ namespace PenguinRun.Editor
         private static void ValidateRetryResetDependencies(List<string> failures)
         {
             var events = new WorldEventScheduler();
-            Expect(events.Tick(500f), "world event scheduler must trigger at its first milestone", failures);
+            Expect(events.Tick(500f, 0.02f), "world event scheduler must trigger at its first milestone", failures);
             Expect(events.EventActive, "world event must be active before reset", failures);
             events.Reset();
             Expect(!events.EventActive, "world event reset must clear the active event", failures);
-            Expect(!events.Tick(499f), "world event reset must restore the first milestone", failures);
+            Expect(!events.Tick(499f, 0.02f), "world event reset must restore the first milestone", failures);
 
             GameObject parent = null;
             try
@@ -126,6 +127,25 @@ namespace PenguinRun.Editor
                 "two stationary fingers must not repeat pause", failures);
         }
 
+        private static void ValidateLaneFollow(List<string> failures)
+        {
+            const float lerp = 29f;
+            var dt60 = 1f / 60f;
+            var at60 = RunnerMotion.Follow01(lerp, dt60);
+            Expect(Mathf.Abs(at60 - lerp * dt60) < 0.0001f,
+                "Follow01 must match historical laneLerp * dt at 60fps", failures);
+
+            Expect(RunnerMotion.Follow01(lerp, 1f / 30f) < 0.85f,
+                "one 30fps lane step must not nearly snap to the target", failures);
+
+            var remain = 1f;
+            remain *= 1f - RunnerMotion.Follow01(lerp, 1f / 120f);
+            remain *= 1f - RunnerMotion.Follow01(lerp, 1f / 120f);
+            Expect(Mathf.Abs(1f - remain - at60) < 0.04f,
+                "two 120fps lane steps must stay close to one 60fps step", failures);
+            Expect(RunnerMotion.Follow01(lerp, 0f) == 0f, "zero dt follow must be 0", failures);
+        }
+
         private static void ValidateHudActions(List<string> failures)
         {
             GameObject eventSystem = null;
@@ -154,6 +174,9 @@ namespace PenguinRun.Editor
                 var emptyBuffs = canvas.transform.Find("SafeArea/NormalStats/Buffs");
                 Expect(emptyBuffs != null && !emptyBuffs.gameObject.activeSelf,
                     "empty buff card must not occupy HUD space", failures);
+                var dashReady = canvas.transform.Find("SafeArea/DashReady");
+                Expect(dashReady != null && dashReady.gameObject.activeSelf,
+                    "manual dash readiness chip must stay visible outside boss stats", failures);
 
                 pause?.onClick.Invoke();
                 resume?.onClick.Invoke();

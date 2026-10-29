@@ -39,12 +39,14 @@ foreach ($theme in 'IceLakeEcho', 'CedarRuins', 'AuroraField', 'MistDike', 'Ocea
 }
 
 $segmentSpawner = Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/SegmentSpawner.cs'
+$segmentSpawner += Require-File 'Assets/Scripts/Runtime/PenguinRun/Systems/SegmentSpawner.RouteEncounters.cs'
 Require-Pattern $segmentSpawner '\bSpawnRouteEvent\s*\(' 'SegmentSpawner.SpawnRouteEvent'
 Require-Pattern $segmentSpawner '\bTryConsumeRouteChoice\s*\(' 'SegmentSpawner.TryConsumeRouteChoice'
 Require-Pattern $segmentSpawner '\bSpawnRouteEventOutcome\s*\(' 'SegmentSpawner.SpawnRouteEventOutcome reward lane'
 Require-Pattern $segmentSpawner 'collider-free|Collider-free' 'route markers are explicitly collider-free'
 
 $runnerController = Require-File 'Assets/Scripts/Runtime/PenguinRun/RunnerGameController.cs'
+$runnerController += Require-File 'Assets/Scripts/Runtime/PenguinRun/RunnerGameController.Routes.cs'
 Require-Pattern $runnerController '\bApplyRouteEventOutcome\s*\(' 'RunnerGameController.ApplyRouteEventOutcome'
 Require-Pattern $runnerController 'routeEventDirector\.Tick\s*\(' 'controller advances route event director'
 

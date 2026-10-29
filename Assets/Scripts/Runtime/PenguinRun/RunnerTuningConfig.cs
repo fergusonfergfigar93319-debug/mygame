@@ -58,7 +58,7 @@ namespace PenguinRun
         public float PowerPickDashMax = 0.24f;
         public float PowerPickMagnetMax = 0.46f;
         public float PowerPickShieldMax = 0.67f;
-        public float PowerPickScoreStarMax = 0.84f;
+        public float PowerPickScoreStarMax = 0.80f;
 
         [Tooltip("Width on [0,1] after ScoreStar threshold reserved for Double Fish pickup.")]
         public float PowerPickDoubleFishBand = 0.055f;
@@ -75,21 +75,20 @@ namespace PenguinRun
         public float MagnetCollectZ = 2.4f;
 
         [Header("Camera (跟随第三人称)")]
-        [Tooltip("相机在角色身后的距离（沿世界 -z）；参考主流 3D 跑酷的低位追随视角。")]
-        public float CameraBehindDistance = 12.2f;
- 
-        [Tooltip("相机相对动态路面的高度。")]
-        public float CameraHeightAboveSurface = 6.8f;
- 
+        [Tooltip("必须与 FramingReference / RunnerCameraTuning 一致：behind 10.5 / height 6.5 / FOV 72。")]
+        public float CameraBehindDistance = 10.5f;
+
+        public float CameraHeightAboveSurface = 6.5f;
+
         [Tooltip("LookAt 瞄准点在角色前方的距离。")]
-        public float CameraAimAhead = 21f;
- 
-        public float CameraAimHeightAboveSurface = 0.3f;
-        public float CameraFieldOfView = 76f;
- 
+        public float CameraAimAhead = 19f;
+
+        public float CameraAimHeightAboveSurface = 0.25f;
+        public float CameraFieldOfView = 72f;
+
         [Range(0.72f, 1f)]
         [Tooltip("企鹅模型整体缩放。")]
-        public float PlayerVisualScale = 0.8f;
+        public float PlayerVisualScale = 0.86f;
 
         [Header("PowerUp Durations (base + level * perLevel)")]
         public float DashBaseSeconds = 5.5f;

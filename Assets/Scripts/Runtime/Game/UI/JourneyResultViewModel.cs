@@ -52,13 +52,24 @@ namespace PenguinRun.Game.UI
             var progression = result.BonusCoins > 0 || result.BonusScore > 0
                 ? $"{growthSummary} · 加成：鱼干 +{result.BonusCoins} / 得分 +{result.BonusScore}"
                 : string.IsNullOrEmpty(growthSummary) ? "营地已记录本次旅程" : growthSummary;
+            var masteryRows = BuildMasteryRows(result);
             return new JourneyResultViewModel(result.NewBest ? "新纪录写入旅程册" : "旅程完成",
                 result.Score, result.DistanceMeters, result.Coins, comparison, review, progression,
-                $"{ThemeLabel(result.ThemeMastery.Theme)}回响",
-                $"完美 {result.ThemeMastery.PerfectCount} · 无伤 {result.ThemeMastery.FlawlessCount}",
-                result.ThemeMastery.ContractCompleted
-                    ? $"旅途契约完成 · {ContractLabel(result.ThemeMastery.ContractKind)}"
-                    : $"旅途契约 · {ContractLabel(result.ThemeMastery.ContractKind)}");
+                "主题回响", masteryRows);
+        }
+
+        private static string BuildMasteryRows(RunOutcomeRouter.Result result)
+        {
+            var rows = new System.Collections.Generic.List<string>();
+            foreach (var snapshot in ThemeMasterySnapshots.CopyDistinct(result.ThemeMasteries, result.ThemeMastery))
+            {
+                if (!snapshot.HasProgress) continue;
+                var contractProgress = snapshot.ContractCompleted ? "完成"
+                    : snapshot.ContractTarget > 0 ? $"{snapshot.ContractProgress}/{snapshot.ContractTarget}" : "未完成";
+                rows.Add($"{ThemeLabel(snapshot.Theme)} · 事件 +{snapshot.EventsCompleted} · 完美 +{snapshot.PerfectCount}"
+                    + $" · {ContractLabel(snapshot.ContractKind)} {contractProgress}");
+            }
+            return string.Join("\n", rows);
         }
 
         private static string BuildRunDepthReview(RunOutcomeRouter.Result result)

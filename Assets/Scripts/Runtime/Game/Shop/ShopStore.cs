@@ -309,7 +309,7 @@ namespace PenguinRun.Game.Shop
                     PlayerSave.AddFishSnacks(1500);
                     PlayerSave.BoosterDoubleFish = PlayerSave.BoosterDoubleFish + 3;
                     PlayerSave.BoosterScoreBoost = PlayerSave.BoosterScoreBoost + 3;
-                    PlayerSave.BoosterLuckyStart = PlayerSave.BoosterLuckyStart + 2;
+                    PlayerSave.BoosterLuckyStart = PlayerSave.BoosterLuckyStart + 3;
                     PlayerSave.UnlockScarf("scarf_pearl");
                     PlayerSave.MarkBundleClaimed(def.Id);
                     break;

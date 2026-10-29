@@ -74,6 +74,7 @@ foreach ($name in 'Mode','ThemeMechanicMode','RunSeed') {
 }
 
 $controller = Read-Required 'Assets/Scripts/Runtime/PenguinRun/RunnerGameController.cs'
+$controller += Read-Required 'Assets/Scripts/Runtime/PenguinRun/RunnerGameController.Themes.cs'
 $runResult = Read-Required 'Assets/Scripts/Runtime/PenguinRun/Systems/RunnerRunResult.cs'
 foreach ($name in 'mechanicDirector','mechanicRuntime','mechanicSpawner','themeMastery') {
     Require $controller "\b$name\b" "controller integration $name"

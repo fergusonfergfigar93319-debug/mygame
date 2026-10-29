@@ -280,10 +280,9 @@ namespace PenguinRun.Game.UI
             var hasBossSpeed = r.LastBossSpeedFishBonus > 0 || r.LastBossSpeedScoreBonus > 0;
             // 不要在这里放 emoji：U+2728 不在项目 TMP 字体图集里，实机渲染成一个豆腐块。
             // 需要装饰符号时走 UiIcons Sprite。
-            var sb = new System.Text.StringBuilder();
             var parts = new System.Collections.Generic.List<string> { model.ProgressionPreview };
             if (!string.IsNullOrWhiteSpace(model.ThemeMasteryBody))
-                parts.Add($"{model.ThemeMasteryTitle} · {model.ThemeMasteryBody}");
+                parts.Add(model.ThemeMasteryBody);
             if (!string.IsNullOrWhiteSpace(model.ContractBody)) parts.Add(model.ContractBody);
             if (r.BonusCoins > 0) parts.Add($"鱼干 +{r.BonusCoins}");
             if (r.BonusScore > 0) parts.Add($"得分 +{r.BonusScore}");
@@ -291,13 +290,8 @@ namespace PenguinRun.Game.UI
             if (r.ConsumedScoreBoostTicket) parts.Add("得分加成券");
             if (hasBossSpeed) parts.Add($"Boss速杀 {r.LastBossSpeedTier} (+{r.LastBossSpeedFishBonus}鱼干/+{r.LastBossSpeedScoreBonus}分)");
 
-            // 这条横幅是一行摘要，不是完整清单。此前它把最多 8 段文案拼进 56px 条里，
-            // 结果是「跑得越好、奖励越多，反而越读不清」。保留前几项并标出还有更多。
-            const int MaxParts = 4;
-            var truncated = parts.Count > MaxParts;
-            if (truncated) parts = parts.GetRange(0, MaxParts);
-            sb.Append(string.Join(" · ", parts));
-            if (truncated) sb.Append(" · …");
+            // Preserve the existing card/button layout, with every theme reachable by scrolling.
+            var body = "旅程收获 · 上下滑动查看全部\n" + string.Join("\n", parts);
 
             var banner = UiBuilder.CreateRect("BonusBanner", panel,
                 new Vector2(0.08f, 0.5f), new Vector2(0.92f, 0.5f),
@@ -306,21 +300,31 @@ namespace PenguinRun.Game.UI
             UiBuilder.AddOutline(banner.gameObject, new Color(1f, 0.78f, 0.32f, 0.55f),
                 new Vector2(1f, -1f));
 
-            var t = UiBuilder.CreateText("Text", banner, sb.ToString(),
-                20, FontStyle.Bold, TextAnchor.MiddleCenter,
+            var viewport = UiBuilder.CreateRect("Viewport", banner, Vector2.zero, Vector2.one,
+                Vector2.zero, Vector2.zero, Color.clear);
+            viewport.offsetMin = new Vector2(16f, 6f);
+            viewport.offsetMax = new Vector2(-16f, -6f);
+            viewport.gameObject.AddComponent<RectMask2D>();
+            var t = UiBuilder.CreateText("Text", viewport, body,
+                20, FontStyle.Bold, TextAnchor.UpperLeft,
                 // 浅金字压在浅金底上只有约 1.2:1 的对比度，实际读不出来。墨色为 10.2:1。
                 UiTheme.InkPrimary);
             var trt = (RectTransform)t.transform;
-            trt.anchorMin = Vector2.zero;
+            trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = Vector2.one;
+            trt.pivot = new Vector2(0.5f, 1f);
             trt.sizeDelta = Vector2.zero;
-            trt.offsetMin = new Vector2(16f, 6f);
-            trt.offsetMax = new Vector2(-16f, -6f);
-            // 兜底：内容再长也只会缩小并省略，不会溢出框外。
-            t.enableAutoSizing = true;
-            t.fontSizeMin = 15f;
-            t.fontSizeMax = 20f;
-            t.overflowMode = TMPro.TextOverflowModes.Ellipsis;
+            t.enableAutoSizing = false;
+            t.overflowMode = TMPro.TextOverflowModes.Overflow;
+            var fit = t.gameObject.AddComponent<ContentSizeFitter>();
+            fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            var scroll = banner.gameObject.AddComponent<ScrollRect>();
+            scroll.viewport = viewport;
+            scroll.content = trt;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 28f;
         }
 
         private static string BuildRankLabel(RunOutcomeRouter.Result r)

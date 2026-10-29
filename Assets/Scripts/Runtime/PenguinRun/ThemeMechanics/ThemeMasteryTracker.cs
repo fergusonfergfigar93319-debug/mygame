@@ -5,6 +5,9 @@ namespace PenguinRun
     internal sealed class ThemeMasteryTracker
     {
         private const float ResonanceSeconds = 8f;
+        private bool resonanceJustStarted;
+        // Skill score multiplier while resonating; the only gameplay payoff of resonance.
+        public const float ResonanceSkillMultiplier = 1.5f;
 
         private readonly RunnerMapTheme theme;
         private readonly JourneyContractDefinition contract;
@@ -33,19 +36,33 @@ namespace PenguinRun
             RunnerMapTheme theme,
             ThemeMechanicMode mode,
             int seed,
-            bool tutorialSeenBeforeRun)
+            bool tutorialSeenBeforeRun,
+            float initialDistance = 0f)
         {
             this.theme = theme;
             this.tutorialSeenBeforeRun = tutorialSeenBeforeRun;
             tutorialSeen = tutorialSeenBeforeRun;
             contract = JourneyContractCatalog.Select(
                 mode,
-                new XorShiftRunRandom(unchecked(seed ^ ((int)theme + 1) * 486187739)));
+                new XorShiftRunRandom(unchecked(seed ^ ((int)theme + 1) * 486187739)),
+                initialDistance <= 800f);
         }
 
         public float Resonance01 => resonance01;
         public float ResonanceSecondsRemaining => resonanceSecondsRemaining;
         public bool IsResonating => resonanceSecondsRemaining > 0f;
+
+        // Resonance pays out as a skill-score multiplier (GDD G4).
+        public int ScaleSkill(int baseScore) =>
+            IsResonating ? Mathf.RoundToInt(baseScore * ResonanceSkillMultiplier) : baseScore;
+
+        // One-shot banner suffix for the event that tipped the meter into resonance.
+        public string ConsumeResonanceBanner()
+        {
+            if (!resonanceJustStarted) return string.Empty;
+            resonanceJustStarted = false;
+            return "\n主题共鸣 · 技巧分 ×1.5";
+        }
 
         public ThemeMasteryRunSnapshot RunSnapshot => new(
             theme,
@@ -58,7 +75,9 @@ namespace PenguinRun
             contractProgress >= contract.Target,
             contract.Kind,
             EarnedStars(),
-            tutorialSeen);
+            tutorialSeen,
+            contractProgress,
+            contract.Target);
 
         public ThemeMasteryHudSnapshot HudSnapshot => new(
             resonance01,
@@ -91,11 +110,21 @@ namespace PenguinRun
             contractProgress = 0;
             resonance01 = 0f;
             resonanceSecondsRemaining = 0f;
+            resonanceJustStarted = false;
         }
 
         public void CancelEvent()
         {
             ResetEvent();
+        }
+
+        public void LeaveTheme()
+        {
+            CancelEvent();
+            currentPerfectStreak = 0;
+            resonance01 = 0f;
+            resonanceSecondsRemaining = 0f;
+            resonanceJustStarted = false;
         }
 
         public void RecordKeypoint(bool perfect)
@@ -210,6 +239,7 @@ namespace PenguinRun
             {
                 resonance01 = 1f;
                 resonanceSecondsRemaining = ResonanceSeconds;
+                resonanceJustStarted = true;
             }
         }
 

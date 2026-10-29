@@ -15,14 +15,16 @@ namespace PenguinRun
 
         public static ReadOnlySpan<JourneyContractDefinition> Definitions => All;
 
-        public static JourneyContractDefinition Select(ThemeMechanicMode mode, IRunRandom random)
+        public static JourneyContractDefinition Select(ThemeMechanicMode mode, IRunRandom random,
+            bool allowSkillBeforeDistance = true)
         {
             var allowSignature = ThemeMechanicCatalog.PolicyFor(mode).AllowSignature;
-            var eligibleCount = allowSignature ? All.Length : All.Length - 1;
+            var eligibleCount = All.Length - (allowSignature ? 0 : 1) - (allowSkillBeforeDistance ? 0 : 1);
             var selected = random.Range(0, eligibleCount);
             for (var index = 0; index < All.Length; index++)
             {
-                if (!allowSignature && All[index].Kind == JourneyContractKind.SignatureComplete)
+                if ((!allowSignature && All[index].Kind == JourneyContractKind.SignatureComplete)
+                    || (!allowSkillBeforeDistance && All[index].Kind == JourneyContractKind.SkillBeforeDistance))
                 {
                     continue;
                 }

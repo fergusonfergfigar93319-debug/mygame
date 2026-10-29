@@ -1,4 +1,5 @@
 using System;
+using PenguinRun;
 using UnityEngine;
 
 namespace PenguinRun.Game.Save
@@ -37,6 +38,10 @@ namespace PenguinRun.Game.Save
         /// </summary>
         public const float PolarPowerUpChancePerLevel = 0.025f;
         public static readonly CampUpgradeKind[] AllKinds = (CampUpgradeKind[])Enum.GetValues(typeof(CampUpgradeKind));
+
+        // The shop is available before a run has a scene-owned tuning instance. Keep its
+        // preview contract on the same default source as the gameplay tuning fields.
+        private static readonly RunnerTuningConfig PreviewTuning = RunnerTuningConfig.Default();
 
         /// <summary>等级 0 → 1 / 1 → 2 / … / 4 → 5 的基础鱼干价格曲线。</summary>
         private static readonly int[] BaseUpgradeCostByLevel = { 40, 90, 180, 320, 540 };
@@ -80,10 +85,10 @@ namespace PenguinRun.Game.Save
         public static string GetDescription(CampUpgradeKind kind) =>
             kind switch
             {
-                CampUpgradeKind.Dash       => "拾取鱼干冲刺后获得更长加速。",
-                CampUpgradeKind.Tuan       => "团团雪球掩护持续更久，挡更多障碍。",
-                CampUpgradeKind.Polar      => "更敏锐的极地直觉，幸运道具的掉率与时长提升。",
-                CampUpgradeKind.Magnet     => "极光磁针吸附鱼干的时间更长，吸附半径更大。",
+                CampUpgradeKind.Dash       => "拾取鱼干后加速更久；时长预览不含局内加成。",
+                CampUpgradeKind.Tuan       => "护盾受击即消耗，并延长滑翔；时长不含局内加成。",
+                CampUpgradeKind.Polar      => "提高道具率，并延长星光、双倍鱼干与沙漏；时长不含局内加成。",
+                CampUpgradeKind.Magnet     => "磁针吸附时间更长、半径更大；时长不含局内加成。",
                 CampUpgradeKind.FishGain   => "每局结算时获得的鱼干额外增加。",
                 CampUpgradeKind.ScoreBonus => "每局最终得分获得百分比加成，更易冲刷新纪录。",
                 _ => string.Empty,
@@ -157,9 +162,14 @@ namespace PenguinRun.Game.Save
 
         // ── 等级 → 数值效果 ────────────────────────────────────────────────────
 
-        public static float GetFishDashDurationSeconds() => 7f + GetLevel(CampUpgradeKind.Dash) * 1f;
-        public static float GetTuanAssistDurationSeconds() => 4.5f + GetLevel(CampUpgradeKind.Tuan) * 0.55f;
-        public static float GetMagnetDurationSeconds() => 10f + GetLevel(CampUpgradeKind.Magnet) * 1.5f;
+        public static float GetFishDashDurationSeconds() =>
+            PreviewTuning.DashBaseSeconds + GetLevel(CampUpgradeKind.Dash) * PreviewTuning.DashPerLevelSeconds;
+
+        public static float GetTuanAssistDurationSeconds() =>
+            PreviewTuning.ShieldBaseSeconds + GetLevel(CampUpgradeKind.Tuan) * PreviewTuning.ShieldPerTuanLevelSeconds;
+
+        public static float GetMagnetDurationSeconds() =>
+            PreviewTuning.MagnetBaseSeconds + GetLevel(CampUpgradeKind.Magnet) * PreviewTuning.MagnetPerLevelSeconds;
 
         /// <summary>0~5 → 0~30%（每级 +6%）。</summary>
         public static float GetFishGainBonus() => GetLevel(CampUpgradeKind.FishGain) * 0.06f;
@@ -178,10 +188,10 @@ namespace PenguinRun.Game.Save
             level = Mathf.Clamp(level, 0, PlayerSave.CampMaxLevel);
             return kind switch
             {
-                CampUpgradeKind.Dash       => $"持续 {7f + level * 1f:0.0} 秒",
-                CampUpgradeKind.Tuan       => $"持续 {4.5f + level * 0.55f:0.00} 秒",
-                CampUpgradeKind.Polar      => $"片段道具抽样 +{level * PolarPowerUpChancePerLevel * 100f:0.#}（每级 +{PolarPowerUpChancePerLevel * 100f:0.#}）",
-                CampUpgradeKind.Magnet     => $"持续 {10f + level * 1.5f:0.0} 秒",
+                CampUpgradeKind.Dash       => $"基础 {PreviewTuning.DashBaseSeconds + level * PreviewTuning.DashPerLevelSeconds:0.##} 秒",
+                CampUpgradeKind.Tuan       => $"基础护盾 {PreviewTuning.ShieldBaseSeconds + level * PreviewTuning.ShieldPerTuanLevelSeconds:0.##} 秒\n滑翔 {PreviewTuning.GlideBaseSeconds + level * PreviewTuning.GlidePerTuanLevelSeconds:0.##} 秒",
+                CampUpgradeKind.Polar      => $"道具率 +{level * PreviewTuning.PowerUpChancePerPolarLevel * 100f:0.#} 点\n基础星光 {PreviewTuning.ScoreStarBaseSeconds + level * PreviewTuning.ScoreStarPerPolarLevelSeconds:0.##} 秒\n双倍 {PreviewTuning.DoubleFishBaseSeconds + level * PreviewTuning.DoubleFishPerPolarLevelSeconds:0.##} / 沙漏 {PreviewTuning.HourglassBaseSeconds + level * PreviewTuning.HourglassPerPolarLevelSeconds:0.##} 秒",
+                CampUpgradeKind.Magnet     => $"基础 {PreviewTuning.MagnetBaseSeconds + level * PreviewTuning.MagnetPerLevelSeconds:0.##} 秒",
                 CampUpgradeKind.FishGain   => $"结算鱼干 ×{1f + level * 0.06f:0.00}",
                 CampUpgradeKind.ScoreBonus => $"结算得分 ×{1f + level * 0.04f:0.00}",
                 _ => "—",

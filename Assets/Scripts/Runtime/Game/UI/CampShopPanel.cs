@@ -538,7 +538,10 @@ namespace PenguinRun.Game.UI
             var kindColor = GetKindColor(kind);
             var icon = GetKindIcon(kind);
 
-            var row = UiBuilder.CreateScrollListRow("CampRow_" + kind, contentRoot, 240f, UiBuilder.Surface1);
+            var previewHeight = kind == CampUpgradeKind.Polar ? 90f
+                : kind == CampUpgradeKind.Tuan ? 64f : 46f;
+            var row = UiBuilder.CreateScrollListRow("CampRow_" + kind, contentRoot,
+                240f + previewHeight - 46f, UiBuilder.Surface1);
             UiBuilder.AddOutline(row.gameObject,
                 maxed ? new Color(1f, 0.85f, 0.35f, 0.55f) : UiBuilder.BorderSubtle,
                 new Vector2(1f, -1f));
@@ -589,7 +592,8 @@ namespace PenguinRun.Game.UI
             // 效果预览
             var previewBg = UiBuilder.CreateRect("Preview", row,
                 new Vector2(0f, 0f), new Vector2(0f, 0f),
-                new Vector2(0f, 46f), new Vector2(98f, 58f),
+                new Vector2(0f, previewHeight),
+                new Vector2(98f, 58f + (previewHeight - 46f) * 0.5f),
                 new Color(0.05f, 0.1f, 0.18f, 0.6f), rounded: true);
             previewBg.anchorMax = new Vector2(0.6f, 0f);
             previewBg.offsetMax = new Vector2(-12f, previewBg.offsetMax.y);

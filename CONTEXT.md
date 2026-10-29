@@ -284,11 +284,27 @@
 - **规则：** 必须经 `conform_inside()` 对微放大的宿主体做布尔求交，轮廓不得越过宿主轮廓；固定 y 偏移的扁椭球在宿主收窄处会穿出，侧视读作一块游离的浅色椭圆。多块贴片的叠压顺序由 **clip margin** 决定（当前胸兜 1.006 / 腹部 1.012 / 面罩 1.006），不靠各自往前顶。
 - **连带约束：** 贴片贴合曲面后，原先按旧平面标定的面部装饰（眉毛、脸颊）会浮空，必须按宿主表面重新落座。
 
+### 游玩内容（RunContent）
+
+- **意指：** 局内机械内容：片段、障碍、道具、Boss 作为遭遇、路线选择作为玩法分叉。
+- **勿混淆：** 剧情（Narrative）是章节承诺与高松鹅终局，当前阶段后置，见 `docs/adr/0005-defer-narrative-prioritize-run-feel.md`。
+
+### 操作体验（RunFeel）
+
+- **意指：** 输入、位移跟手、碰撞公平、反馈配方与镜头构图。换道跟手必须对帧率不敏感；局内收集物对玩家称「鱼干」。
+- **相关：** 完美动作窗口、擦身而过、局内反馈配方、画面构图基准、手动冲刺。
+
+### 手动冲刺（ManualDash）
+
+- **意指：** 双击屏幕或 Shift/F 触发的短冲刺，与拾取道具「鱼干冲刺」分开计时。冷却 `ManualDashCooldownSeconds`（2.5s）；冷却中再次按下会缓冲到冷却结束再发出。
+- **HUD：** 跑道左上常驻 `DashReady`：就绪为「可冲刺」，冷却中为「冲刺 1.2」。Boss 战期间仍可见，因为破绽反击走的就是这次冲刺。冷却不得再写入中央反馈条。
+- **勿混淆：** Buff 条上的「冲刺 5.5s」是道具持续时间，不是手动冲刺冷却。
+
 ### 新手期（Onboarding Period）
 
 - **意指：** 玩家尚未演示最小动作集时的首局保护期。四个能力位为换道、跳跃、滑铲、收集；全部演示过即毕业，另设 `TotalRuns >= 3` 保险丝强制毕业。
 - **生效边界：** 「是否新手期」在开局 `RunnerSessionConfig.Snapshot()` 读一次，整局不变；能力位局内实时记录，结算时落盘。
-- **期内行为：** 抑制路线分支、旅途札记升级、主题机关、世界事件与移动敌人；片段池按 `LaneWeave → JumpArc → SlideTunnel → RewardRun` 轮转并排除高难 pattern。Boss **不**抑制。
+- **期内行为：** 抑制路线分支、旅途札记升级、主题机关、世界事件与移动敌人；片段池按 `LaneWeave → JumpArc → SlideTunnel → RewardRun` 轮转并排除高难 pattern。第一次道具固定为鱼干冲刺（只展示加速这一种效果）。Boss **不**抑制。
 - **勿混淆：** `Runner3DTutorialDone` 属于图鉴域，语义是「已完成第一次旅程」（解锁 `story_first_journey`），**不是**新手期毕业标志。
 - **相关：** `docs/adr/0004-competence-driven-onboarding.md`、`OnboardingState`。
 
@@ -296,6 +312,11 @@
 
 ## 领域规则
 
+- `RunnerSessionConfig.MapTheme` 是开局快照；局内主题权威是 `RunnerGameController.CurrentTheme`。新增玩法消费者不得继续读取开局主题。52 s 只累计有效 Running 模拟时间并产生单个 Pending 请求，Daily 不轮换；路线/机关/Boss 前奏与奖励尾部未释放时不得切图清场。
+- 精通与契约按本局访问主题归属；A→B→A 复用 tracker，技巧契约只认该主题赚取的技巧分。多主题快照通过既有终局事务逐主题结算一次，不得在切图时写精通存档或重复结算其他成长。
+- 本阶段新增实现必须服务游玩内容或操作体验；不为章节叙事、高松鹅终章战或局内换装新增系统（`docs/adr/0005-defer-narrative-prioritize-run-feel.md`）。
+- 局内收集物对玩家称「鱼干」，反馈文案不得写成「金币」。
+- 手动冲刺冷却只显示在 `DashReady`，不得用中央反馈条逐次播报剩余秒数。
 - 每个主题必须同时具有：片段池定义、调色板障碍外观映射、Boss 刷新条件、BGM 映射、`ThemeAudioProfile` 听感档案（环境音床 + 地面音色，且不得与他主题重复）。
 - 新障碍必须配套 `ObstacleColliderSpec` 规格；不允许未注册碰撞规格的障碍进入 `obstacles` 列表。动态障碍须实现 `ObstacleBehavior.IsCollidable` 并与视觉状态一致。
 - 新道具必须在 `PowerUpKind`、`PickupSystem.ActivatePowerUp`、`WorldDirector`（如有持续状态）、`GetPowerUpColors`、`AddPowerUpEffects`、`PlayPowerUp` 共 6 处同步扩展，缺一处视为未完成。

@@ -45,6 +45,7 @@ namespace PenguinRun.Game
             public IReadOnlyList<string> CompletedRouteEventIds;
             public string ThemedRelicId;
             public ThemeMasteryRunSnapshot ThemeMastery;
+            public IReadOnlyList<ThemeMasteryRunSnapshot> ThemeMasteries;
             public GrowthTransactionResult Growth;
             public bool CompanionHelperTriggered;
             public int CompanionHelperFishBonus;
@@ -61,12 +62,14 @@ namespace PenguinRun.Game
             IReadOnlyList<RunUpgradeId> selectedUpgradeIds = null,
             IReadOnlyList<string> completedRouteEventIds = null,
             string themedRelicId = "",
-            ThemeMasteryRunSnapshot themeMastery = default)
+            ThemeMasteryRunSnapshot themeMastery = default,
+            IReadOnlyList<ThemeMasteryRunSnapshot> themeMasteries = null)
         {
             score = Math.Max(0, score);
             distanceMeters = Math.Max(0, distanceMeters);
             coins = Math.Max(0, coins);
             survivalSeconds = Math.Max(0f, survivalSeconds);
+            var immutableMasteries = ThemeMasterySnapshots.CopyDistinct(themeMasteries, themeMastery);
 
             // 1) 先消耗本局的临时道具（在前一帧 PrepareXxxRun 写入），算出本局的额外乘数。
             var (ticketFishMul, ticketScoreMul) = ShopStore.ConsumePendingForOutcome();
@@ -118,7 +121,7 @@ namespace PenguinRun.Game
             var growth = GrowthTransaction.Apply(new GrowthTransactionInput(
                 score, distanceMeters, coins, survivalSeconds, dailyMode,
                 routeEventsCompleted, riskyRoutesCompleted, skillScore,
-                completedRouteEventIds, themedRelicId, themeMastery));
+                completedRouteEventIds, themedRelicId, themeMastery, immutableMasteries));
 
             PlayerSave.IncrementTotalRuns();
 
@@ -155,6 +158,7 @@ namespace PenguinRun.Game
                 CompletedRouteEventIds = CopyStrings(completedRouteEventIds),
                 ThemedRelicId = themedRelicId ?? string.Empty,
                 ThemeMastery = themeMastery,
+                ThemeMasteries = immutableMasteries,
                 Growth = growth,
                 CompanionHelperTriggered = helperTriggered,
                 CompanionHelperFishBonus = helperFishBonus,

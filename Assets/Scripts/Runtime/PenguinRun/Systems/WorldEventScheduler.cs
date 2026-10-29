@@ -49,13 +49,13 @@ namespace PenguinRun
         };
 
         /// <summary>每帧调用，返回是否触发了新事件。</summary>
-        public bool Tick(float distance)
+        public bool Tick(float distance, float deltaTime, bool allowNew = true)
         {
-            if (suppressed) return false;
+            if (suppressed || deltaTime <= 0f || float.IsNaN(deltaTime) || float.IsInfinity(deltaTime)) return false;
 
             if (EventActive)
             {
-                EventTimer -= Time.deltaTime;
+                EventTimer -= deltaTime;
                 if (EventTimer <= 0f)
                 {
                     ActiveEvent = WorldEventType.None;
@@ -65,7 +65,7 @@ namespace PenguinRun
                 return false;
             }
 
-            if (distance >= nextEventDistance)
+            if (allowNew && distance >= nextEventDistance)
             {
                 nextEventDistance += EventInterval;
                 TriggerRandomEvent();
@@ -74,6 +74,7 @@ namespace PenguinRun
 
             return false;
         }
+
 
         private void TriggerRandomEvent()
         {

@@ -21,32 +21,86 @@ namespace PenguinRun
         private bool active;
         private Vector2 lastTapPos;
         private float lastTapTime = -9f;
+        private int activeFingerId = -1;
+        private int resetFrame = -1;
+        private bool touchBlocked;
+        private bool hadTouches;
+        private bool mouseBlocked;
+
+        public void Reset()
+        {
+            CancelPointer();
+            // A pause/resume callback must not re-arm contacts still on screen.
+            touchBlocked |= Input.touchCount > 0;
+            mouseBlocked |= hadTouches || Input.touchCount > 0 ||
+                Input.GetMouseButton(0) || Input.GetMouseButtonDown(0) || Input.GetMouseButtonUp(0);
+            resetFrame = Time.frameCount;
+        }
+
+        private void CancelPointer()
+        {
+            active = false;
+            consumed = false;
+            activeFingerId = -1;
+            lastTapTime = -9f;
+            lastTapPos = Vector2.zero;
+        }
 
         public RunnerAction Poll()
         {
+            if (resetFrame == Time.frameCount) return RunnerAction.None;
+            var touchCount = Input.touchCount;
+            if (touchCount == 0)
+            {
+                touchBlocked = false;
+                if (hadTouches)
+                {
+                    // A completed tap retains its double-tap history; a lost contact does not.
+                    if (active) CancelPointer();
+                    mouseBlocked = true;
+                }
+                hadTouches = false;
+            }
+            else
+            {
+                hadTouches = true;
+                mouseBlocked = true;
+            }
             var kb = PollKeyboard();
             if (kb != RunnerAction.None)
-                return kb;
-
-            // 双指触摸 = 暂停
-            if (Input.touchCount >= 2)
             {
-                var any = false;
-                for (var i = 0; i < Input.touchCount; i++)
-                {
-                    if (Input.GetTouch(i).phase == TouchPhase.Began)
-                    {
-                        any = true;
-                        break;
-                    }
-                }
-                if (RunnerGestureClassifier.IsTwoFingerPause(Input.touchCount, any))
-                    return RunnerAction.Pause;
+                Reset();
+                return kb;
             }
 
-            if (Input.touchCount > 0)
+            if (touchCount > 0 && touchBlocked) return RunnerAction.None;
+            // Latch the whole contact group, including release frames.
+            if (touchCount >= 2)
+            {
+                var any = false;
+                var liveCount = 0;
+                for (var i = 0; i < touchCount; i++)
+                {
+                    var phase = Input.GetTouch(i).phase;
+                    if (phase == TouchPhase.Ended || phase == TouchPhase.Canceled) continue;
+                    liveCount++;
+                    any |= phase == TouchPhase.Began;
+                }
+                CancelPointer();
+                touchBlocked = true;
+                return RunnerGestureClassifier.IsTwoFingerPause(liveCount, any)
+                    ? RunnerAction.Pause : RunnerAction.None;
+            }
+
+            if (touchCount > 0)
                 return PollTouch();
 
+            // Legacy touch input can synthesize mouse events after its last touch.
+            if (mouseBlocked)
+            {
+                if (!Input.GetMouseButton(0) && !Input.GetMouseButtonDown(0)) mouseBlocked = false;
+                return RunnerAction.None;
+            }
             return PollMouse();
         }
 
@@ -72,12 +126,19 @@ namespace PenguinRun
         private RunnerAction PollTouch()
         {
             var t = Input.GetTouch(0);
+            if (active && activeFingerId != t.fingerId)
+            {
+                CancelPointer();
+                touchBlocked = true;
+                return RunnerAction.None;
+            }
             switch (t.phase)
             {
                 case TouchPhase.Began:
                     start = t.position;
                     consumed = false;
                     active = true;
+                    activeFingerId = t.fingerId;
                     break;
                 case TouchPhase.Moved:
                 case TouchPhase.Stationary:
@@ -93,9 +154,12 @@ namespace PenguinRun
 
                     break;
                 case TouchPhase.Ended:
-                case TouchPhase.Canceled:
                     if (active)
                         return FinishPointer(t.position);
+                    break;
+                case TouchPhase.Canceled:
+                    CancelPointer();
+                    touchBlocked = true;
                     break;
             }
 
@@ -109,6 +173,7 @@ namespace PenguinRun
                 start = Input.mousePosition;
                 consumed = false;
                 active = true;
+                activeFingerId = -1;
             }
 
             if (Input.GetMouseButton(0) && active && !consumed)
@@ -123,6 +188,7 @@ namespace PenguinRun
 
             if (Input.GetMouseButtonUp(0) && active)
                 return FinishPointer(Input.mousePosition);
+            if (active && !Input.GetMouseButton(0)) CancelPointer();
 
             return RunnerAction.None;
         }
@@ -131,6 +197,7 @@ namespace PenguinRun
         {
             var delta = endPos - start;
             active = false;
+            activeFingerId = -1;
             var thresholds = RunnerGestureThresholds.ForViewport(Screen.width, Screen.height);
             if (!consumed && RunnerGestureClassifier.IsTap(delta, thresholds))
             {

@@ -118,7 +118,7 @@ namespace PenguinRun
         public float powerPickDashMax = 0.24f;
         public float powerPickMagnetMax = 0.46f;
         public float powerPickShieldMax = 0.67f;
-        public float powerPickScoreStarMax = 0.84f;
+        public float powerPickScoreStarMax = 0.80f;
         public float powerPickDoubleFishBand = 0.055f;
         public float powerPickHourglassBand = 0.045f;
 

@@ -45,6 +45,14 @@ namespace PenguinRun
 
         public float FishRewardMultiplier => 1f + EffectValue(RunUpgradeEffect.FishValue);
 
+        public float AirControlMultiplier => 1f + EffectValue(RunUpgradeEffect.AirControl);
+
+        public float HitInvulnerabilityBonusSeconds => EffectValue(RunUpgradeEffect.HitInvulnerability);
+
+        public float CompanionRewardMultiplier => 1f + EffectValue(RunUpgradeEffect.CompanionFind);
+
+        public float BossCounterScoreMultiplier => 1f + EffectValue(RunUpgradeEffect.BossCounterScore);
+
         public RunUpgradeOffer BuildOffer()
         {
             if (!CanSelect)

@@ -10,7 +10,7 @@ namespace PenguinRun
         private const float PlayerMarginZ = 0.02f;
         private const int PerfectDodgePruneThreshold = 64;
 
-        // 擦身带：障碍判定盒外侧这一圈内掠过（且没有靴底净空）即算「擦身而过」。
+        // 擦身带：站立着地且未跳铲时，从可碰撞障碍判定盒外侧掠过才算「擦身而过」。
         // 0.55m 约为一颗鱼干的宽度——比车道间距 3m 小一个量级，只有贴着障碍走才触发。
         private const float NearMissBandX = 0.55f;
 
@@ -102,15 +102,19 @@ namespace PenguinRun
                 var overlapsNow = relZ >= -halfDz && relZ <= halfDz;
                 var tunneledPast = relZ > halfDz && relZ < obstacleSweepDz - halfDz;
                 if (!overlapsNow && !tunneledPast) continue;
+                if (obstacle.TryGetComponent<ObstacleBehavior>(out var behavior) && !behavior.IsCollidable)
+                    continue;
+
                 var dx = Mathf.Abs(obstacle.transform.position.x - px);
                 var hitHalfDx = spec.HalfDx + PlayerMarginX;
                 if (dx > hitHalfDx)
                 {
                     // 擦身而过：只看本帧真实重叠带（tunneled 补判不算），且玩家没有靴底净空——
-                    // 从上方跳过去的属于完美跳跃那条路径，不重复计。
+                    // 跳铲动作不计擦身，同一障碍与完美闪避奖励互斥。
                     if (overlapsNow && onNearMiss != null && dx < hitHalfDx + NearMissBandX
+                        && slideTimerSeconds <= 0f && (motor == null || (motor.Grounded && !motor.IsLowPosture))
                         && playerY <= obstacle.transform.position.y + spec.FeetClearanceAboveRoot
-                        && nearMissed.Add(obstacle))
+                        && !perfectDodged.Contains(obstacle) && nearMissed.Add(obstacle))
                     {
                         feedbackText = "擦身而过！";
                         feedbackTimer = 0.55f;
@@ -118,9 +122,6 @@ namespace PenguinRun
                     }
                     continue;
                 }
-
-                if (obstacle.TryGetComponent<ObstacleBehavior>(out var behavior) && !behavior.IsCollidable)
-                    continue;
 
                 var clearedByJump = playerY > obstacle.transform.position.y + spec.FeetClearanceAboveRoot;
                 var clearedByCrouch = spec.IsLow && bodyHeight <= spec.PassUnderMaxHeight;
@@ -137,7 +138,8 @@ namespace PenguinRun
                     }
                 }
 
-                if (motor != null && motor.PerfectActionWindow > 0f && !perfectDodged.Contains(obstacle))
+                if (motor != null && motor.PerfectActionWindow > 0f
+                    && !perfectDodged.Contains(obstacle) && !nearMissed.Contains(obstacle))
                 {
                     if (clearedByCrouch && slideTimerSeconds > 0f && motor.LastCriticalAction == RunnerAction.Slide)
                     {
@@ -193,7 +195,8 @@ namespace PenguinRun
             if (outcome.InvulnerabilitySeconds > 0f)
             {
                 var shieldGrace = outcome.ConsumeShield ? upgrades.ShieldGraceSeconds : 0f;
-                world.SetHitInvulnerability(outcome.InvulnerabilitySeconds + shieldGrace);
+                world.SetHitInvulnerability(outcome.InvulnerabilitySeconds + shieldGrace
+                    + upgrades.HitInvulnerabilityBonusSeconds);
             }
 
             if (outcome.Kind == HitOutcomeKind.Damage || outcome.Kind == HitOutcomeKind.GameOver)

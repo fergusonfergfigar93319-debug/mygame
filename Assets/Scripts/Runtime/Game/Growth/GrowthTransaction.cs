@@ -10,7 +10,8 @@ namespace PenguinRun.Game.Growth
         public GrowthTransactionInput(int score, int distanceMeters, int coins, float survivalSeconds,
             bool dailyMode, int routeEventsCompleted, int riskyRoutesCompleted, int skillScore,
             IReadOnlyList<string> completedRouteEventIds, string themedRelicId,
-            ThemeMasteryRunSnapshot themeMastery = default)
+            ThemeMasteryRunSnapshot themeMastery = default,
+            IReadOnlyList<ThemeMasteryRunSnapshot> themeMasteries = null)
         {
             Score = Math.Max(0, score);
             DistanceMeters = Math.Max(0, distanceMeters);
@@ -32,6 +33,7 @@ namespace PenguinRun.Game.Growth
             }
             ThemedRelicId = themedRelicId ?? string.Empty;
             ThemeMastery = themeMastery;
+            ThemeMasteries = ThemeMasterySnapshots.CopyDistinct(themeMasteries, themeMastery);
         }
         public int Score { get; }
         public int DistanceMeters { get; }
@@ -44,6 +46,7 @@ namespace PenguinRun.Game.Growth
         public IReadOnlyList<string> CompletedRouteEventIds { get; }
         public string ThemedRelicId { get; }
         public ThemeMasteryRunSnapshot ThemeMastery { get; }
+        public IReadOnlyList<ThemeMasteryRunSnapshot> ThemeMasteries { get; }
     }
 
     public readonly struct GrowthTransactionResult
@@ -85,9 +88,20 @@ namespace PenguinRun.Game.Growth
             if (!string.IsNullOrEmpty(input.ThemedRelicId) && CodexDiscoveryStore.Discover(input.ThemedRelicId))
                 newDiscoveries.Add(input.ThemedRelicId);
 
-            var masteryBefore = ThemeMasteryStore.For(input.ThemeMastery.Theme);
-            var mastery = ThemeMasteryStore.ApplyRun(input.ThemeMastery);
-            var masteryStarGained = mastery.Stars > masteryBefore.Stars;
+            var mastery = default(ThemeMasteryRecord);
+            var masteryStarGained = false;
+            var hasMastery = false;
+            foreach (var snapshot in input.ThemeMasteries)
+            {
+                var before = ThemeMasteryStore.For(snapshot.Theme);
+                var applied = ThemeMasteryStore.ApplyRun(snapshot);
+                var gained = applied.Stars > before.Stars;
+                if (!hasMastery || (gained && (!masteryStarGained || applied.Stars > mastery.Stars))
+                    || (!masteryStarGained && applied.Stars > mastery.Stars))
+                    mastery = applied;
+                masteryStarGained |= gained;
+                hasMastery = true;
+            }
 
             var bondAward = CompanionBondStore.AwardAfterRun(input.RouteEventsCompleted,
                 input.RiskyRoutesCompleted, input.SkillScore, input.DailyMode,

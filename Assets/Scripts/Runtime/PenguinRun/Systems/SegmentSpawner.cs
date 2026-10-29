@@ -55,6 +55,7 @@ namespace PenguinRun
         private GameObject routeEventRoot;
         private readonly List<GameObject> routeOutcomeRoots = new();
         private readonly List<GameObject> mechanicObstacleRoots = new();
+        private readonly List<GameObject> bossRewardEntities = new();
 
         private readonly GameObjectPool coinPool;
         private readonly GameObjectPool powerUpPool;
@@ -71,6 +72,7 @@ namespace PenguinRun
             this.powerUpTuning = powerUpTuning;
             this.laneWidth = laneWidth;
             this.config = config;
+            routeTheme = config.MapTheme;
             this.waveDirector = waveDirector;
             this.baseGroundY = baseGroundY;
             nextSpawnZ = worldTuning.initialSpawnZ;
@@ -98,18 +100,27 @@ namespace PenguinRun
         {
             ClearSpawnedEntities();
             nextSpawnZ = worldTuning.initialSpawnZ;
+            pendingSegmentBanner = false;
+            pendingOnboardingPatternHint = false;
+            pendingDashHint = false;
+            dashHintConsumed = false;
+            waveDirector.SetTheme(config.MapTheme);
+            routeTheme = config.MapTheme;
             waveDirector.ResetForRun();
         }
 
         public void ApplyTheme(RunnerMapTheme theme, bool clearSpawnedEntities = true)
         {
+            CancelRouteEncounter();
             waveDirector.SetTheme(theme);
+            routeTheme = theme;
             if (!clearSpawnedEntities) return;
 
             ClearSpawnedEntities();
             // 换图后尽快接上新主题障碍，但避免立刻顶脸生成。
             nextSpawnZ = worldTuning.spawnDistance + 12f;
         }
+
 
         public void SeedInitialObstacles(float runDistance)
         {
@@ -125,6 +136,8 @@ namespace PenguinRun
             SpawnCoinLine(10f, RunnerLane.Center, 6, runDistance);
             SpawnCoinLine(14f, RunnerLane.Left, 4, runDistance);
             SpawnCoinLine(18f, RunnerLane.Right, 4, runDistance);
+            if (config.IsOnboarding)
+                SpawnPowerUp(32f, runDistance, palette, PowerUpKind.Dash, RunnerLane.Left);
         }
 
         /// <summary>
@@ -146,6 +159,7 @@ namespace PenguinRun
                 var z = c.transform.position.z;
                 if (z < zMin || z > zMax) continue;
                 if (!IsCoinOverlappingObstacle(c.transform.position)) continue;
+                routeFish.Remove(c);
                 coinYDelta.Remove(c);
                 coinPool.Return(c);
                 coins.RemoveAt(i);
@@ -173,6 +187,8 @@ namespace PenguinRun
         private SegmentPatternKind pendingSegmentBannerKind;
         private bool pendingOnboardingPatternHint;
         private SegmentPatternKind pendingOnboardingPatternKind;
+        private bool pendingDashHint;
+        private bool dashHintConsumed;
 
         public bool TryConsumeSegmentBanner(out SegmentPatternKind kind)
         {
@@ -203,110 +219,29 @@ namespace PenguinRun
             return true;
         }
 
-        public bool SpawnRouteEvent(RouteEventSnapshot routeEvent, float runDistance)
+        public bool TryConsumeDashHint(out string message)
         {
-            if (!routeEvent.AwaitingChoice || routeEventRoot != null)
-            {
-                return false;
-            }
-
-            var spawnZ = Mathf.Max(
-                worldTuning.spawnDistance + 34f,
-                nextSpawnZ + worldTuning.spawnDistance + 24f);
-            var surfaceY = TrackTerrain.SurfaceY(spawnZ, runDistance, baseGroundY);
-            var root = new GameObject($"Route Event {routeEvent.Id}");
-            root.transform.position = new Vector3(0f, surfaceY, spawnZ);
-
-            // Collider-free route markers: RunnerVisuals creates mesh renderers without physics components.
-            var safeColor = new Color(0.34f, 0.82f, 0.68f, 0.88f);
-            var riskColor = new Color(1f, 0.42f, 0.32f, 0.92f);
-            for (var i = 0; i < 5; i++)
-            {
-                var z = i * 5.5f;
-                AddRouteLaneMarker(root.transform, RunnerLane.Left, z, safeColor, false);
-                AddRouteLaneMarker(root.transform, RunnerLane.Right, z, riskColor, true);
-            }
-
-            AddChildPrimitive(root.transform, "Safe Beacon", PrimitiveType.Cylinder,
-                new Vector3(RunnerLane.Left.ToX(laneWidth), 1.1f, 20f),
-                new Vector3(0.5f, 2.2f, 0.5f), safeColor, true);
-            AddChildPrimitive(root.transform, "Risk Beacon", PrimitiveType.Cylinder,
-                new Vector3(RunnerLane.Right.ToX(laneWidth), 1.35f, 20f),
-                new Vector3(0.62f, 2.7f, 0.62f), riskColor, true);
-            AddChildPrimitive(root.transform, "Decision Line", PrimitiveType.Cube,
-                new Vector3(0f, 0.05f, 0f),
-                new Vector3(laneWidth * 3.15f, 0.07f, 0.26f),
-                new Color(1f, 0.9f, 0.55f, 0.8f), true);
-
-            routeEventRoot = root;
-            nextSpawnZ = Mathf.Max(nextSpawnZ, spawnZ + 30f - worldTuning.spawnDistance);
+            message = "";
+            if (!pendingDashHint) return false;
+            pendingDashHint = false;
+            dashHintConsumed = true;
+            message = "裂纹墙：双击屏幕或按 Shift 冲刺打碎";
             return true;
         }
 
-        public bool TryConsumeRouteChoice(RunnerLane playerLane, out bool risky)
-        {
-            risky = false;
-            if (routeEventRoot == null || routeEventRoot.transform.position.z > 2.5f)
-            {
-                return false;
-            }
-
-            risky = playerLane == RunnerLane.Right;
-            Object.Destroy(routeEventRoot);
-            routeEventRoot = null;
-            return true;
-        }
-
-        public void SpawnRouteEventOutcome(
-            RouteEventOutcome outcome,
-            bool risky,
-            float runDistance)
-        {
-            var spawnZ = worldTuning.spawnDistance + 18f;
-            var surfaceY = TrackTerrain.SurfaceY(spawnZ, runDistance, baseGroundY);
-            var lane = risky ? RunnerLane.Right : RunnerLane.Left;
-            var laneX = lane.ToX(laneWidth);
-            var color = risky
-                ? new Color(1f, 0.55f, 0.28f, 0.72f)
-                : new Color(0.48f, 0.9f, 0.7f, 0.72f);
-            var root = new GameObject($"Route Outcome {outcome.SegmentPattern}");
-            root.transform.position = new Vector3(0f, surfaceY, spawnZ);
-
-            for (var i = 0; i < 8; i++)
-            {
-                var sideOffset = outcome.SegmentPattern switch
-                {
-                    RouteSegmentPattern.Slalom => (i % 2 == 0 ? -0.38f : 0.38f) * laneWidth,
-                    RouteSegmentPattern.FishRibbon => Mathf.Sin(i * 0.8f) * laneWidth * 0.28f,
-                    RouteSegmentPattern.ChaseLine => Mathf.Sin(i * 0.45f) * laneWidth * 0.18f,
-                    _ => 0f,
-                };
-                var height = outcome.SegmentPattern == RouteSegmentPattern.JumpArc
-                    ? Mathf.Sin(i / 7f * Mathf.PI) * 1.15f
-                    : 0.12f;
-                AddChildPrimitive(root.transform, $"Reward Trail {i}", PrimitiveType.Cube,
-                    new Vector3(laneX + sideOffset, height, i * 2.4f),
-                    new Vector3(0.34f, 0.08f, 0.52f), color, true);
-            }
-
-            // 「散鱼」等奖励段：除引导条外真正刷出可拾取金币。
-            if (outcome.SegmentPattern == RouteSegmentPattern.FishRibbon)
-                SpawnCoinLine(spawnZ + 1.2f, lane, 12, runDistance);
-            else if (outcome.SegmentPattern is RouteSegmentPattern.CalmLane or RouteSegmentPattern.JumpArc)
-                SpawnCoinLine(spawnZ + 2f, lane, 6, runDistance);
-
-            routeOutcomeRoots.Add(root);
-        }
 
         public void Tick(float dt, float effectiveSpeed, float runDistance)
         {
+            if (dt <= 0f) return;
             nextSpawnZ -= effectiveSpeed * dt;
-            if (!SpawnPaused && nextSpawnZ < worldTuning.spawnDistance)
+            if (!SpawnPaused && !RouteEncounterActive && nextSpawnZ < worldTuning.spawnDistance)
             {
                 var modifiers = waveDirector.ConsumeWave();
                 if (waveDirector.LastConsumeWasFirstWave &&
                     (modifiers.PatternKind == SegmentPatternKind.HazardRhythm ||
-                     modifiers.PatternKind == SegmentPatternKind.RewardRun))
+                     modifiers.PatternKind == SegmentPatternKind.RewardRun ||
+                     modifiers.PatternKind == SegmentPatternKind.EnemyAmbush ||
+                     modifiers.PatternKind == SegmentPatternKind.PowerUpTrial))
                 {
                     pendingSegmentBanner = true;
                     pendingSegmentBannerKind = modifiers.PatternKind;
@@ -325,7 +260,7 @@ namespace PenguinRun
                 SpawnPattern(nextSpawnZ + worldTuning.spawnDistance + lead, modifiers, runDistance);
                 nextSpawnZ += Random.Range(worldTuning.spawnSpacingMin, worldTuning.spawnSpacingMax);
             }
-            else if (SpawnPaused)
+            else if (SpawnPaused || RouteEncounterActive)
             {
                 // boss 战期间，不堆积新障碍生成时机
                 nextSpawnZ = Mathf.Max(nextSpawnZ, worldTuning.spawnDistance + 4f);
@@ -354,6 +289,7 @@ namespace PenguinRun
                 var c = coins[i];
                 if (c == null || !c.activeSelf)
                 {
+                    routeFish.Remove(c);
                     if (c != null) coinPool.Return(c);
                     coinYDelta.Remove(c);
                     coins.RemoveAt(i);
@@ -377,6 +313,7 @@ namespace PenguinRun
                 SyncCoinHeight(c, runDistance);
                 if (c.transform.position.z < worldTuning.despawnZ)
                 {
+                    routeFish.Remove(c);
                     coinYDelta.Remove(c);
                     coinPool.Return(c);
                     coins.RemoveAt(i);
@@ -464,6 +401,7 @@ namespace PenguinRun
 
         private void DestroyObstacle(GameObject obstacle, int index)
         {
+            routeObstacles.Remove(obstacle);
             obstacleYDelta.Remove(obstacle);
             // 清理关联行为
             for (var b = obstacleBehaviors.Count - 1; b >= 0; b--)
@@ -510,6 +448,7 @@ namespace PenguinRun
 
         private void ClearSpawnedEntities()
         {
+            CancelRouteEncounter();
             foreach (var obstacle in obstacles) Object.Destroy(obstacle);
             obstacles.Clear();
             obstacleSet.Clear();
@@ -535,62 +474,9 @@ namespace PenguinRun
             obstacleYDelta.Clear();
             coinYDelta.Clear();
             mechanicObstacleRoots.Clear();
+            bossRewardEntities.Clear();
         }
 
-        private void TickRouteMarkers(float dt, float effectiveSpeed, float runDistance)
-        {
-            if (routeEventRoot != null)
-            {
-                MoveRouteMarkerRoot(routeEventRoot, dt, effectiveSpeed, runDistance);
-                if (routeEventRoot.transform.position.z < worldTuning.despawnZ)
-                {
-                    Object.Destroy(routeEventRoot);
-                    routeEventRoot = null;
-                }
-            }
-
-            for (var i = routeOutcomeRoots.Count - 1; i >= 0; i--)
-            {
-                var root = routeOutcomeRoots[i];
-                if (root == null)
-                {
-                    routeOutcomeRoots.RemoveAt(i);
-                    continue;
-                }
-
-                MoveRouteMarkerRoot(root, dt, effectiveSpeed, runDistance);
-                if (root.transform.position.z < worldTuning.despawnZ)
-                {
-                    Object.Destroy(root);
-                    routeOutcomeRoots.RemoveAt(i);
-                }
-            }
-        }
-
-        private void MoveRouteMarkerRoot(GameObject root, float dt, float effectiveSpeed, float runDistance)
-        {
-            var position = root.transform.position;
-            position.z -= effectiveSpeed * dt;
-            position.y = TrackTerrain.SurfaceY(position.z, runDistance, baseGroundY);
-            root.transform.position = position;
-        }
-
-        private void AddRouteLaneMarker(
-            Transform root,
-            RunnerLane lane,
-            float localZ,
-            Color color,
-            bool diamond)
-        {
-            var marker = AddChildPrimitive(root, diamond ? "Risk Diamond" : "Safe Tile",
-                PrimitiveType.Cube,
-                new Vector3(lane.ToX(laneWidth), 0.08f, localZ),
-                new Vector3(0.72f, 0.08f, 0.72f), color, true);
-            if (diamond)
-            {
-                marker.transform.localRotation = Quaternion.Euler(0f, 45f, 0f);
-            }
-        }
 
         /// <summary>护盾/受击消除障碍时调用，同步滚动雪球列表。</summary>
         public void TryRemoveObstacle(GameObject obstacle)
@@ -601,79 +487,6 @@ namespace PenguinRun
             DestroyObstacle(obstacle, idx);
         }
 
-        // ── Boss 战特殊片段 ──────────────────────────────────
-
-        /// <summary>生成 Boss 前奏片段：预警、补给、教学</summary>
-        public void SpawnBossPrelude(float runDistance, BossDefinition bossDef, float preludeLengthMeters = 100f)
-        {
-            // 在 Boss 出现前 preludeLengthMeters 处开始生成特殊片段
-            var startZ = nextSpawnZ + worldTuning.spawnDistance;
-
-            // 1. 主题化预兆视觉（如冰裂、风道等）- 通过降低障碍密度和放置特色元素实现
-            // 2. 放置推荐反制道具
-            if (bossDef.PreferredPowerUps != null && bossDef.PreferredPowerUps.Length > 0)
-            {
-                var powerUp = bossDef.PreferredPowerUps[Random.Range(0, bossDef.PreferredPowerUps.Length)];
-                SpawnSpecificPowerUp(startZ + 20f, runDistance, powerUp);
-            }
-
-            // 3. 教学金币线：展示正确动作路线
-            var lane = (RunnerLane)Random.Range(-1, 2);
-            SpawnTutorialCoinLine(startZ + 40f, lane, 6, runDistance, bossDef.Archetype);
-
-            // 4. 降低普通障碍密度（通过调整 nextSpawnZ 实现更大的间隔）
-            nextSpawnZ += worldTuning.spawnSpacingMax * 1.5f;
-        }
-
-        /// <summary>生成 Boss 战后奖励段</summary>
-        public void SpawnBossReward(float runDistance, BossDefinition bossDef)
-        {
-            var startZ = nextSpawnZ + worldTuning.spawnDistance;
-
-            // 1. 鱼干大串
-            var rewardLane = (RunnerLane)Random.Range(-1, 2);
-            SpawnCoinLine(startZ + 10f, rewardLane, 12, runDistance);
-
-            // 2. 短暂安全冲刺道具
-            SpawnSpecificPowerUp(startZ + 35f, runDistance, PowerUpKind.Dash);
-
-            // 3. 主题特色道具
-            if (bossDef.PreferredPowerUps != null && bossDef.PreferredPowerUps.Length > 0)
-            {
-                var powerUp = bossDef.PreferredPowerUps[Random.Range(0, bossDef.PreferredPowerUps.Length)];
-                SpawnSpecificPowerUp(startZ + 50f, runDistance, powerUp);
-            }
-
-            // 4. 安全区间：再次降低障碍密度
-            nextSpawnZ += worldTuning.spawnSpacingMax * 2f;
-        }
-
-        private void SpawnSpecificPowerUp(float z, float runDistance, PowerUpKind kind)
-        {
-            var powerLane = (RunnerLane)Random.Range(-1, 2);
-            var (color, secondaryColor) = GetPowerUpColors(kind);
-            var power = CreatePowerUpRoot($"PowerUp {kind}", color, kind, secondaryColor);
-            if (power == null) return;
-            var laneX = powerLane.ToX(laneWidth);
-            var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
-            power.transform.position = new Vector3(laneX, surface + PowerUpHoverHeight, z);
-            powerUps[power] = kind;
-        }
-
-        private void SpawnTutorialCoinLine(float z, RunnerLane lane, int count, float runDistance, BossArchetype archetype)
-        {
-            // 根据 Boss 类型，金币线展示不同的动作路线
-            for (var i = 0; i < count; i++)
-            {
-                var bonusY = archetype switch
-                {
-                    BossArchetype.Aerial => i % 2 == 0 ? 0.8f : 0f, // 跳跃路线
-                    BossArchetype.Grounded => i % 2 == 0 ? -0.2f : 0.4f, // 滑铲/地面路线
-                    _ => (i % 3 == 1) ? 0.5f : 0f, // 混合路线
-                };
-                SpawnCoin(z + i * 1.85f, lane, runDistance, bonusY);
-            }
-        }
 
         private void ApplyRollingMotion(float dt, float runDistance)
         {
@@ -1349,7 +1162,7 @@ namespace PenguinRun
 
             // 外观优先级：开源模型 > 程序化 Mesh > Primitive 回退
             var obstacleKind = lowBarrier ? ObstacleKind.SlideGate : ObstacleKind.StandardHigh;
-            var builtWithModel = visualFactory.TryAttachObstacle(obstacle.transform, config.MapTheme, obstacleKind);
+            var builtWithModel = visualFactory.TryAttachObstacle(obstacle.transform, routeTheme, obstacleKind);
             if (!builtWithModel)
                 builtWithModel = TryBuildOpenModelObstacle(obstacle.transform, lowBarrier, palette);
             if (!builtWithModel)
@@ -1543,7 +1356,7 @@ namespace PenguinRun
             var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
             obstacle.transform.position = new Vector3(obstacleLane.ToX(laneWidth), surface + dy, z);
 
-            var builtWithModel = visualFactory.TryAttachObstacle(obstacle.transform, config.MapTheme, ObstacleKind.WideWall);
+            var builtWithModel = visualFactory.TryAttachObstacle(obstacle.transform, routeTheme, ObstacleKind.WideWall);
             if (!builtWithModel)
                 builtWithModel = TryBuildOpenModelWideWall(obstacle.transform, palette);
             if (!builtWithModel)
@@ -1610,6 +1423,8 @@ namespace PenguinRun
                 var shatter = obstacle.AddComponent<ShatterWall>();
                 shatter.Setup(obstacle.transform);
                 obstacleBehaviors.Add(shatter);
+                if (!dashHintConsumed)
+                    pendingDashHint = true;
             }
         }
 
@@ -1903,13 +1718,19 @@ namespace PenguinRun
             }
         }
 
-        private void SpawnCoin(float z, RunnerLane coinLane, float runDistance, float bonusY = 0f)
+        private GameObject SpawnCoin(float z, RunnerLane coinLane, float runDistance, float bonusY = 0f,
+            bool ownedBossReward = false)
         {
             if (!TryPickClearCoinLane(z, ref coinLane))
-                return;
+                return null;
 
             var coin = coinPool.Rent();
-            if (coin == null) return;
+            if (coin == null) return null;
+            // Rent may recycle a pooled object. Ownership belongs to this spawn, not its reference.
+            bossRewardEntities.Remove(coin);
+            routeFish.Remove(coin);
+            coins.Remove(coin);
+            if (ownedBossReward) RegisterBossReward(coin);
             var surface = TrackTerrain.SurfaceY(z, runDistance, baseGroundY);
             coin.transform.position = new Vector3(coinLane.ToX(laneWidth), surface + CoinHoverHeight + bonusY, z);
             coins.Add(coin);
@@ -1921,6 +1742,7 @@ namespace PenguinRun
             {
                 coinYDelta.Remove(coin);
             }
+            return coin;
         }
 
         /// <summary>优先原车道；被障碍占用则改旁道；三道都被挡则跳过该枚金币。</summary>
@@ -1992,12 +1814,23 @@ namespace PenguinRun
             return prop;
         }
 
-        private void SpawnPowerUp(float z, float runDistance, SegmentObstaclePalette? paletteHint = null)
+        private void SpawnPowerUp(float z, float runDistance, SegmentObstaclePalette? paletteHint = null,
+            PowerUpKind? forcedKind = null, RunnerLane? forcedLane = null)
         {
-            var powerLane = (RunnerLane)Random.Range(-1, 2);
+            var powerLane = forcedLane ?? (RunnerLane)Random.Range(-1, 2);
             var r = Random.value;
             PowerUpKind kind;
 
+            if (forcedKind.HasValue)
+            {
+                kind = forcedKind.Value;
+            }
+            else if (config.IsOnboarding)
+            {
+                kind = PowerUpKind.Dash;
+            }
+            else
+            {
             // 根据主题生成专属道具（含新增主题道具）
             var themeRoll = Random.value;
             if (paletteHint == SegmentObstaclePalette.OceanCoral && themeRoll < 0.40f)
@@ -2056,6 +1889,7 @@ namespace PenguinRun
                 else
                     kind = PowerUpKind.GlideFeather;
             }
+            }
 
             var (color, secondaryColor) = GetPowerUpColors(kind);
             var power = CreatePowerUpRoot($"PowerUp {kind}", color, kind, secondaryColor);
@@ -2071,8 +1905,10 @@ namespace PenguinRun
         {
             var root = powerUpPool.Rent();
             if (root == null) return null;
+            bossRewardEntities.Remove(root);
+            powerUps.Remove(root);
             root.name = name;
-            var visualProfile = PowerUpVisualProfile.For(kind, config.MapTheme);
+            var visualProfile = PowerUpVisualProfile.For(kind, routeTheme);
             coreColor = visualProfile.CoreColor;
             secondaryColor = visualProfile.HaloColor;
 
@@ -2138,7 +1974,7 @@ namespace PenguinRun
         /// <summary>道具配色唯一来源为 <see cref="PowerUpVisualProfile"/>（primary=核心色，secondary=光晕色）。</summary>
         private (Color primary, Color secondary) GetPowerUpColors(PowerUpKind kind)
         {
-            var profile = PowerUpVisualProfile.For(kind, config.MapTheme);
+            var profile = PowerUpVisualProfile.For(kind, routeTheme);
             return (profile.CoreColor, profile.HaloColor);
         }
 

@@ -15,6 +15,7 @@ Unity **6000.4.5f1**，横屏 3D。玩法代码在 `Assets/Scripts/Runtime/Pengu
 
 ## 设计文档
 
+- [游戏开发设计总纲 GDD](./docs/GDD.md) — 按系统汇总的数值、缺口与路线图
 - [当前设计基准](./docs/CURRENT_DESIGN.md)
 - [术语与领域规则](./CONTEXT.md) — **改动前先读**
 - [验证体系](./docs/VERIFICATION.md) — 门禁、校验器与资产生成器

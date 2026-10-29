@@ -29,9 +29,6 @@ namespace PenguinRun.Game.UI
         /// <summary>顶栏下方单行活动 Ticker。</summary>
         private TextMeshProUGUI topTickerText;
 
-        /// <summary>今日挑战卡片右侧的鱼干预览。</summary>
-        private TextMeshProUGUI dailyFishRewardChipText;
-
         private TextMeshProUGUI strategyHeadlineText;
         private TextMeshProUGUI strategyDetailText;
         private TextMeshProUGUI strategyButtonText;
@@ -545,7 +542,10 @@ namespace PenguinRun.Game.UI
         private static LobbyViewModel BuildLobbyViewModel()
         {
             var recommendation = GrowthRecommendation.Build();
-            var claimableMissions = MissionStore.CountClaimableMissions();
+            var missionStates = MissionStore.MissionStates(MissionTrack.Daily);
+            missionStates.AddRange(MissionStore.MissionStates(MissionTrack.Achievement));
+            var rewardSummary = LobbyRewardSummary.FromMissions(missionStates);
+            var claimableMissions = rewardSummary.ClaimableCount;
             var companionHint = PlayerSave.CompanionDrorUnlocked
                 ? "团团已整装，准备同行"
                 : "再完成几次旅程，新的伙伴会来到营地";
@@ -559,19 +559,14 @@ namespace PenguinRun.Game.UI
             var nextTheme = NextChapterTheme();
             var chapterTitle = RunnerMapThemeInfo.DisplayName(nextTheme);
             var chapterBody = RunnerMapThemeInfo.Tagline(nextTheme);
-            var journalReward = claimableMissions > 0
-                ? $"可领取 {claimableMissions} 份任务奖励"
-                : "今日奖励：鱼干 × 80";
-            var routeReward = HasPlayedDailyToday()
-                ? "伙伴手记 · 普通"
-                : "今日首胜 · 双倍鱼干";
             return new LobbyViewModel(recommendation.Title, recommendation.Body,
                 recommendation.ActionLabel, recommendation.Progress01,
                 companionHint, PlayerSave.TotalFishSnacks, claimableMissions,
                 bond.Level, bond.Progress01, bond.HelperLabel, camp.Progress01, recommendation.Kind,
                 PlayerSave.PlayerLevel, CodexDiscoveryStore.CountDiscovered(), "极光季 · 第三章",
-                journalReward, chapterTitle, chapterBody,
-                $"{difficulty.DisplayName} · 得分 ×{difficulty.ScoreMultiplier:0.##}", routeReward);
+                rewardSummary.JournalLabel, chapterTitle, chapterBody,
+                $"{difficulty.DisplayName} · 得分 ×{difficulty.ScoreMultiplier:0.##}",
+                LobbyRewardSummary.JourneyRewardLabel);
         }
 
         private void RefreshStorybookLobby()
@@ -617,9 +612,6 @@ namespace PenguinRun.Game.UI
             if (levelText != null)
                 levelText.text = $"Lv.{PlayerSave.PlayerLevel}";
 
-            if (dailyFishRewardChipText != null)
-                dailyFishRewardChipText.text = "+50 鱼干";
-
             if (difficultyHintText != null)
             {
                 var preset = DifficultyPreset.ForKind(PlayerSave.SelectedDifficulty);
@@ -661,7 +653,7 @@ namespace PenguinRun.Game.UI
 
             if (!HasPlayedDailyToday())
             {
-                topTickerText.text = "今日挑战尚未开始 · 限定关卡 · 双倍鱼干";
+                topTickerText.text = LobbyRewardSummary.DailyChallengeHint;
                 return;
             }
 

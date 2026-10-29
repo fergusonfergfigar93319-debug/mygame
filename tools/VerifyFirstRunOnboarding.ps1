@@ -72,6 +72,10 @@ Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/Systems/SegmentSpawner.cs' `
     '!config\.IsOnboarding' 'enemy spawn suppression'
 Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/Systems/SegmentSpawner.cs' `
     'config\.IsOnboarding\s*\?\s*2\s*:\s*5' 'seed obstacle reduction'
+Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/Systems/SegmentSpawner.cs' `
+    'PowerUpKind\.Dash' 'onboarding first pickup is Dash'
+Require-Pattern 'CONTEXT.md' `
+    '第一次道具固定为鱼干冲刺' 'glossary first-pickup dash rule'
 Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/RunnerGameController.cs' `
     'onboarding\.Persist\(\)' 'persist competence at settlement'
 Require-Pattern 'Assets/Scripts/Runtime/PenguinRun/RunnerGameController.cs' `

@@ -268,7 +268,7 @@ namespace PenguinRun.Game.Shop
             {
                 Id = "bundle_polar",
                 Title = "极地大礼盒",
-                Description = "600 鱼干 · 各类券 ×2 · 解锁极地青围巾（一次性）。",
+                Description = "600 鱼干 · 双倍鱼干券 ×2 · 得分加成券 ×2 · 解锁极光绿围巾（一次性）。",
                 IconGlyph = "\u2746",
                 Category = ShopCategory.Bundles,
                 Rarity = ShopRarity.Epic,

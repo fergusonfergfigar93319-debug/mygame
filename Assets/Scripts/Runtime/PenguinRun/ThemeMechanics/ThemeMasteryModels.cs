@@ -64,7 +64,9 @@ namespace PenguinRun
             bool contractCompleted,
             JourneyContractKind contractKind,
             int earnedMasteryStars,
-            bool tutorialSeen)
+            bool tutorialSeen,
+            int contractProgress = 0,
+            int contractTarget = 0)
         {
             Theme = theme;
             EventsCompleted = Math.Max(0, eventsCompleted);
@@ -77,6 +79,9 @@ namespace PenguinRun
             ContractKind = contractKind;
             EarnedMasteryStars = Mathf.Clamp(earnedMasteryStars, 0, 3);
             TutorialSeen = tutorialSeen;
+            ContractTarget = Math.Max(0, contractTarget);
+            ContractProgress = contractCompleted && ContractTarget > 0
+                ? ContractTarget : Mathf.Clamp(contractProgress, 0, ContractTarget);
         }
 
         public RunnerMapTheme Theme { get; }
@@ -90,6 +95,11 @@ namespace PenguinRun
         public JourneyContractKind ContractKind { get; }
         public int EarnedMasteryStars { get; }
         public bool TutorialSeen { get; }
+        public int ContractProgress { get; }
+        public int ContractTarget { get; }
+        public bool HasProgress => EventsCompleted > 0 || PerfectCount > 0 || FlawlessCount > 0
+            || BestPerfectStreak > 0 || SignatureCompleted || FlawlessSignatureCompleted
+            || ContractCompleted || ContractProgress > 0 || EarnedMasteryStars > 0;
     }
 
     internal readonly struct ThemeMasteryHudSnapshot

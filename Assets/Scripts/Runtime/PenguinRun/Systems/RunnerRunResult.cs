@@ -12,7 +12,8 @@ namespace PenguinRun
             IReadOnlyList<RunUpgradeId> selectedUpgradeIds = null,
             IReadOnlyList<string> completedRouteEventIds = null,
             string themedRelicId = "",
-            ThemeMasteryRunSnapshot themeMastery = default)
+            ThemeMasteryRunSnapshot themeMastery = default,
+            IReadOnlyList<ThemeMasteryRunSnapshot> themeMasteries = null)
         {
             Score = score;
             DistanceMeters = distanceMeters;
@@ -35,6 +36,7 @@ namespace PenguinRun
             CompletedRouteEventIds = Array.AsReadOnly(copiedRouteIds);
             ThemedRelicId = themedRelicId ?? string.Empty;
             ThemeMastery = themeMastery;
+            ThemeMasteries = ThemeMasterySnapshots.CopyDistinct(themeMasteries, themeMastery);
         }
 
         public int Score { get; }
@@ -52,6 +54,7 @@ namespace PenguinRun
         public IReadOnlyList<string> CompletedRouteEventIds { get; }
         public string ThemedRelicId { get; }
         public ThemeMasteryRunSnapshot ThemeMastery { get; }
+        public IReadOnlyList<ThemeMasteryRunSnapshot> ThemeMasteries { get; }
 
         private static RunUpgradeId[] CopyIds(IReadOnlyList<RunUpgradeId> source)
         {

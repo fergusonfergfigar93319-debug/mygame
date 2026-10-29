@@ -113,7 +113,7 @@ Require-Pattern $powerProfile 'CoreColor' 'power-up core color'
 Require-Pattern $powerProfile 'HaloColor' 'power-up halo color'
 Require-Pattern $powerProfile 'PulseScale' 'power-up pulse scale'
 $spawner = Require-Path 'Assets/Scripts/Runtime/PenguinRun/Systems/SegmentSpawner.cs'
-Require-Pattern $spawner 'PowerUpVisualProfile\.For\(kind, config\.MapTheme\)' 'spawner applies power-up visual profile'
+Require-Pattern $spawner 'PowerUpVisualProfile\.For\(kind, routeTheme\)' 'spawner applies current-theme power-up visual profile'
 Require-Pattern $runnerGame 'ApplyMobileQualityBudget' 'runner applies mobile quality budget'
 # The cap moved out of a single hardcoded value in PenguinRunnerGame and into the
 # per-tier table, where a low-end device now gets 16 rather than the same 64 as a

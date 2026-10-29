@@ -96,6 +96,7 @@ namespace PenguinRun
         private readonly RunnerCombatTuning combat;
         private readonly float baseGroundY;
         private readonly float laneWidth;
+        private RunnerMapTheme currentTheme;
 
         public BossSystem(RunnerAudio audio, RunnerSessionConfig config, Transform sceneRoot, float baseGroundY, float laneWidth, RunnerCombatTuning combat)
         {
@@ -105,6 +106,7 @@ namespace PenguinRun
             this.baseGroundY = baseGroundY;
             this.laneWidth = laneWidth;
             this.combat = combat;
+            currentTheme = config.MapTheme;
 
             var preset = config.DifficultyPreset;
             ApplyDifficultyBossTuning(config.Difficulty, preset, config.Daily);
@@ -114,6 +116,7 @@ namespace PenguinRun
         public void Reset()
         {
             CleanupBoss();
+            currentTheme = config.MapTheme;
             counterPending = false;
             currentThemeTrait = default;
             lastThemedRelicId = string.Empty;
@@ -128,6 +131,19 @@ namespace PenguinRun
             lastKnownPhase = BossPhase.Spawning;
             guidancePauseRequest = false;
             currentBossElapsed = 0f;
+        }
+
+        public RunnerMapTheme CurrentTheme => currentTheme;
+
+        /// <summary>Changes the context used by future previews and spawns. Active/prelude Boss state is preserved.</summary>
+        public bool SetTheme(RunnerMapTheme theme)
+        {
+            if (!RunThemeSessionState.IsValid(theme)) return false;
+            if (currentTheme == theme) return true;
+            if (CurrentBoss != null || preludeSpawned) return false;
+            currentTheme = theme;
+            nextBossDef = null;
+            return true;
         }
 
         public void CleanupBoss()
@@ -194,7 +210,7 @@ namespace PenguinRun
                 bossPatternMinSeconds, bossPatternMaxSeconds,
                 bossDangerWindowRatio, bossTelegraphLifetimeRatio, bossVulnerableChance,
                 minPatternDangerDelay);
-            currentThemeTrait = BossThemeTraitCatalog.For(config.MapTheme);
+            currentThemeTrait = BossThemeTraitCatalog.For(currentTheme);
             CurrentBoss.SetThemeTrait(currentThemeTrait);
             CurrentBoss.SetStrikeCallback(HandleBossPatternStrike);
             CurrentBoss.Root.transform.SetParent(sceneRoot, false);
@@ -211,7 +227,7 @@ namespace PenguinRun
 
         private BossDefinitions.BossSpawnContext BuildSpawnContext(float runDistance) => new()
         {
-            MapTheme = config.MapTheme,
+            MapTheme = currentTheme,
             Difficulty = config.Difficulty,
             IsDaily = config.Daily,
             RunDistance = runDistance,

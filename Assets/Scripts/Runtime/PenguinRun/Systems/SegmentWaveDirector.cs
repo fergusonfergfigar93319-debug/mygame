@@ -17,6 +17,7 @@ namespace PenguinRun
         private int wavesLeftInSegment;
         private readonly bool isOnboarding;
         private int onboardingRotationIndex;
+        private SegmentPatternKind lastPatternKind = (SegmentPatternKind)(-1);
 
         public SegmentWaveDirector(RunnerMapTheme theme, bool isOnboarding = false)
         {
@@ -28,6 +29,7 @@ namespace PenguinRun
         public void ResetForRun()
         {
             onboardingRotationIndex = 0;
+            lastPatternKind = (SegmentPatternKind)(-1);
             PickNewSegment();
         }
 
@@ -69,12 +71,35 @@ namespace PenguinRun
             if (isOnboarding)
             {
                 current = PickOnboardingSegment();
+                lastPatternKind = current.PatternKind;
                 wavesLeftInSegment = current.WaveCount;
                 return;
             }
 
-            current = pool[Random.Range(0, pool.Length)];
+            current = PickVariedSegment();
+            lastPatternKind = current.PatternKind;
             wavesLeftInSegment = current.WaveCount;
+        }
+
+        private RunnerSegmentDefinition PickVariedSegment()
+        {
+            // Draw uniformly from eligible definitions instead of retrying random picks.
+            // A bounded retry can still repeat the previous pattern when alternatives exist.
+            var eligibleCount = 0;
+            for (var i = 0; i < pool.Length; i++)
+            {
+                if (pool[i].PatternKind != lastPatternKind) eligibleCount++;
+            }
+
+            if (eligibleCount == 0) return pool[Random.Range(0, pool.Length)];
+            var selected = Random.Range(0, eligibleCount);
+            for (var i = 0; i < pool.Length; i++)
+            {
+                if (pool[i].PatternKind == lastPatternKind) continue;
+                if (selected-- == 0) return pool[i];
+            }
+
+            return pool[0];
         }
 
         private RunnerSegmentDefinition PickOnboardingSegment()
@@ -117,5 +142,14 @@ namespace PenguinRun
                 or SegmentPatternKind.SplitGate
                 or SegmentPatternKind.EnemyAmbush;
         }
+
+        internal static string BannerCopy(SegmentPatternKind kind, string fallback) => kind switch
+        {
+            SegmentPatternKind.HazardRhythm => "危险节奏！看准跳铲",
+            SegmentPatternKind.RewardRun => "鱼干奖励线",
+            SegmentPatternKind.EnemyAmbush => "敌人伏击！换道躲避",
+            SegmentPatternKind.PowerUpTrial => "道具展示段",
+            _ => fallback,
+        };
     }
 }

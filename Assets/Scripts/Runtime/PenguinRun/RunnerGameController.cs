@@ -18,7 +18,7 @@ namespace PenguinRun
     /// <summary>
     /// Owns one run lifecycle: input → simulation → world advance expectations are ordered by <see cref="PenguinRunnerGame"/>.
     /// </summary>
-    internal sealed class RunnerGameController
+    internal sealed partial class RunnerGameController
     {
         private readonly RunnerInput input = new();
         private readonly RunnerTuning tuning;
@@ -38,7 +38,9 @@ namespace PenguinRun
         private readonly MapMechanicDirector mechanicDirector;
         private readonly ThemeMechanicRuntime mechanicRuntime;
         private readonly ThemeMechanicSpawner mechanicSpawner;
-        private readonly ThemeMasteryTracker themeMastery;
+        private readonly ThemeMasterySessionLedger masterySession;
+        private ThemeMasteryTracker themeMastery => masterySession.Current;
+        private readonly RunThemeSessionState themeSession;
 
         // 每帧传给 CollectCoins 的两个回调。捕获 this 的 lambda 与实例方法组都不会被
         // 编译器缓存，写在调用点上等于每帧各新建一个委托；这里建一次复用整局。
@@ -59,6 +61,8 @@ namespace PenguinRun
         private bool finishRequested;
         private float pauseHoldUI;
         private bool waitingForGuidedReaction;
+        public const float ManualDashCooldownSeconds = 2.5f;
+        public float ManualDashCooldown => manualDashCooldownTimer;
         private float manualDashCooldownTimer;
         private int lastLifeCount = 3;
         private bool entranceSkipped;
@@ -97,6 +101,7 @@ namespace PenguinRun
             this.onFinish = onFinish;
 
             onboarding = OnboardingState.LoadFromSave();
+            themeSession = new RunThemeSessionState(config.MapTheme, config.Daily);
             var waveDirector = new SegmentWaveDirector(config.MapTheme, config.IsOnboarding);
             spawner = new SegmentSpawner(tuning.world, tuning.powerUp, tuning.movement.laneWidth, config, waveDirector, tuning.movement.groundY);
             routeEventDirector = new RouteEventDirector(config.MapTheme, config.Daily, PlayerSave.TotalRuns, config.IsOnboarding);
@@ -107,11 +112,11 @@ namespace PenguinRun
             mechanicRuntime = new ThemeMechanicRuntime();
             mechanicSpawner = new ThemeMechanicSpawner(
                 sceneRoot, tuning.movement.laneWidth, tuning.movement.groundY);
-            themeMastery = new ThemeMasteryTracker(
+            masterySession = new ThemeMasterySessionLedger(
                 config.MapTheme, config.ThemeMechanicMode, config.RunSeed,
-                ThemeMasteryStore.For(config.MapTheme).TutorialSeen);
+                theme => ThemeMasteryStore.For(theme).TutorialSeen);
             onAirCollection = () => AwardSkill(SkillAction.AirCollection, 60);
-            onFishCollected = themeMastery.RecordFish;
+            onFishCollected = amount => themeMastery.RecordFish(amount);
             onNearMiss = HandleNearMiss;
             onShatterWall = () => onFeedback?.Invoke(RunFeedbackKind.DefenseBlock);
             pickups = new PickupSystem(tuning.pickup, tuning.powerUp, config, runUpgradeState);
@@ -184,6 +189,8 @@ namespace PenguinRun
 
         public void ResetRun(bool start)
         {
+            ResetInput();
+            TrackTerrain.SetThemeProfile(config.MapTheme);
             spawner.Reset();
             motor.ResetToStart();
             world.ResetRun();
@@ -194,7 +201,8 @@ namespace PenguinRun
             routeEventDirector.Reset();
             runUpgradeState.Reset();
             skillScoreTracker.Reset();
-            themeMastery.Reset();
+            masterySession.Reset();
+            themeSession.Reset();
             mechanicDirector.Reset();
             mechanicRuntime.Cancel(ThemeMechanicCancelReason.ThemeTransition);
             mechanicRuntime.Tick(0f);
@@ -204,6 +212,7 @@ namespace PenguinRun
             lastRunnerAction = RunnerAction.None;
             secondsSinceDamage = 99f;
             collisions.Reset();
+            pickups.ResetRun();
             stateMachine.ForceTransitionTo(start ? GameStateMachine.State.Running : GameStateMachine.State.Idle);
             finishRequested = false;
             upgradeOfferPending = false;
@@ -335,8 +344,7 @@ namespace PenguinRun
         /// <summary>尝试进入主题切换过渡（Running → ThemeTransition）。</summary>
         public bool TryBeginThemeTransition()
         {
-            if (stateMachine.Current != GameStateMachine.State.Running) return false;
-            if (bossSystem.BossActive) return false;
+            if (!CanApplyPendingThemeSwitch()) return false;
             return stateMachine.TransitionTo(GameStateMachine.State.ThemeTransition);
         }
 
@@ -364,7 +372,7 @@ namespace PenguinRun
                 skill.TotalScore, skill.PeakChain, runUpgradeState.SelectedIds,
                 routeEventDirector.CompletedEventIds,
                 bossSystem.LastThemedRelicId,
-                themeMastery.RunSnapshot);
+                themeMastery.RunSnapshot, masterySession.Snapshots);
         }
 
         /// <summary>结束本局并把结果回调给 PenguinRunnerGame（再由它走 RunOutcomeRouter + 场景切换）。</summary>
@@ -449,14 +457,6 @@ namespace PenguinRun
                 action = RunnerAction.None;
             }
             var dt = Mathf.Min(rawDt, 0.05f);
-            var dashCdBefore = manualDashCooldownTimer;
-            manualDashCooldownTimer = Mathf.Max(0f, manualDashCooldownTimer - dt);
-            dashBufferTimer = Mathf.Max(0f, dashBufferTimer - dt);
-            if (dashCdBefore > 0f && manualDashCooldownTimer <= 0f && dashBufferTimer > 0f)
-            {
-                dashBufferTimer = 0f;
-                TriggerManualDash(ref feedbackText, ref feedbackTimer);
-            }
             if (world.Paused)
             {
                 pauseHoldUI = Mathf.Max(0f, pauseHoldUI - dt);
@@ -492,6 +492,15 @@ namespace PenguinRun
                 return 0f;
             }
 
+            var dashCdBefore = manualDashCooldownTimer;
+            manualDashCooldownTimer = Mathf.Max(0f, manualDashCooldownTimer - dt);
+            dashBufferTimer = Mathf.Max(0f, dashBufferTimer - dt);
+            if (dashCdBefore > 0f && manualDashCooldownTimer <= 0f && dashBufferTimer > 0f)
+            {
+                dashBufferTimer = 0f;
+                TriggerManualDash(ref feedbackText, ref feedbackTimer);
+            }
+
             // 命中顿帧：受伤后的短暂时间内世界以 0.3 倍速运行，输入照常读取。
             // 这是「被撞到了」最直接的体感——原先只有一层红闪，玩家常常分不清是擦过还是掉了一颗心。
             if (hitStopTimer > 0f)
@@ -501,6 +510,7 @@ namespace PenguinRun
             }
             HitStopActive = hitStopTimer > 0f;
 
+            TickThemeSwitchClock(dt);
             skillScoreTracker.Tick(dt);
             themeMastery.Tick(dt);
             secondsSinceDamage += dt;
@@ -526,7 +536,7 @@ namespace PenguinRun
                 onboarding.Record(action, laneChanged);
             }
             motor.Tick(dt, tuning.movement.laneWidth,
-                tuning.movement.laneLerp * runUpgradeState.LaneResponseMultiplier,
+                tuning.movement.laneLerp * runUpgradeState.LaneResponseMultiplier * (motor.Grounded ? 1f : runUpgradeState.AirControlMultiplier),
                 ref feedbackText, ref feedbackTimer, world.GlideTimer, groundY,
                 mechanicRuntime.Snapshot.Modifiers);
             if (!config.IsOnboarding)
@@ -547,7 +557,8 @@ namespace PenguinRun
 
         public void TickRunningWorld(float dt, float effectiveSpeed)
         {
-            if (world.Paused) return;
+            if (world.Paused || waitingForGuidedReaction || dt <= 0f) return;
+            TickRouteScheduling();
             CancelMechanicForWorldAuthority();
             var phaseBeforeTick = mechanicRuntime.Snapshot.Phase;
             mechanicRuntime.Tick(dt);
@@ -565,22 +576,6 @@ namespace PenguinRun
                     mechanicRuntime.Cancel(ThemeMechanicCancelReason.MissingCriticalAsset);
                     mechanicSpawner.Clear();
                     spawner.ClearMechanicVisuals();
-                }
-            }
-            var routeCanStart =
-                stateMachine.Current == GameStateMachine.State.Running &&
-                !bossSystem.BossActive &&
-                !bossSystem.HasSpawnedPrelude &&
-                !bossSystem.IsBossApproaching(world.Distance, 180f);
-            if (routeEventDirector.AwaitingChoice)
-            {
-                routeEventDirector.Tick(world.Distance);
-            }
-            else if (routeCanStart && routeEventDirector.Tick(world.Distance))
-            {
-                if (!spawner.SpawnRouteEvent(routeEventDirector.Snapshot, world.Distance))
-                {
-                    routeEventDirector.Expire(world.Distance);
                 }
             }
 
@@ -616,11 +611,7 @@ namespace PenguinRun
                 TryStartThemeMechanic();
             }
 
-            if (routeEventDirector.AwaitingChoice &&
-                spawner.TryConsumeRouteChoice(motor.Lane, out var choseRisk))
-            {
-                ApplyRouteEventOutcome(routeEventDirector.Choose(choseRisk, world.Distance));
-            }
+            TickRouteChoice();
 
             if (config.IsOnboarding)
             {
@@ -637,6 +628,9 @@ namespace PenguinRun
                     feedbackTimer = 2.4f;
                 }
             }
+
+            if (spawner.TryConsumeDashHint(out var dashHint))
+            { feedbackText = dashHint; feedbackTimer = 2.2f; }
 
             // 速度门检测
             if (spawner.CheckSpeedGatePass(playerTransform, motor.PlayerY, out var gateFeedback))
@@ -678,10 +672,11 @@ namespace PenguinRun
                 ref feedbackText, ref feedbackTimer);
             if (bossSystem.TryConsumeCounter())
             {
-                AwardSkill(SkillAction.BossCounter, 250);
+                AwardSkill(SkillAction.BossCounter, Mathf.RoundToInt(250f * runUpgradeState.BossCounterScoreMultiplier));
             }
             if (bossSystem.TryConsumeGuidancePauseRequest())
             {
+                ResetInput();
                 waitingForGuidedReaction = true;
                 // 等待玩家操作期间固定展示引导提示。
                 feedbackTimer = Mathf.Max(feedbackTimer, 999f);
@@ -734,7 +729,7 @@ namespace PenguinRun
                 if (outcome.InvulnerabilitySeconds > 0f)
                 {
                     var shieldGrace = outcome.ConsumeShield ? runUpgradeState.ShieldGraceSeconds : 0f;
-                    world.SetHitInvulnerability(outcome.InvulnerabilitySeconds + shieldGrace);
+                    world.SetHitInvulnerability(outcome.InvulnerabilitySeconds + shieldGrace + runUpgradeState.HitInvulnerabilityBonusSeconds);
                 }
 
                 if (outcome.Kind == HitOutcomeKind.BlockedByDefense)
@@ -823,148 +818,6 @@ namespace PenguinRun
             }
         }
 
-        private void ApplyRouteEventOutcome(RouteEventResolution resolution)
-        {
-            if (!resolution.IsValid) return;
-
-            var fishReward = Mathf.RoundToInt(
-                resolution.Outcome.FishReward * runUpgradeState.FishRewardMultiplier);
-            var scoreReward = Mathf.RoundToInt(
-                resolution.Outcome.ScoreReward * runUpgradeState.RouteRewardMultiplier);
-            world.AddRouteEventReward(fishReward, scoreReward);
-            spawner.SpawnRouteEventOutcome(resolution.Outcome, resolution.Risky, world.Distance);
-            if (resolution.Risky)
-            {
-                AwardSkill(SkillAction.RiskRoute, 140);
-            }
-            feedbackText = resolution.Risky
-                ? $"冒险路线 · {resolution.Outcome.Label}  +{scoreReward}分"
-                : $"安心路线 · {resolution.Outcome.Label}  +{fishReward}鱼干";
-            feedbackTimer = 1.5f;
-            runnerAudio.PlayCheckpoint();
-
-            if (runUpgradeState.CanSelect &&
-                (routeEventDirector.CompletedCount == 1 ||
-                 (routeEventDirector.CompletedCount - 1) % 2 == 0))
-            {
-                upgradeOfferPending = true;
-            }
-        }
-
-        private void CancelMechanicForWorldAuthority()
-        {
-            var activeBeforeCancel = mechanicRuntime.Snapshot.Phase != ThemeMechanicPhase.Idle
-                && mechanicRuntime.Snapshot.Phase != ThemeMechanicPhase.Cancelled;
-            if (bossSystem.BossActive)
-            {
-                mechanicRuntime.Cancel(ThemeMechanicCancelReason.Boss);
-            }
-            else if (routeEventDirector.AwaitingChoice)
-            {
-                mechanicRuntime.Cancel(ThemeMechanicCancelReason.RouteEvent);
-            }
-            else if (IsThemeTransition)
-            {
-                mechanicRuntime.Cancel(ThemeMechanicCancelReason.ThemeTransition);
-            }
-
-            if (activeBeforeCancel && mechanicRuntime.Snapshot.Phase == ThemeMechanicPhase.Cancelled)
-            {
-                themeMastery.CancelEvent();
-                mechanicSpawner.Clear();
-                spawner.ClearMechanicVisuals();
-                mechanicKeypointIndex = 0;
-            }
-        }
-
-        private void TryStartThemeMechanic()
-        {
-            if (mechanicRuntime.Snapshot.Phase != ThemeMechanicPhase.Idle)
-            {
-                return;
-            }
-
-            var context = new ThemeMechanicContext(
-                config.MapTheme,
-                config.ThemeMechanicMode,
-                world.Distance,
-                world.Lives,
-                secondsSinceDamage,
-                bossSystem.BossActive,
-                routeEventDirector.AwaitingChoice,
-                IsThemeTransition,
-                Mathf.Clamp01((int)config.Difficulty / 3f));
-            if (!mechanicDirector.TrySchedule(context, out var request))
-            {
-                return;
-            }
-
-            var pattern = ThemeMechanicPatternCatalog.For(request.Definition.Id, request.Signature);
-            if (pattern.Length == 0 || !mechanicRuntime.Begin(request))
-            {
-                return;
-            }
-
-            mechanicKeypointIndex = 0;
-            mechanicSpawner.Begin(pattern, world.Distance);
-            themeMastery.BeginEvent(pattern.Length, request.Signature);
-            for (var index = 0; index < pattern.Length; index++)
-            {
-                var beat = pattern[index];
-                spawner.SpawnMechanicObstacle(
-                    beat.ApparatusPath,
-                    beat.Lane,
-                    30f + beat.Seconds * 6f,
-                    world.Distance);
-            }
-        }
-
-        private void EvaluateMechanicKeypoints()
-        {
-            var request = mechanicRuntime.CurrentRequest;
-            var pattern = ThemeMechanicPatternCatalog.For(
-                request.Definition.Id, request.Signature);
-            while (mechanicKeypointIndex < pattern.Length
-                && pattern[mechanicKeypointIndex].Seconds <= mechanicRuntime.PhaseElapsedSeconds)
-            {
-                var beat = pattern[mechanicKeypointIndex];
-                var laneCorrect = motor.Lane == beat.Lane;
-                var actionCorrect = (!beat.RequiresJump || !motor.Grounded || lastRunnerAction == RunnerAction.Jump)
-                    && (!beat.RequiresSlide || motor.SlideTimer > 0f || lastRunnerAction == RunnerAction.Slide);
-                var perfect = laneCorrect && actionCorrect;
-                mechanicRuntime.RecordKeypoint(perfect);
-                themeMastery.RecordKeypoint(perfect);
-                if (perfect && beat.Rewarding)
-                {
-                    AwardSkill(SkillAction.NoHitSegment, 90);
-                }
-                mechanicKeypointIndex++;
-            }
-        }
-
-        private void ResolveThemeMechanic()
-        {
-            var grade = themeMastery.ResolveEvent(mechanicRuntime.CurrentRequest.Signature);
-            mechanicSpawner.Clear();
-            spawner.ClearMechanicVisuals();
-            mechanicKeypointIndex = 0;
-            if (grade != ThemeMechanicGrade.None)
-            {
-                feedbackText = grade switch
-                {
-                    ThemeMechanicGrade.Flawless => "环境应对 · 无伤",
-                    ThemeMechanicGrade.Perfect => "环境应对 · 完美",
-                    _ => "环境应对 · 完成",
-                };
-                feedbackTimer = 1.2f;
-            }
-        }
-
-        private void RecordThemeDamage()
-        {
-            secondsSinceDamage = 0f;
-            themeMastery.RecordDamage();
-        }
 
         public bool TryBuildUpgradeOffer(out RunUpgradeOffer offer)
         {
@@ -1010,8 +863,10 @@ namespace PenguinRun
             segmentTrackingActive = true;
             segmentDamaged = false;
             segmentBannerKind = kind;
-            segmentBannerTimer = 1.2f;
-            EmitRunFeedback(kind == SegmentPatternKind.HazardRhythm
+            segmentBannerTimer = 1.6f;
+            feedbackText = SegmentWaveDirector.BannerCopy(kind, feedbackText);
+            feedbackTimer = 1.6f;
+            EmitRunFeedback(kind is SegmentPatternKind.HazardRhythm or SegmentPatternKind.EnemyAmbush
                 ? RunFeedbackKind.SegmentHazard
                 : RunFeedbackKind.SegmentReward);
             consumedKind = kind;
@@ -1027,8 +882,9 @@ namespace PenguinRun
 
         private void AwardSkill(SkillAction action, int baseScore)
         {
-            world.AddSkillScore(skillScoreTracker.Record(action, baseScore));
-            themeMastery.RecordSkill(skillScoreTracker.Snapshot.TotalScore, world.Distance);
+            var awarded = skillScoreTracker.Record(action, themeMastery.ScaleSkill(baseScore));
+            world.AddSkillScore(awarded);
+            masterySession.RecordSkillAward(awarded, world.Distance);
         }
 
         private void BreakSkillChain()
@@ -1093,6 +949,15 @@ namespace PenguinRun
 
         private void HandleStateChanged(GameStateMachine.State from, GameStateMachine.State to)
         {
+            CancelRoutesForState(to);
+            if (to is GameStateMachine.State.DeathSequence or GameStateMachine.State.GameOver
+                or GameStateMachine.State.Finished or GameStateMachine.State.Idle)
+                themeSession.CancelPending();
+            if (to is GameStateMachine.State.Paused or GameStateMachine.State.ThemeTransition
+                or GameStateMachine.State.DeathSequence or GameStateMachine.State.GameOver
+                or GameStateMachine.State.Finished or GameStateMachine.State.Idle or GameStateMachine.State.Countdown
+                || from is GameStateMachine.State.Paused or GameStateMachine.State.ThemeTransition)
+                ResetInput();
             switch (to)
             {
                 case GameStateMachine.State.Running:
@@ -1173,23 +1038,5 @@ namespace PenguinRun
             character.Tick(deltaTime, state);
         }
 
-        private void TriggerManualDash(ref string feedbackText, ref float feedbackTimer)
-        {
-            if (manualDashCooldownTimer > 0f)
-            {
-                dashBufferTimer = 0.16f;
-                feedbackText = $"冲刺冷却 {manualDashCooldownTimer:0.0}s";
-                feedbackTimer = 0.4f;
-                return;
-            }
-
-            const float touchDashSeconds = 1.2f;
-            world.DashTimer = Mathf.Max(world.DashTimer, touchDashSeconds);
-            manualDashCooldownTimer = 2.5f;
-            dashBufferTimer = 0f;
-            feedbackText = "冲刺！";
-            feedbackTimer = 0.65f;
-            EmitRunFeedback(RunFeedbackKind.DashStart);
-        }
     }
 }

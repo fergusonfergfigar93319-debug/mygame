@@ -12,6 +12,7 @@ namespace PenguinRun
         private readonly RunnerPowerUpTuning powerUpTuning;
         private readonly RunnerSessionConfig config;
         private readonly RunUpgradeState upgrades;
+        private bool onboardingDashHinted;
 
         public PickupSystem(
             RunnerPickupTuning pickupTuning,
@@ -24,6 +25,8 @@ namespace PenguinRun
             this.config = config;
             this.upgrades = upgrades;
         }
+
+        public void ResetRun() => onboardingDashHinted = false;
 
         public void CollectCoins(
             Transform player,
@@ -58,7 +61,7 @@ namespace PenguinRun
                 var comboBonus = Mathf.Min(pickupTuning.comboBonusMax, nextCombo * pickupTuning.comboBonusPerCoin);
                 world.AddCoin(1, comboBonus, pickupTuning.comboWindowSeconds);
 
-                feedbackText = nextCombo >= 3 ? $"金币连击 x{nextCombo}" : "+1 金币";
+                feedbackText = nextCombo >= 3 ? $"鱼干连击 x{nextCombo}" : "+1 鱼干";
                 feedbackTimer = 0.55f;
                 EventBus.Emit(GameEvents.CoinCollected, nextCombo);
                 onFishCollected?.Invoke(1);
@@ -103,9 +106,14 @@ namespace PenguinRun
                 if (Mathf.Abs(p.x - px) > collectX) continue;
                 if (Mathf.Abs(p.y - py) > halfY) continue;
 
-                ActivatePowerUp(powerUps[power], world, ref feedbackText);
-                feedbackTimer = 0.85f;
-                EventBus.Emit(GameEvents.PowerUpCollected, powerUps[power]);
+                var kind = powerUps[power];
+                ActivatePowerUp(kind, world, ref feedbackText);
+                feedbackTimer = config.IsOnboarding && kind == PowerUpKind.Dash && !onboardingDashHinted
+                    ? 2.6f
+                    : 0.85f;
+                if (config.IsOnboarding && kind == PowerUpKind.Dash)
+                    onboardingDashHinted = true;
+                EventBus.Emit(GameEvents.PowerUpCollected, kind);
 
                 power.SetActive(false); // 池化回收由 SegmentSpawner.Tick 处理
                 powerUps.Remove(power);
@@ -122,7 +130,10 @@ namespace PenguinRun
             {
                 case PowerUpKind.Dash:
                     world.DashTimer = Mathf.Max(world.DashTimer, (powerUpTuning.dashBaseSeconds + config.DashLevel * powerUpTuning.dashPerLevelSeconds) * comboMult * durationMult * upgrades.DashDurationMultiplier);
-                    feedbackText = string.IsNullOrEmpty(comboLabel) ? "鱼干冲刺" : $"鱼干冲刺 · {comboLabel}";
+                    if (config.IsOnboarding && !onboardingDashHinted)
+                        feedbackText = "鱼干冲刺：短暂加速！之后双击屏幕或按 Shift 可再冲刺";
+                    else
+                        feedbackText = string.IsNullOrEmpty(comboLabel) ? "鱼干冲刺" : $"鱼干冲刺 · {comboLabel}";
                     break;
                 case PowerUpKind.Magnet:
                     world.MagnetTimer = Mathf.Max(world.MagnetTimer, (powerUpTuning.magnetBaseSeconds + config.MagnetLevel * powerUpTuning.magnetPerLevelSeconds) * comboMult * durationMult);
@@ -170,7 +181,7 @@ namespace PenguinRun
                     break;
                 case PowerUpKind.SecondHeart:
                     world.AddExtraLife();
-                    feedbackText = $"\u2665 +1 心 ({world.Lives}/{world.MaxLives})";
+                    feedbackText = $"+1 心 ({world.Lives}/{world.MaxLives})";
                     break;
 
                 // ── 新道具 ────────────────────────────────────
